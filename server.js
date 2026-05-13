@@ -654,3 +654,70 @@ app.listen(PORT, async () => {
   console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
   await fetchLiveSchema(); // Load real schema at startup
 });
+// ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
+const WP_API_KEY = process.env.WHATSAPP_API_KEY || null;
+
+app.post("/whatsapp", async (req, res) => {
+  try {
+    if (WP_API_KEY) {
+      const key = req.headers["x-api-key"] || req.headers["authorization"];
+      if (!key || key.replace("Bearer ", "") !== WP_API_KEY) {
+        return res.status(401).json({ success: false, error: "Unauthorized" });
+      }
+    }
+    const body = req.body;
+    const message = body.message || body.query || body.text || body.Body || body.body ||
+      (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
+    const sender = body.from || body.From || body.sender || body.phone || "user";
+
+    if (!message) {
+      return res.json({ success: false, error: "No message found", received: body });
+    }
+
+    console.log("[WHATSAPP]", sender, "->", message);
+    if (!liveSchema) await fetchLiveSchema();
+
+    let plan;
+    try { plan = await processQuery(message, []); }
+    catch(e) { return res.json({ success: false, error: e.message }); }
+
+    if (plan.query_type === "ledger") {
+      const search = (plan.ledger_search || "").trim();
+      if (!search) return res.json({ success: true, reply: "Please tell me the company name.", sender });
+      const { data } = await supabase.from("ledger")
+        .select("name,closing_balance,voucher_date,voucher_particular,voucher_debit,voucher_credit")
+        .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(500);
+      if (!data || !data.length) return res.json({ success: true, reply: `No ledger found for "${search}"`, sender });
+      const uniqueNames = [...new Set(data.map(r => r.name))];
+      if (uniqueNames.length > 1) return res.json({ success: true, reply: "Multiple found: " + uniqueNames.slice(0,5).join(", "), options: uniqueNames.slice(0,5), sender });
+      const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
+      return res.json({ success: true, reply: `Ledger: ${data[0].name} | Balance: Rs.${data[0].closing_balance} | Transactions: ${txns.length}`, type: "ledger", data: { company: data[0].name, closing_balance: data[0].closing_balance, transactions: txns.slice(0,20) }, sender });
+    }
+
+    if (plan.query_type === "clarify") {
+      return res.json({ success: true, reply: plan.clarify_message, options: plan.clarify_options || [], sender });
+    }
+
+    if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
+
+    let rows;
+    try { rows = await runSQL(plan.sql); }
+    catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
+
+    if (!rows || !rows.length) return res.json({ success: true, reply: "No data found for: " + message, data: [], sender });
+
+    return res.json({ success: true, reply: `Found ${rows.length} records`, type: "data", count: rows.length, data: rows, sender });
+
+  } catch(err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/whatsapp", (req, res) => {
+  const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN || "mis_webhook_token";
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+  if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
+  res.status(403).send("Forbidden");
+});
