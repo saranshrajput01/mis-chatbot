@@ -388,15 +388,38 @@ function buildTableHTML(rows) {
     return isNaN(n) ? null : n;
   }
 
-  // Detect amount columns ONLY by column name — never guess by value
-  // This prevents phone numbers being formatted as money
-  const amtCols = cols.filter(c =>
-    /^(total|amount|price|balance|revenue|sales|pending_amount|debit|credit|grand_total|total_sales|total_price|closing_balance|opening_balance|last_year_revenue|cost|value|salary|expense)$/i.test(c.trim())
-  );
+  // Smart amount detection:
+  // 1. Never format phone/mobile/contact/id/code/number/gst/pin/zip columns
+  // 2. Never format columns where values are too long (phone numbers > 12 digits)
+  // 3. Format everything else that looks like a money value
 
-  // Detect day-bucket columns like "0-30 Days", "31-60 Days"
+  const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design/i;
+
+  const allAmtCols = cols.filter(col => {
+    // Skip obviously non-money columns by name
+    if (NON_AMOUNT_COLS.test(col)) return false;
+
+    // Skip day-bucket columns — handle separately
+    if (/^\d+[-–]\d+/i.test(col.trim())) return false;
+
+    // Check actual values — if numeric and reasonable length → it's money
+    const sampleValues = rows.slice(0, 5).map(r => r[col]).filter(v => v !== null && v !== "" && v !== "-");
+    if (!sampleValues.length) return false;
+
+    return sampleValues.some(v => {
+      const str = String(v).replace(/[₹Rs.\s,]/g, "").trim();
+      // Money: numeric, not too long (phone numbers are 10+ digits without decimals)
+      const num = parseFloat(str);
+      if (isNaN(num)) return false;
+      // If it's a whole number with more than 10 digits → probably phone number
+      if (Number.isInteger(num) && str.length > 10) return false;
+      return true;
+    });
+  });
+
+  // Day-bucket columns also get amount formatting
   const bucketCols = cols.filter(c => /^\d+[-–]\d+/i.test(c.trim()));
-  const allAmtCols = [...new Set([...amtCols, ...bucketCols])];
+  bucketCols.forEach(c => { if (!allAmtCols.includes(c)) allAmtCols.push(c); });
 
   let header = cols.map(c => `<th style="${TH}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</th>`).join("");
 
