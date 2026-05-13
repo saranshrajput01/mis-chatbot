@@ -587,10 +587,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
-    // id field se sender number nikalo
-    // "true_918750285420@s.whatsapp.net..." → "918750285420"
-    const senderFromId = body.id?.split("_")[1]?.split("@")[0] || "";
-    const phone = senderFromId || "918750285420";
+    const phone = to || "918750285420";
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -634,7 +631,11 @@ app.post("/whatsapp", async (req, res) => {
     const sender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "user";
 
-    console.log("[WHATSAPP EXTRACTED]", sender, "->", message);
+    // body.id se actual sender number nikalo
+    // "false_84856138649813@lid_AC1D..." → split by "_" → [1] = "84856138649813@lid" → split "@" → "84856138649813"
+    // "true_918750285420@s.whatsapp.net" → split by "_" → [1] = "918750285420@s..." → split "@" → "918750285420"
+    const actualPhone = body.id?.split("_")[1]?.split("@")[0] || sender.split("@")[0] || "918750285420";
+    console.log("[WHATSAPP PHONE]", actualPhone);
 
     // ✅ BAAD MEIN check karo
     if (!message) {
@@ -658,12 +659,12 @@ app.post("/whatsapp", async (req, res) => {
       if (uniqueNames.length > 1) return res.json({ success: true, reply: "Multiple found: " + uniqueNames.slice(0,5).join(", "), options: uniqueNames.slice(0,5), sender });
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
       const replyText = `Ledger: ${data[0].name} | Balance: Rs.${data[0].closing_balance} | Transactions: ${txns.length}`;
-      await sendWhatsAppReply(sender, replyText);
+      await sendWhatsAppReply(actualPhone, replyText);
       return res.json({ success: true, reply: replyText, sender });
     }
 
     if (plan.query_type === "clarify") {
-      await sendWhatsAppReply(sender, plan.clarify_message);
+      await sendWhatsAppReply(actualPhone, plan.clarify_message);
       return res.json({ success: true, reply: plan.clarify_message, options: plan.clarify_options || [], sender });
     }
 
@@ -674,7 +675,7 @@ app.post("/whatsapp", async (req, res) => {
     catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
 
     if (!rows || !rows.length) {
-      await sendWhatsAppReply(sender, "No data found for: " + message);
+      await sendWhatsAppReply(actualPhone, "No data found for: " + message);
       return res.json({ success: true, reply: "No data found", data: [], sender });
     }
 
@@ -688,7 +689,7 @@ app.post("/whatsapp", async (req, res) => {
       { session_id: wpSession, role: "assistant", content: replyText }
     ]);
 
-    await sendWhatsAppReply(sender, replyText);
+    await sendWhatsAppReply(actualPhone, replyText);
 
     return res.json({ success: true, reply: replyText, type: "data", count: rows.length, data: rows, sender });
 
