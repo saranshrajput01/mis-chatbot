@@ -23,6 +23,7 @@ app.get("/history/:sid", async (req, res) => {
     res.json(data || []);
   } catch(e) { res.json([]); }
 });
+
 app.delete("/history/:sid", async (req, res) => {
   try { await supabase.from("chat_history").delete().eq("session_id", req.params.sid); } catch(e) {}
   res.json({ ok: true });
@@ -47,14 +48,33 @@ function parseAmt(n) {
   return parseFloat(String(n || "").replace(/[₹,\s]/g, "")) || 0;
 }
 
+// ── FUZZY / TYPO NORMALISER ────────────────────────────────────────────────
+// Fixes common phonetic typos before keyword matching
+function fixTypos(text) {
+  return text
+    .replace(/\blgdr\b/gi, "ledger")
+    .replace(/\bkhata\b/gi, "ledger")
+    .replace(/\bldgr\b/gi, "ledger")
+    .replace(/\bldger\b/gi, "ledger")
+    .replace(/\binvois\b|\binvoic\b|\binvoice?s?\b/gi, "invoice")
+    .replace(/\bsalari\b|\bsalry\b|\bsalary\b/gi, "salary")
+    .replace(/\bkiraya\b/gi, "rent")
+    .replace(/\btankhwa\b/gi, "salary")
+    .replace(/\bpending\b|\bbaaki\b|\bbaki\b/gi, "pending")
+    .replace(/\bkharcha\b|\bkharch\b/gi, "expense")
+    .replace(/\bdikhao\b|\bdikha\b|\bshow\b|\bsend\b|\bdo\b|\bde\b|\bdedo\b|\bdikhaoo\b/gi, "show")
+    .replace(/\bretainer\b|\bretainrship\b|\bretaineship\b|\bretainership\b/gi, "retainership")
+    .replace(/\bpansri\b|\bpansari\b|\bpansary\b/gi, "pansari");
+}
+
 function normalizeCompany(text = "") {
   return text
     .toLowerCase()
     .replace(/private\s+limited/gi, "")
     .replace(/pvt\.?\s*ltd\.?/gi, "")
     .replace(/\blimited\b|\bltd\b|\bllp\b/gi, "")
-    .replace(/\bledger\b|\bkhata\b|\bstatement\b|\bbalance\b|\baccount\b/gi, "")
-    .replace(/\bshow\b|\bsend\b|\bplease\b|\bmujhe\b|\bdikhao\b|\bbatao\b|\bbhejo\b|\bdikha\b|\bkaro\b|\bdedo\b|\bde\b|\bdo\b|\bof\b|\bfor\b|\bthe\b|\bka\b|\bki\b|\bke\b|\btill\b|\bdate\b|\ball\b|\bget\b|\bfind\b|\bfetch\b|\bgive\b|\bme\b/gi, "")
+    .replace(/\bledger\b|\bkhata\b|\bstatement\b|\bbalance\b|\baccount\b|\blgdr\b|\bldgr\b/gi, "")
+    .replace(/\bshow\b|\bsend\b|\bplease\b|\bmujhe\b|\bdikhao\b|\bbatao\b|\bbhejo\b|\bdikha\b|\bkaro\b|\bdedo\b|\bde\b|\bdo\b|\bof\b|\bfor\b|\bthe\b|\bka\b|\bki\b|\bke\b|\btill\b|\bdate\b|\ball\b|\bget\b|\bfind\b|\bfetch\b|\bgive\b|\bme\b|\bdikhaoo\b/gi, "")
     .replace(/[^a-z0-9 ]/g, "")
     .replace(/\s+/g, " ")
     .trim();
@@ -62,13 +82,25 @@ function normalizeCompany(text = "") {
 
 // ── DETECT QUERY TYPE ─────────────────────────────────────────────────────────
 function detectType(q) {
-  const ql = q.toLowerCase();
+  // Fix typos first for detection
+  const fixed = fixTypos(q);
+  const ql = fixed.toLowerCase();
+
+  // COMBINE: multiple expense categories joined with +, aur, and, comma
+  if (/\+|combine|total.*expense|expense.*total/.test(ql) &&
+      /(salary|rent|travel|phone|insurance|branding|commission|utility|maintenance|stationery|legal|technical|welfare)/i.test(ql)) {
+    return "COMBINE_EXPENSE";
+  }
+
   if (/ledger|khata|statement|account\s*detail|balanc/i.test(ql)) return "LEDGER";
   if (/pending|overdue|baaki|baki|\bdue\b|60.?day|90.?day|120.?day|30.?day|180.?day|60-90|90-120|ageing|aging/i.test(ql)) return "PENDING";
-  if (/no\s*sale|zero\s*sale|without\s*sale|not\s*sold|inactive|dead\s*client|koi\s*sale\s*nahi|sale\s*nahi/i.test(ql)) return "NO_SALES";
-  if (/salary|salari|wages|tankhwa|payroll/i.test(ql)) return "EXPENSE";
-  if (/rent|kiraya|lease/i.test(ql)) return "EXPENSE";
-  if (/invoice|bill|invois|invioce|mis-/i.test(ql)) return "INVOICE";
+
+  // NO_SALES: clients who had no sale this year but had last year, OR generic no-sale queries
+  if (/no\s*sale|zero\s*sale|without\s*sale|not\s*sold|inactive|dead\s*client|koi\s*sale\s*nahi|sale\s*nahi|invoice\s*nahi.*but.*last\s*year|last\s*year.*tha|nahi\s*gaya.*last\s*year/i.test(ql)) return "NO_SALES";
+
+  if (/salary|wages|payroll/i.test(ql)) return "EXPENSE";
+  if (/rent|lease/i.test(ql)) return "EXPENSE";
+  if (/invoice|bill|mis-/i.test(ql)) return "INVOICE";
   if (/expense|kharcha|kharch|expenditure|cost|spent|payment\s*done|spend|monthly\s*exp|category.*exp|exp.*category/i.test(ql)) return "EXPENSE";
   if (/sale|revenue|top\s*\d|client|customer|best|highest|earning|income|sells|category.*sale|sale.*category|month.*sale|sale.*month|product.*sale|erp|google\s*sheet|whatsapp|mobile\s*app|tally|web\s*form|php|retainer/i.test(ql)) return "SALES";
   if (/phone|mobile\s*num|number|contact|num\b|no\.\s|call/i.test(ql)) return "CONTACT";
@@ -170,7 +202,9 @@ async function handleLedger(question, exactName) {
     return { type: "html", content: buildLedgerHTML(data[0], txns) };
   }
 
-  const searchTerm = normalizeCompany(question);
+  // Apply typo fix before searching
+  const cleanQ = fixTypos(question);
+  const searchTerm = normalizeCompany(cleanQ);
   if (!searchTerm || searchTerm.length < 2) return { type: "text", content: "Please tell me the company name." };
 
   const searchWords = searchTerm.split(" ").filter(w => w.length > 2);
@@ -191,7 +225,9 @@ async function handleLedger(question, exactName) {
 
   if (!matchedRows.length) {
     const suggestions = [...new Set(data.map(r => r.name))].slice(0, 6);
-    return suggestions.length ? { type: "suggestions", content: "Did you mean:", options: suggestions } : { type: "text", content: "No company found for '" + searchTerm + "'." };
+    return suggestions.length
+      ? { type: "suggestions", content: "Did you mean:", options: suggestions }
+      : { type: "text", content: "No company found for '" + searchTerm + "'." };
   }
 
   const uniqueNames = [...new Set(matchedRows.map(r => r.name))];
@@ -202,27 +238,158 @@ async function handleLedger(question, exactName) {
   return { type: "html", content: buildLedgerHTML(companyRows[0], txns) };
 }
 
+// ── COMBINE EXPENSE HANDLER ───────────────────────────────────────────────────
+// Handles: "salary + office rent + travel ka total batao"
+async function handleCombineExpense(question) {
+  const q = question.toLowerCase();
+
+  const catMap = {
+    "salary": "Salary", "salari": "Salary", "wages": "Salary", "tankhwa": "Salary",
+    "office rent": "OFFICE RENT", "rent": "OFFICE RENT", "kiraya": "OFFICE RENT",
+    "travel": "Travel Exp", "conveyance": "Travel Exp",
+    "phone": "Phone and Internet", "internet": "Phone and Internet",
+    "electricity": "Utility Direc", "utility": "Utility Direc",
+    "insurance": "INSURANCE",
+    "maintenance": "Repair & Maintenance", "repair": "Repair & Maintenance",
+    "branding": "BRANDING EXP", "marketing": "BRANDING EXP",
+    "commission": "COMMISSION EXP",
+    "stationery": "Stationery", "stationary": "Stationery",
+    "legal": "Legal & Prof Exp", "professional": "Legal & Prof Exp",
+    "technical": "Technical Exp",
+    "welfare": "Employees Welfare",
+    "financial": "Financial Exp",
+  };
+
+  // Find which categories are mentioned
+  const mentionedCats = [];
+  // Sort by key length desc so "office rent" matches before "rent"
+  const sortedKeys = Object.keys(catMap).sort((a,b) => b.length - a.length);
+  for (const k of sortedKeys) {
+    if (q.includes(k) && !mentionedCats.includes(catMap[k])) {
+      mentionedCats.push(catMap[k]);
+    }
+  }
+
+  if (!mentionedCats.length) return null; // fallback to regular expense handler
+
+  // Month/year filter
+  const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+  let monthFilter = null, yearFilter = null;
+  for (const [mn,mv] of Object.entries(monthMap)) { if(q.includes(mn)){monthFilter=mv;break;} }
+  const yearMatch = q.match(/20(2[0-9])/);
+  if (yearMatch) yearFilter = yearMatch[0];
+
+  // Fetch all expenses for these categories
+  const { data } = await supabase.from("expenses")
+    .select("date,sub_group,amount,party_name")
+    .in("sub_group", mentionedCats)
+    .order("date", { ascending: false })
+    .limit(2000);
+
+  let filtered = data || [];
+  if (monthFilter || yearFilter) {
+    filtered = filtered.filter(r => {
+      const d = (r.date || "").substring(0, 7);
+      if (monthFilter && yearFilter) return d === yearFilter + "-" + monthFilter;
+      if (monthFilter) return d.endsWith("-" + monthFilter);
+      if (yearFilter) return d.startsWith(yearFilter);
+      return true;
+    });
+  }
+
+  if (!filtered.length) return `No expense records found for: ${mentionedCats.join(", ")}${monthFilter ? " in this period" : ""}.`;
+
+  // Group by category
+  const bycat = {};
+  filtered.forEach(r => { bycat[r.sub_group] = (bycat[r.sub_group] || 0) + (r.amount || 0); });
+  const grandTotal = filtered.reduce((s,r) => s + (r.amount||0), 0);
+
+  let ctx = `COMBINED EXPENSE SUMMARY (${mentionedCats.join(" + ")})${yearFilter ? " — " + yearFilter : ""}${monthFilter ? "-" + monthFilter : ""}:\n`;
+  ctx += "Category|Total Amount\n";
+  mentionedCats.forEach(cat => {
+    ctx += `${cat}|Rs.${(bycat[cat]||0).toLocaleString("en-IN")}\n`;
+  });
+  ctx += `GRAND TOTAL|Rs.${grandTotal.toLocaleString("en-IN")}`;
+
+  return ctx;
+}
+
 // ── NO SALES HANDLER ──────────────────────────────────────────────────────────
 async function handleNoSales(question) {
   const q = question.toLowerCase();
 
-  // Parse date range from question
-  const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+  // ── SPECIAL: "clients jinhe is saal invoice nahi gaya but last year the" ──
+  const isLastYearComparison = /last\s*year|pichle\s*saal|last\s*saal/i.test(q);
 
-  // Detect range like "apr 2025 to mar 2026" or "last 12 months" or "last 6 months"
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const thisYearStart = `${currentYear}-01-01`;
+  const thisYearEnd   = `${currentYear}-12-31`;
+  const lastYearStart = `${currentYear - 1}-01-01`;
+  const lastYearEnd   = `${currentYear - 1}-12-31`;
+
+  if (isLastYearComparison) {
+    // Get companies that had sales last year
+    const { data: lastYearSales } = await supabase.from("sales")
+      .select("company_name,total_price")
+      .gte("created_at", lastYearStart)
+      .lte("created_at", lastYearEnd)
+      .gt("total_price", 0)
+      .limit(5000);
+
+    // Get companies that had sales this year
+    const { data: thisYearSales } = await supabase.from("sales")
+      .select("company_name,total_price")
+      .gte("created_at", thisYearStart)
+      .lte("created_at", thisYearEnd)
+      .gt("total_price", 0)
+      .limit(5000);
+
+    const hadLastYear = {};
+    (lastYearSales || []).forEach(r => {
+      if (r.company_name) {
+        const key = r.company_name.trim();
+        hadLastYear[key] = (hadLastYear[key] || 0) + (r.total_price || 0);
+      }
+    });
+
+    const hadThisYear = new Set(
+      (thisYearSales || []).map(r => (r.company_name || "").trim().toLowerCase())
+    );
+
+    // Clients in last year but NOT in this year
+    const lostClients = Object.entries(hadLastYear)
+      .filter(([name]) => !hadThisYear.has(name.toLowerCase()))
+      .sort((a,b) => b[1] - a[1]); // sort by last year revenue
+
+    // Top N filter
+    const topMatch = q.match(/top\s*(\d+)/i);
+    const n = topMatch ? parseInt(topMatch[1]) : lostClients.length;
+    const finalList = lostClients.slice(0, n);
+
+    if (!finalList.length) return `All clients from ${currentYear - 1} have already been invoiced in ${currentYear}!`;
+
+    let ctx = `CLIENTS WITH SALE IN ${currentYear-1} BUT NO INVOICE IN ${currentYear} (${finalList.length} clients):\n`;
+    ctx += `Rank|Company Name|Last Year Revenue\n`;
+    finalList.forEach(([name, amt], i) => {
+      ctx += `${i+1}|${name}|Rs.${amt.toLocaleString("en-IN")}\n`;
+    });
+    ctx += `\nTotal Lost Revenue Potential: Rs.${finalList.reduce((s,[,a])=>s+a,0).toLocaleString("en-IN")}`;
+    return ctx;
+  }
+
+  // ── GENERIC NO SALES ──
+  const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
   let startMonth = null, endMonth = null;
 
-  // "last N months"
   const lastNMatch = q.match(/last\s*(\d+)\s*month/i);
   if (lastNMatch) {
     const n = parseInt(lastNMatch[1]);
-    const now = new Date();
     const end = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const start = new Date(end.getFullYear(), end.getMonth() - (n - 1), 1);
     startMonth = start.toISOString().substring(0, 7);
     endMonth = end.toISOString().substring(0, 7);
   } else {
-    // Try to find explicit months like "apr 2025 to mar 2026"
     const months = [];
     for (const [mn, mv] of Object.entries(monthMap)) {
       const yearMatch = new RegExp(mn + "\\s*(20\\d\\d)", "gi").exec(q);
@@ -232,12 +399,9 @@ async function handleNoSales(question) {
       startMonth = months[0].year + "-" + months[0].month;
       endMonth = months[1].year + "-" + months[1].month;
     } else if (months.length === 1) {
-      // Single month - just that month
       startMonth = months[0].year + "-" + months[0].month;
       endMonth = startMonth;
     } else {
-      // Default: last 12 months
-      const now = new Date();
       const end = new Date(now.getFullYear(), now.getMonth() - 1, 1);
       const start = new Date(end.getFullYear(), end.getMonth() - 11, 1);
       startMonth = start.toISOString().substring(0, 7);
@@ -245,7 +409,6 @@ async function handleNoSales(question) {
     }
   }
 
-  // Get all sales in the date range
   const { data: salesData } = await supabase.from("sales")
     .select("company_name,total_price,category,created_at")
     .gte("created_at", startMonth + "-01")
@@ -253,19 +416,16 @@ async function handleNoSales(question) {
     .gt("total_price", 0)
     .limit(5000);
 
-  // Get all ledger companies (active clients)
   const { data: ledgerData } = await supabase.from("ledger")
     .select("name,subgroup,closing_balance")
     .limit(5000);
 
   if (!ledgerData || !ledgerData.length) return "No client data found.";
 
-  // Find unique clients who had sales in this period
   const clientsWithSales = new Set(
     (salesData || []).map(r => (r.company_name || "").toLowerCase().trim())
   );
 
-  // Find unique ledger clients
   const uniqueLedgerClients = {};
   ledgerData.forEach(r => {
     if (r.name && r.name.trim()) {
@@ -274,13 +434,11 @@ async function handleNoSales(question) {
     }
   });
 
-  // Clients with NO sales in this period
   const noSalesClients = Object.values(uniqueLedgerClients).filter(r => {
     const norm = (r.name || "").toLowerCase().trim();
     return !clientsWithSales.has(norm);
   });
 
-  // Apply category filter if mentioned
   let catFilter = null;
   if (/google\s*sheet/i.test(q)) catFilter = "google";
   else if (/erp/i.test(q)) catFilter = "erp";
@@ -294,9 +452,7 @@ async function handleNoSales(question) {
     finalList = noSalesClients.filter(r => (r.subgroup || "").toLowerCase().includes(catFilter));
   }
 
-  if (!finalList.length) {
-    return `All clients had at least one sale between ${startMonth} and ${endMonth}.`;
-  }
+  if (!finalList.length) return `All clients had at least one sale between ${startMonth} and ${endMonth}.`;
 
   const ctx = `CLIENTS WITH NO SALES from ${startMonth} to ${endMonth} (${finalList.length} clients):\nClient Name|Subgroup|Closing Balance\n` +
     finalList.slice(0, 100).map(r => `${r.name}|${r.subgroup||"N/A"}|Rs.${(r.closing_balance||0).toLocaleString("en-IN")}`).join("\n");
@@ -306,7 +462,7 @@ async function handleNoSales(question) {
 
 // ── CONTEXT FETCHER ───────────────────────────────────────────────────────────
 async function fetchContext(question, type) {
-  const q = question.toLowerCase();
+  const q = fixTypos(question).toLowerCase(); // Always fix typos before matching
   let ctx = "";
 
   // ── PENDING ──
@@ -360,11 +516,12 @@ async function fetchContext(question, type) {
     };
 
     let matchedCat = null;
-    for (const [k,v] of Object.entries(catMap)) {
-      if (q.includes(k)) { matchedCat = v; break; }
+    // Sort by key length desc so "office rent" matches before "rent"
+    const sortedKeys = Object.keys(catMap).sort((a,b) => b.length - a.length);
+    for (const k of sortedKeys) {
+      if (q.includes(k)) { matchedCat = catMap[k]; break; }
     }
 
-    // Month/year filter for expenses
     const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
     let monthFilter = null, yearFilter = null;
     for (const [mn,mv] of Object.entries(monthMap)) { if(q.includes(mn)){monthFilter=mv;break;} }
@@ -372,15 +529,12 @@ async function fetchContext(question, type) {
     if (yearMatch2) yearFilter = yearMatch2[0];
 
     if (matchedCat) {
-      let query = supabase.from("expenses")
+      const { data } = await supabase.from("expenses")
         .select("date,party_name,design_number,amount,sub_group")
         .ilike("sub_group", "%" + matchedCat + "%")
         .order("date", { ascending: false }).limit(500);
 
-      const { data } = await query;
       let filtered = data || [];
-
-      // Apply month/year filter
       if (monthFilter || yearFilter) {
         filtered = filtered.filter(r => {
           const d = (r.date || "").substring(0, 7);
@@ -404,16 +558,6 @@ async function fetchContext(question, type) {
         data.forEach(r => { const m=(r.date||"").substring(0,7); if(m) bm[m]=(bm[m]||0)+(r.amount||0); });
         ctx = "MONTHLY EXPENSE SUMMARY:\nMonth|Total Amount\n";
         Object.entries(bm).sort().forEach(([m,a]) => { ctx += `${m}|Rs.${a.toLocaleString("en-IN")}\n`; });
-        ctx += `GRAND TOTAL: Rs.${data.reduce((s,r)=>s+(r.amount||0),0).toLocaleString("en-IN")}`;
-      }
-    }
-    else if (/categor|group|type|breakdow|summary/i.test(q)) {
-      const { data } = await supabase.from("expenses").select("sub_group,amount").limit(2000);
-      if (data && data.length) {
-        const bg = {};
-        data.forEach(r => { bg[r.sub_group||"Other"]=(bg[r.sub_group||"Other"]||0)+(r.amount||0); });
-        ctx = "EXPENSE SUMMARY BY CATEGORY:\nCategory|Total Amount\n";
-        Object.entries(bg).sort((a,b)=>b[1]-a[1]).forEach(([g,a]) => { ctx += `${g}|Rs.${a.toLocaleString("en-IN")}\n`; });
         ctx += `GRAND TOTAL: Rs.${data.reduce((s,r)=>s+(r.amount||0),0).toLocaleString("en-IN")}`;
       }
     }
@@ -441,21 +585,24 @@ async function fetchContext(question, type) {
         });
       } else ctx = `Invoice ${invMatch[0]} not found.`;
     } else {
-      const co = normalizeCompany(question.replace(/invoice|bill|invoices|bills|till\s*date|all|give|show|me|latest|recent/gi, " "));
+      // Fix typos in company name extraction too
+      const co = normalizeCompany(fixTypos(question).replace(/invoice|bill|invoices|bills|till\s*date|all|give|show|me|latest|recent/gi, " "));
       if (co.length > 1) {
         const words = co.split(" ").filter(w => w.length > 2);
         const primary = words.sort((a,b) => b.length-a.length)[0];
-        const { data } = await supabase.from("sales")
-          .select("invoice_no,company_name,description,total_price,invoice_pdf,created_at,category,contact_person,phone")
-          .ilike("company_name", "%" + primary + "%")
-          .order("created_at", { ascending: false }).limit(50);
-        if (data && data.length) {
-          const tot = data.reduce((s,r) => s+(r.total_price||0), 0);
-          ctx = `INVOICES for "${co}" (${data.length} invoices, Total Rs.${tot.toLocaleString("en-IN")}):\nInv No|Date|Description|Category|Amount|PDF\n`;
-          data.forEach(r => {
-            ctx += `${r.invoice_no||""}|${(r.created_at||"").split("T")[0]}|${(r.description||"").slice(0,50)}|${r.category||""}|Rs.${(r.total_price||0).toLocaleString("en-IN")}|${r.invoice_pdf||"N/A"}\n`;
-          });
-        } else ctx = `No invoices found for "${co}".`;
+        if (primary) {
+          const { data } = await supabase.from("sales")
+            .select("invoice_no,company_name,description,total_price,invoice_pdf,created_at,category,contact_person,phone")
+            .ilike("company_name", "%" + primary + "%")
+            .order("created_at", { ascending: false }).limit(50);
+          if (data && data.length) {
+            const tot = data.reduce((s,r) => s+(r.total_price||0), 0);
+            ctx = `INVOICES for "${co}" (${data.length} invoices, Total Rs.${tot.toLocaleString("en-IN")}):\nInv No|Date|Description|Category|Amount|PDF\n`;
+            data.forEach(r => {
+              ctx += `${r.invoice_no||""}|${(r.created_at||"").split("T")[0]}|${(r.description||"").slice(0,50)}|${r.category||""}|Rs.${(r.total_price||0).toLocaleString("en-IN")}|${r.invoice_pdf||"N/A"}\n`;
+            });
+          } else ctx = `No invoices found for "${co}".`;
+        }
       }
     }
   }
@@ -463,13 +610,13 @@ async function fetchContext(question, type) {
   // ── SALES ──
   else if (type === "SALES") {
     const salesCatMap = {
-      "erp call":"ERP - CALL SYSTEM", "erp-call":"ERP - CALL SYSTEM", "erp call system":"ERP - CALL SYSTEM",
-      "erp ready":"ERP - READY PRODUCTS", "erp product":"ERP - READY PRODUCTS", "erp - ready":"ERP - READY PRODUCTS",
-      "google sheet retainer":"GOOGLE SHEET - RETAINERSHIP", "retainer":"GOOGLE SHEET - RETAINERSHIP", "retainership":"GOOGLE SHEET - RETAINERSHIP",
+      "erp call system":"ERP - CALL SYSTEM", "erp - call":"ERP - CALL SYSTEM", "erp call":"ERP - CALL SYSTEM",
+      "erp ready":"ERP - READY PRODUCTS", "erp product":"ERP - READY PRODUCTS",
+      "google sheet retainer":"GOOGLE SHEET - RETAINERSHIP", "retainership":"GOOGLE SHEET - RETAINERSHIP", "retainer":"GOOGLE SHEET - RETAINERSHIP",
       "google sheet custom":"GOOGLE SHEET - CUSTOM", "custom sheet":"GOOGLE SHEET - CUSTOM",
       "google sheet ready":"GOOGLE SHEET - READY", "ready sheet":"GOOGLE SHEET - READY",
       "google sheet amc":"GOOGLE SHEET - AMC", "amc":"GOOGLE SHEET - AMC",
-      "whatsapp":"WHATSAPP CREDIT", "wa wallet":"WA Wallet", "wa credit":"WHATSAPP CREDIT",
+      "whatsapp credit":"WHATSAPP CREDIT", "whatsapp":"WHATSAPP CREDIT", "wa wallet":"WA Wallet",
       "web form":"WEB FORM", "webform":"WEB FORM",
       "mobile app pansari":"MOBILE APP - PANSARI", "mobile app":"MOBILE APP - OTHERS",
       "php pansari":"PHP - PANSARI", "php other":"PHP - OTHERS", "php":"PHP - OTHERS",
@@ -477,8 +624,9 @@ async function fetchContext(question, type) {
     };
 
     let salesCat = null;
-    for (const [k,v] of Object.entries(salesCatMap)) {
-      if (q.includes(k)) { salesCat = v; break; }
+    const sortedSalesCatKeys = Object.keys(salesCatMap).sort((a,b) => b.length-a.length);
+    for (const k of sortedSalesCatKeys) {
+      if (q.includes(k)) { salesCat = salesCatMap[k]; break; }
     }
 
     const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
@@ -534,7 +682,7 @@ async function fetchContext(question, type) {
 
   // ── CONTACT ──
   else if (type === "CONTACT") {
-    const cleaned = normalizeCompany(question).trim();
+    const cleaned = normalizeCompany(fixTypos(question)).trim();
     if (cleaned.length < 2) return "Please tell me which company's contact you need.";
     const words = cleaned.split(" ").filter(w => w.length > 2);
     const primary = words.sort((a,b) => b.length-a.length)[0];
@@ -568,7 +716,7 @@ async function fetchContext(question, type) {
 
   // ── GENERAL ──
   else {
-    const words = question.split(" ").filter(w => w.length > 3);
+    const words = fixTypos(question).split(" ").filter(w => w.length > 3);
     let found = false;
     for (const w of words) {
       const { data } = await supabase.from("ledger")
@@ -586,6 +734,27 @@ async function fetchContext(question, type) {
   return ctx;
 }
 
+// ── AI CALLER ─────────────────────────────────────────────────────────────────
+async function callAI(systemPrompt, userMessage, history = []) {
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { "Authorization": "Bearer " + process.env.OPENAI_API_KEY, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
+        { role: "user", content: userMessage }
+      ],
+      max_tokens: 2000,
+      temperature: 0.1
+    })
+  });
+  const d = await response.json();
+  if (!response.ok) throw new Error(JSON.stringify(d));
+  return d.choices?.[0]?.message?.content || "No response.";
+}
+
 // ── MAIN CHAT ROUTE ───────────────────────────────────────────────────────────
 app.post("/chat", async (req, res) => {
   const { message, history = [], session_id, exactName } = req.body;
@@ -594,7 +763,7 @@ app.post("/chat", async (req, res) => {
   try {
     const type = detectType(message);
 
-    // LEDGER: Direct HTML
+    // ── LEDGER ──
     if (type === "LEDGER") {
       const result = await handleLedger(message, exactName || null);
       if (session_id && result.type !== "suggestions") {
@@ -606,7 +775,7 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: result.content || "", type: result.type, options: result.options || [] });
     }
 
-    // CONTACT: Direct from DB
+    // ── CONTACT ──
     if (type === "CONTACT") {
       const ctx = await fetchContext(message, type);
       if (session_id) {
@@ -618,30 +787,15 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: ctx, type: "text" });
     }
 
-    // NO SALES: Direct handler
-    if (type === "NO_SALES") {
-      const ctx = await handleNoSales(message);
-      // Pass to AI for formatting
-      const sys = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
-Reply in ENGLISH ONLY. Use HTML tables for data display.
-Table style: <table border='1' cellpadding='6' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
-RULES: NEVER invent data. Use ONLY the DATABASE DATA below. Format amounts as Rs. X,XX,XXX.
-DATABASE DATA:\n${ctx}`;
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": "Bearer " + process.env.OPENAI_API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: sys },
-            { role: "user", content: message }
-          ],
-          max_tokens: 2000, temperature: 0.1
-        })
-      });
-      const d = await response.json();
-      const reply = d.choices?.[0]?.message?.content || "No data found.";
+    // ── COMBINE EXPENSE ──
+    if (type === "COMBINE_EXPENSE") {
+      const ctx = await handleCombineExpense(message);
+      if (!ctx) {
+        // Fallback to regular expense
+        return handleAsExpense(message, history, session_id, res);
+      }
+      const sys = buildSystemPrompt(ctx);
+      const reply = await callAI(sys, message, history);
       if (session_id) {
         await supabase.from("chat_history").insert([
           { session_id, role: "user", content: message },
@@ -652,56 +806,25 @@ DATABASE DATA:\n${ctx}`;
       return res.json({ reply, type: replyType });
     }
 
-    // ALL OTHERS: AI with context
+    // ── NO SALES ──
+    if (type === "NO_SALES") {
+      const ctx = await handleNoSales(message);
+      const sys = buildSystemPrompt(ctx);
+      const reply = await callAI(sys, message, history);
+      if (session_id) {
+        await supabase.from("chat_history").insert([
+          { session_id, role: "user", content: message },
+          { session_id, role: "assistant", content: reply }
+        ]);
+      }
+      const replyType = /<table|<div|<tr|<td|<th/i.test(reply) ? "html" : "text";
+      return res.json({ reply, type: replyType });
+    }
+
+    // ── ALL OTHERS ──
     const ctx = await fetchContext(message, type);
-
-    const sys = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
-
-LANGUAGE: Always reply in ENGLISH ONLY. Understand Hindi, Hinglish, typos, short forms.
-Examples:
-- "erp call system ka sale batao apr 2026 mein" = Sales of ERP - CALL SYSTEM category in April 2026
-- "month wise sale dikhao" = Show month-wise sales breakdown
-- "60-90 days ka pending batao" = Show pending with overdue 60-90 days
-- "pansari ka invoice dikhao" = Show all invoices for Pansari
-- "salary kitni gayi is mahine" = Show salary expenses this month
-
-DATA DISPLAY: Use HTML tables for all data.
-Table: <table border='1' cellpadding='6' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
-
-AVAILABLE SALES CATEGORIES (use exact names):
-ERP - CALL SYSTEM | ERP - READY PRODUCTS | GOOGLE SHEET - RETAINERSHIP | GOOGLE SHEET - CUSTOM | GOOGLE SHEET - READY | GOOGLE SHEET - AMC | WHATSAPP CREDIT | WA Wallet | WEB FORM | MOBILE APP - PANSARI | MOBILE APP - OTHERS | PHP - PANSARI | PHP - OTHERS | TALLY
-
-AVAILABLE EXPENSE CATEGORIES:
-Salary | OFFICE RENT | Phone and Internet | Technical Exp | Travel Exp | Utility Direc | INSURANCE | Repair & Maintenance | BRANDING EXP | COMMISSION EXP | Stationery | Legal & Prof Exp | Employees Welfare | Financial Exp | Computer Maintenance | Bad Debts | Factory Related | OFFICE EXP | Telephone Exp | Maintenance Fee | Indirect Expenses | Other Expense
-
-RULES:
-- NEVER invent data. Use ONLY the DATABASE DATA below.
-- If no data: say "No data found for this query."
-- Always show totals at bottom of tables.
-- Format amounts as Rs. X,XX,XXX.XX (Indian format).
-- For PDFs, make them clickable links if URL is available.
-
-DATABASE DATA:
-${ctx}`;
-
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { "Authorization": "Bearer " + process.env.OPENAI_API_KEY, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: sys },
-          ...history.slice(-6).map(h => ({ role: h.role, content: h.content })),
-          { role: "user", content: message }
-        ],
-        max_tokens: 2000,
-        temperature: 0.1
-      })
-    });
-
-    const d = await response.json();
-    if (!response.ok) return res.status(500).json({ error: "AI error", details: d });
-    const reply = d.choices?.[0]?.message?.content || "No response.";
+    const sys = buildSystemPrompt(ctx);
+    const reply = await callAI(sys, message, history);
 
     if (session_id) {
       await supabase.from("chat_history").insert([
@@ -714,10 +837,44 @@ ${ctx}`;
     res.json({ reply, type: replyType });
 
   } catch (err) {
-    console.error(err);
+    console.error("CHAT ERROR:", err);
     res.status(500).json({ error: err.message });
   }
 });
+
+// ── SYSTEM PROMPT BUILDER ─────────────────────────────────────────────────────
+function buildSystemPrompt(ctx) {
+  return `You are a Sales & Finance Assistant for Mis Work India Private Limited.
+
+LANGUAGE: Always reply in ENGLISH ONLY. You understand Hindi, Hinglish, typos, and short forms.
+Examples of queries you should handle:
+- "erp call system ka sale batao apr 2026 mein" → ERP - CALL SYSTEM sales in April 2026
+- "month wise sale dikhao" → Month-wise sales breakdown
+- "60-90 days ka pending batao" → Pending with overdue 60-90 days
+- "salary + office rent + travel combine karke total kya banta hai" → Sum of those 3 expense categories
+- "top 5 clients jinhe is saal invoice nahi gaya but last year the" → Clients invoiced last year but not this year
+- "pansri ka lgdr dikao" → Ledger of Pansari company (typo-tolerant)
+
+DATA DISPLAY: Use HTML tables for all data.
+Table style: <table border='1' cellpadding='6' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
+
+AVAILABLE SALES CATEGORIES:
+ERP - CALL SYSTEM | ERP - READY PRODUCTS | GOOGLE SHEET - RETAINERSHIP | GOOGLE SHEET - CUSTOM | GOOGLE SHEET - READY | GOOGLE SHEET - AMC | WHATSAPP CREDIT | WA Wallet | WEB FORM | MOBILE APP - PANSARI | MOBILE APP - OTHERS | PHP - PANSARI | PHP - OTHERS | TALLY
+
+AVAILABLE EXPENSE CATEGORIES:
+Salary | OFFICE RENT | Phone and Internet | Technical Exp | Travel Exp | Utility Direc | INSURANCE | Repair & Maintenance | BRANDING EXP | COMMISSION EXP | Stationery | Legal & Prof Exp | Employees Welfare | Financial Exp | Computer Maintenance | Bad Debts | Factory Related | OFFICE EXP | Telephone Exp | Indirect Expenses
+
+RULES:
+- NEVER invent data. Use ONLY the DATABASE DATA provided below.
+- If no data available: reply "No data found for this query."
+- Always show totals/grand totals at the bottom of tables.
+- Format all amounts as Rs. X,XX,XXX.XX (Indian format).
+- For PDFs, make them clickable links if URL is available.
+- For combined expense queries, show each category as a separate row, then grand total row.
+
+DATABASE DATA:
+${ctx}`;
+}
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("MIS Chatbot running at http://localhost:" + PORT));
