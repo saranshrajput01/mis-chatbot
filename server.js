@@ -593,7 +593,7 @@ async function sendWhatsAppReply(to, message) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + WA_API_KEY
+        "x-api-key": WA_API_KEY
       },
       body: JSON.stringify({
         receiverMobileNo: phone,
