@@ -262,6 +262,17 @@ CRITICAL SQL RULES (follow strictly):
 6. NULLIF(x, 0) to avoid division by zero
 7. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
 
+8. COMPANY NAME DEDUPLICATION (CRITICAL):
+   - Sales table has same companies stored in different cases (e.g. "PANSARI INDUSTRIES" and "Pansari Industries")
+   - ALWAYS use UPPER(company_name) for grouping to merge duplicates:
+     GROUP BY UPPER(company_name)
+   - For display, use MAX(company_name) or MIN(company_name) to pick one version:
+     SELECT MAX(company_name) as company_name, SUM(total_price) as total_sales
+     FROM sales GROUP BY UPPER(company_name)
+   - Same rule for pending table: GROUP BY UPPER(party_name), display: MAX(party_name)
+   - Same rule for ledger table: GROUP BY UPPER(name), display: MAX(name)
+   - NEVER group by raw company_name/party_name without UPPER() wrapping
+
 === SQL EXAMPLES ===
 "team member wise salary apr 2025 to mar 2026 pivot":
 SELECT design_number as name, TO_CHAR(date,'YYYY-MM') as month, ROUND(SUM(amount)::numeric,0) as total
