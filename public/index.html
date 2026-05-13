@@ -429,14 +429,6 @@
     col.appendChild(bubble);
     col.appendChild(ts);
 
-    // Timestamp
-    const ts = document.createElement("div");
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-    ts.style.cssText = "font-size:10px;color:#aaa;margin-top:3px;padding:0 4px;text-align:" + (role==="user" ? "right" : "left");
-    ts.textContent = timeStr;
-    col.appendChild(ts);
-
     wrap.appendChild(av);
     wrap.appendChild(col);
     chat.appendChild(wrap);
