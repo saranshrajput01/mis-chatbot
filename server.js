@@ -204,14 +204,23 @@ Understand Hindi, Hinglish, typos perfectly:
 
 === PERSON NAME SEARCH (CRITICAL) ===
 When user mentions a PERSON NAME (like "Deepankar ji", "Shammi ji", "Ankur"):
-- Search sales table: WHERE contact_person ILIKE '%name%' OR login ILIKE '%name%'
+- Search sales table using contact_person or login column
 - NEVER use query_type:"ledger" for person searches
-- "Deepankar ji ka address/GST/details" → SELECT DISTINCT company_name, address, state, gst_no, contact_person, phone FROM sales WHERE contact_person ILIKE '%Deepankar%'
+- Always use DISTINCT ON (gst_no) to avoid duplicate company entries
+- "Deepankar ji ka address/GST/details":
+  SELECT DISTINCT ON (gst_no) company_name, address, state, gst_no, contact_person, phone
+  FROM sales WHERE contact_person ILIKE '%Deepankar%'
+  ORDER BY gst_no, created_at DESC
 
 === GST / BILLING DETAILS ===
 For GST details, address, billing info → always use sales table:
 - Columns: gst_no, company_name, address, state, contact_person, phone
-- "GST details/bill details/invoice details of X" → SELECT DISTINCT company_name, address, state, gst_no, contact_person, phone FROM sales WHERE company_name ILIKE '%X%'
+- ALWAYS use DISTINCT ON (gst_no) to get one record per unique company
+- "GST details of X":
+  SELECT DISTINCT ON (gst_no) company_name, address, state, gst_no, contact_person, phone
+  FROM sales WHERE company_name ILIKE '%X%'
+  ORDER BY gst_no, created_at DESC
+- If no gst_no: use DISTINCT ON (company_name)
 
 === WHEN TO USE LEDGER (query_type:"ledger") ===
 ONLY when user explicitly says: ledger / lgdr / khata / statement / account statement
