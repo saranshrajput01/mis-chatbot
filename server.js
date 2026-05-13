@@ -701,6 +701,7 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
+    console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
     console.log("[WHATSAPP]", sender, "->", message);
     if (!liveSchema) await fetchLiveSchema();
 
