@@ -14,6 +14,37 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 );
 
+// ── LIVE SCHEMA AUTO-DISCOVERY ────────────────────────────────────────────────
+// Fetches real column names from DB at startup — no hardcoding needed
+let liveSchema = "";
+
+async function fetchLiveSchema() {
+  try {
+    const { data, error } = await supabase.rpc("execute_sql", {
+      query: `SELECT table_name, column_name, data_type
+              FROM information_schema.columns
+              WHERE table_schema = 'public'
+              AND table_name IN ('sales','expenses','pending','ledger')
+              ORDER BY table_name, ordinal_position`
+    });
+    if (error || !data) { console.error("[SCHEMA]", error?.message); return; }
+
+    const tables = {};
+    data.forEach(r => {
+      if (!tables[r.table_name]) tables[r.table_name] = [];
+      tables[r.table_name].push(r.column_name + " (" + r.data_type + ")");
+    });
+
+    liveSchema = "=== ACTUAL DATABASE COLUMNS (auto-detected, always use these) ===\n";
+    Object.entries(tables).forEach(([tbl, cols]) => {
+      liveSchema += "TABLE public." + tbl + ":\n  " + cols.join(", ") + "\n\n";
+    });
+    console.log("[SCHEMA] Live schema loaded:", Object.keys(tables).join(", "));
+  } catch(e) {
+    console.error("[SCHEMA] Error:", e.message);
+  }
+}
+
 // ── OPENAI ────────────────────────────────────────────────────────────────────
 async function openai(systemPrompt, messages, maxTokens = 3000) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -148,6 +179,9 @@ app.delete("/history/:sid", async (req, res) => {
 // ── THE BRAIN: AI generates SQL + formats answer ──────────────────────────────
 async function processQuery(userMessage, chatHistory) {
 
+  // Refresh schema on each request (cached after first load)
+  if (!liveSchema) await fetchLiveSchema();
+
   const SYSTEM = `You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
 Today: ${new Date().toISOString().split("T")[0]}. Financial year: Apr 2025 – Mar 2026.
 
@@ -155,7 +189,9 @@ You have access to a PostgreSQL database. You will:
 1. Write a SQL query to get the data
 2. Format the result as HTML
 
-=== DATABASE SCHEMA ===
+${liveSchema}
+
+=== ADDITIONAL SCHEMA NOTES ===
 
 TABLE: public.sales
   id SERIAL, invoice_no TEXT, company_name TEXT, address TEXT, state TEXT,
@@ -614,4 +650,7 @@ app.post("/chat", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`));
+app.listen(PORT, async () => {
+  console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
+  await fetchLiveSchema(); // Load real schema at startup
+});
