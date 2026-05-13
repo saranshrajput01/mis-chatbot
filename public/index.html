@@ -32,10 +32,10 @@
     .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; margin-top: 2px; }
     .avatar.bot { background: #1a1a2e; color: #fff; }
     .avatar.user { background: #4a90d9; color: #fff; }
-    .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+    .bubble { max-width: 100%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
     .bubble.bot { background: #fff; color: #222; border-top-left-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
     .bubble.user { background: #1a73e8; color: #fff; border-top-right-radius: 2px; }
-    .bubble.html-content { max-width: 98%; padding: 10px; background: #fff; overflow-x: auto; box-shadow: 0 1px 6px rgba(0,0,0,0.12); border-radius: 10px; }
+    .bubble.html-content { max-width: 100%; padding: 10px; background: #fff; overflow-x: auto; box-shadow: 0 1px 6px rgba(0,0,0,0.12); border-radius: 10px; }
 
     /* TABLE STYLES */
     .bubble table, .bubble.html-content table { border-collapse: collapse !important; font-size: 12px !important; font-family: Arial !important; }
@@ -416,8 +416,29 @@
       }
     }
 
+    // Add timestamp
+    const ts = document.createElement("div");
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2,"0");
+    const mm = String(now.getMinutes()).padStart(2,"0");
+    ts.style.cssText = `font-size:10px;color:#aaa;margin-top:3px;text-align:${role==="user"?"right":"left"};padding:0 4px`;
+    ts.textContent = hh + ":" + mm;
+
+    const col = document.createElement("div");
+    col.style.cssText = `display:flex;flex-direction:column;max-width:${type==="html"?"98%":"80%"}`;
+    col.appendChild(bubble);
+    col.appendChild(ts);
+
+    // Timestamp
+    const ts = document.createElement("div");
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+    ts.style.cssText = "font-size:10px;color:#aaa;margin-top:3px;padding:0 4px;text-align:" + (role==="user" ? "right" : "left");
+    ts.textContent = timeStr;
+    col.appendChild(ts);
+
     wrap.appendChild(av);
-    wrap.appendChild(bubble);
+    wrap.appendChild(col);
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
   }
