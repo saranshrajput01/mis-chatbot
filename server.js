@@ -82,9 +82,13 @@ function normalizeCompany(text = "") {
 
 // ── DETECT QUERY TYPE ─────────────────────────────────────────────────────────
 function detectType(q) {
-  // Fix typos first for detection
   const fixed = fixTypos(q);
   const ql = fixed.toLowerCase();
+
+  // PIVOT: category × month table (must check before SALES)
+  if (/(pivot|month.*col|col.*month|category.*month|month.*category|12\s*month|12\s*col|most.sell|best.sell|top.sell|product.*month|month.*product|category.*wise.*month|month.*wise.*category)/i.test(ql)) {
+    return "PIVOT_SALES";
+  }
 
   // COMBINE: multiple expense categories joined with +, aur, and, comma
   if (/\+|combine|total.*expense|expense.*total/.test(ql) &&
@@ -95,7 +99,6 @@ function detectType(q) {
   if (/ledger|khata|statement|account\s*detail|balanc/i.test(ql)) return "LEDGER";
   if (/pending|overdue|baaki|baki|\bdue\b|60.?day|90.?day|120.?day|30.?day|180.?day|60-90|90-120|ageing|aging/i.test(ql)) return "PENDING";
 
-  // NO_SALES: clients who had no sale this year but had last year, OR generic no-sale queries
   if (/no\s*sale|zero\s*sale|without\s*sale|not\s*sold|inactive|dead\s*client|koi\s*sale\s*nahi|sale\s*nahi|invoice\s*nahi.*but.*last\s*year|last\s*year.*tha|nahi\s*gaya.*last\s*year/i.test(ql)) return "NO_SALES";
 
   if (/salary|wages|payroll/i.test(ql)) return "EXPENSE";
@@ -105,6 +108,131 @@ function detectType(q) {
   if (/sale|revenue|top\s*\d|client|customer|best|highest|earning|income|sells|category.*sale|sale.*category|month.*sale|sale.*month|product.*sale|erp|google\s*sheet|whatsapp|mobile\s*app|tally|web\s*form|php|retainer/i.test(ql)) return "SALES";
   if (/phone|mobile\s*num|number|contact|num\b|no\.\s|call/i.test(ql)) return "CONTACT";
   return "GENERAL";
+}
+
+// ── PIVOT SALES HANDLER ───────────────────────────────────────────────────────
+// Builds a Category × Month pivot table for sales
+async function handlePivotSales(question) {
+  const q = question.toLowerCase();
+
+  // Parse start month/year from query — default: Apr 2025 → Mar 2026
+  const monthNames = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"];
+  const monthNums  = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+
+  let startYear = 2025, startMonthIdx = 3; // Apr = index 3
+
+  // Try to detect start month like "apr-25", "apr 2025", "april 25"
+  for (let i = 0; i < monthNames.length; i++) {
+    const mn = monthNames[i];
+    const re = new RegExp(mn + "[\\s\\-]*(20)?(\\d{2})", "i");
+    const m = q.match(re);
+    if (m) {
+      startMonthIdx = i;
+      startYear = parseInt("20" + m[2]);
+      break;
+    }
+  }
+
+  // Build ordered list of 12 months
+  const months = [];
+  for (let i = 0; i < 12; i++) {
+    const idx = (startMonthIdx + i) % 12;
+    const yr  = startYear + Math.floor((startMonthIdx + i) / 12);
+    months.push({
+      label: monthNames[idx].charAt(0).toUpperCase() + monthNames[idx].slice(1) + "-" + String(yr).slice(2),
+      key: `${yr}-${String(idx + 1).padStart(2,"0")}`
+    });
+  }
+
+  const startDate = months[0].key + "-01";
+  const endDate   = months[11].key + "-31";
+
+  // Fetch all sales in this 12-month window
+  const { data, error } = await supabase.from("sales")
+    .select("category,total_price,created_at")
+    .gte("created_at", startDate)
+    .lte("created_at", endDate)
+    .gt("total_price", 0)
+    .limit(10000);
+
+  if (error || !data || !data.length) {
+    return { html: null, text: `No sales data found between ${months[0].label} and ${months[11].label}.` };
+  }
+
+  // Build pivot: category → { monthKey → total }
+  const pivot = {};
+  const categoryTotals = {};
+
+  data.forEach(r => {
+    const cat = r.category || "Unknown";
+    const monthKey = (r.created_at || "").substring(0, 7);
+    if (!pivot[cat]) pivot[cat] = {};
+    pivot[cat][monthKey] = (pivot[cat][monthKey] || 0) + (r.total_price || 0);
+    categoryTotals[cat] = (categoryTotals[cat] || 0) + (r.total_price || 0);
+  });
+
+  // Sort categories by total (most selling first)
+  const sortedCats = Object.entries(categoryTotals)
+    .sort((a, b) => b[1] - a[1])
+    .map(([cat]) => cat);
+
+  // Build HTML table
+  const TH = `padding:6px 8px;border:1px solid #555;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:center;white-space:nowrap`;
+  const TD = `padding:5px 7px;border:1px solid #ccc;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap`;
+  const TDL = `padding:5px 7px;border:1px solid #ccc;font-size:11px;font-family:Arial;text-align:left;white-space:nowrap`;
+
+  // Header row
+  let headerCells = `<th style="${TH};text-align:left">Product Category</th>`;
+  months.forEach(m => { headerCells += `<th style="${TH}">${m.label}</th>`; });
+  headerCells += `<th style="${TH};background:#333">Total</th>`;
+
+  // Data rows
+  let dataRows = "";
+  const monthGrandTotals = {};
+  months.forEach(m => { monthGrandTotals[m.key] = 0; });
+  let grandTotal = 0;
+
+  sortedCats.forEach((cat, idx) => {
+    const bg = idx % 2 === 0 ? "#fff" : "#f9f9f9";
+    let row = `<tr style="background:${bg}"><td style="${TDL}"><b>${cat}</b></td>`;
+    let rowTotal = 0;
+    months.forEach(m => {
+      const val = pivot[cat][m.key] || 0;
+      monthGrandTotals[m.key] = (monthGrandTotals[m.key] || 0) + val;
+      rowTotal += val;
+      row += `<td style="${TD}">${val > 0 ? "Rs." + val.toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:0}) : "-"}</td>`;
+    });
+    grandTotal += rowTotal;
+    row += `<td style="${TD};background:#fff3cd;font-weight:bold">Rs.${rowTotal.toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:0})}</td>`;
+    row += `</tr>`;
+    dataRows += row;
+  });
+
+  // Grand total row
+  let totalRow = `<tr style="background:#e0e0e0"><td style="${TDL};font-weight:bold">GRAND TOTAL</td>`;
+  months.forEach(m => {
+    const val = monthGrandTotals[m.key] || 0;
+    totalRow += `<td style="${TD};font-weight:bold">${val > 0 ? "Rs." + val.toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:0}) : "-"}</td>`;
+  });
+  totalRow += `<td style="${TD};background:#ffc107;font-weight:bold;font-size:12px">Rs.${grandTotal.toLocaleString("en-IN", {minimumFractionDigits:0, maximumFractionDigits:0})}</td></tr>`;
+
+  const html = `<div style="font-family:Arial,sans-serif;font-size:12px;max-width:100%">
+    <div style="padding:8px 4px;border-bottom:2px solid #1a1a2e;margin-bottom:8px">
+      <b style="font-size:13px">📊 Product Category — Month-wise Sales</b>
+      <span style="font-size:11px;color:#666;margin-left:12px">${months[0].label} to ${months[11].label}</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table style="border-collapse:collapse;font-size:11px;min-width:900px">
+        <thead><tr>${headerCells}</tr></thead>
+        <tbody>${dataRows}${totalRow}</tbody>
+      </table>
+    </div>
+    <div style="padding:6px 4px;font-size:11px;color:#555;margin-top:4px">
+      Total Records: <b>${data.length}</b> &nbsp;|&nbsp; Categories: <b>${sortedCats.length}</b> &nbsp;|&nbsp; Grand Total: <b>Rs.${grandTotal.toLocaleString("en-IN")}</b>
+    </div>
+  </div>`;
+
+  return { html, text: null };
 }
 
 // ── LEDGER HTML BUILDER ───────────────────────────────────────────────────────
@@ -762,6 +890,21 @@ app.post("/chat", async (req, res) => {
 
   try {
     const type = detectType(message);
+
+
+    // ── PIVOT SALES ──
+    if (type === "PIVOT_SALES") {
+      const result = await handlePivotSales(message);
+      const reply = result.html || result.text;
+      const replyType = result.html ? "html" : "text";
+      if (session_id) {
+        await supabase.from("chat_history").insert([
+          { session_id, role: "user", content: message },
+          { session_id, role: "assistant", content: reply }
+        ]);
+      }
+      return res.json({ reply, type: replyType });
+    }
 
     // ── LEDGER ──
     if (type === "LEDGER") {
