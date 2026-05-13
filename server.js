@@ -698,7 +698,17 @@ app.post("/whatsapp", async (req, res) => {
     }
 
     console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
-    console.log("[WHATSAPP]", sender, "->", message);
+    // app.mis.work specific fields
+    const wpMessage = body.message || body.text || body.Body || 
+      body.data?.message || body.data?.text ||
+      (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
+      (Array.isArray(body.messages) ? body.messages[0]?.body : null) || "";
+    const wpSender = body.from || body.sender || body.mobile || 
+      body.data?.from || body.data?.sender || "user";
+    if (!message && wpMessage) {
+      Object.assign(body, { message: wpMessage, from: wpSender });
+    }
+    console.log("[WHATSAPP EXTRACTED]", wpSender, "->", wpMessage || message);
     if (!liveSchema) await fetchLiveSchema();
 
     let plan;
