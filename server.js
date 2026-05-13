@@ -8,10 +8,14 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(require("path").join(__dirname, "public")));
 
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+// Service role client — allows AI to run any SQL
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
 
-// ── OPENAI HELPER ─────────────────────────────────────────────────────────────
-async function openai(systemPrompt, messages, maxTokens = 2000) {
+// ── OPENAI ────────────────────────────────────────────────────────────────────
+async function openai(systemPrompt, messages, maxTokens = 3000) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -30,72 +34,6 @@ async function openai(systemPrompt, messages, maxTokens = 2000) {
   return d.choices?.[0]?.message?.content || "";
 }
 
-// ── DATABASE SCHEMA ───────────────────────────────────────────────────────────
-function getSchema() {
-  return `
-You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
-Today's date: ${new Date().toISOString().split("T")[0]}
-Current financial year: April 2025 to March 2026 (2026-03-31 is the last day)
-
-SYNONYM MAPPINGS:
-- client = customer = party = company = client name = party name
-- show = dikhao = batao = de = dedo = dikha = share = give = bta
-- ledger = lgdr = ldgr = khata
-- invoice = bill = invois
-- salary = salari = tankhwa = wages
-- rent = kiraya = office rent
-- expense = kharcha = kharch = cost
-- pending = baaki = baki = overdue
-- team member = employee = staff = party_name in expenses table
-
-DATABASE TABLES:
-
-=== TABLE: sales ===
-- created_at (timestamp)   → invoice date
-- invoice_no (text)        → e.g. "MIS-24-25-123"
-- company_name (text)      → CLIENT/customer name
-- address, state, gst_no, contact_person, phone (text)
-- description (text)       → work description
-- total_price (numeric)    → invoice amount
-- category (text)          → product/service type
-- invoice_pdf (text)       → PDF URL
-- login (text)             → salesperson
-
-Categories: "GOOGLE SHEET - RETAINERSHIP","GOOGLE SHEET - CUSTOM","GOOGLE SHEET - READY",
-"GOOGLE SHEET - AMC","PHP - PANSARI","PHP - OTHERS","WHATSAPP CREDIT","WA Wallet",
-"ERP - CALL SYSTEM","ERP - READY PRODUCTS","MOBILE APP - PANSARI","MOBILE APP - OTHERS",
-"WEB FORM","TALLY"
-
-=== TABLE: expenses ===
-- date (date)              → expense date
-- voucher_number (int)
-- party_name (text)        → *** THIS IS THE TEAM MEMBER / EMPLOYEE NAME for salary entries ***
-                             *** ALWAYS fetch party_name when user asks about team members ***
-- group (text)             → main group
-- sub_group (text)         → expense category (e.g. "Salary")
-- design_number (text)     → description/narration
-- amount (numeric)         → Rs.
-- type (text)              → "Dr" or "Cr"
-
-Sub_groups: "Salary","OFFICE RENT","Phone and Internet","Technical Exp","Travel Exp",
-"Utility Direc","INSURANCE","Repair & Maintenance","BRANDING EXP","COMMISSION EXP",
-"Stationery","Legal & Prof Exp","Employees Welfare","Financial Exp","Computer Maintenance",
-"Bad Debts","Factory Related","OFFICE EXP","Telephone Exp","Indirect Expenses","Other Expense"
-
-=== TABLE: pending ===
-- bill_date, bill_ref_no, party_name, party_group, sub_group, sales_person (text)
-- pending_amount (text)    → "₹1,090" format
-- due_date (date), overdue_days (int)
-
-=== TABLE: ledger ===
-- name (text)              → company name
-- subgroup, group, email, contact_person, mobile (text)
-- opening_balance, closing_balance (numeric)
-- voucher_date (date), voucher_particular, voucher_type, voucher_no (text)
-- voucher_debit, voucher_credit (numeric)
-`;
-}
-
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function fmtAmt(n) {
   const num = parseFloat(String(n || "").replace(/[₹,]/g, "")) || 0;
@@ -106,18 +44,18 @@ function fmtDate(d) {
   if (!d) return "";
   const dt = new Date(d);
   if (isNaN(dt)) return String(d).split("T")[0];
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return String(dt.getDate()).padStart(2,"0") + "-" + months[dt.getMonth()] + "-" + String(dt.getFullYear()).slice(2);
+  const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return String(dt.getDate()).padStart(2,"0") + "-" + M[dt.getMonth()] + "-" + String(dt.getFullYear()).slice(2);
 }
 
 function fmtMonth(ym) {
-  if (!ym) return "";
-  const [y, m] = ym.split("-");
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  return months[parseInt(m) - 1] + "-" + String(y).slice(2);
+  if (!ym) return ym;
+  const [y, m] = String(ym).split("-");
+  const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return M[parseInt(m) - 1] + "-" + String(y).slice(2);
 }
 
-// ── LEDGER HTML BUILDER ───────────────────────────────────────────────────────
+// ── LEDGER HTML ───────────────────────────────────────────────────────────────
 function buildLedgerHTML(info, txns) {
   const openBal  = parseFloat(info.opening_balance) || 0;
   const closeBal = parseFloat(info.closing_balance) || 0;
@@ -126,45 +64,36 @@ function buildLedgerHTML(info, txns) {
   const lastDate  = dates[dates.length - 1] ? fmtDate(dates[dates.length - 1]) : firstDate;
   const totalDr   = txns.reduce((s, r) => s + (parseFloat(r.voucher_debit) || 0), 0);
   const totalCr   = txns.reduce((s, r) => s + (parseFloat(r.voucher_credit) || 0), 0);
-
   const TD = `padding:7px 12px;border:1px solid #ddd;font-size:12px;font-family:Arial`;
   const TH = `padding:8px 12px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff`;
 
-  let rows = `<tr>
-    <td style="${TD};white-space:nowrap"><b>01-Apr-25</b></td>
-    <td style="${TD}"><b>To</b></td>
+  let rows = `<tr><td style="${TD};white-space:nowrap"><b>01-Apr-25</b></td><td style="${TD}"><b>To</b></td>
     <td style="${TD}" colspan="3"><b>Opening Balance</b></td>
     <td style="${TD};text-align:right"><b>${openBal > 0 ? fmtAmt(openBal) : ""}</b></td>
-    <td style="${TD};text-align:right"><b>${openBal < 0 ? fmtAmt(Math.abs(openBal)) : ""}</b></td>
-  </tr>`;
+    <td style="${TD};text-align:right"><b>${openBal < 0 ? fmtAmt(Math.abs(openBal)) : ""}</b></td></tr>`;
 
   txns.forEach((r, i) => {
     const isDr = (parseFloat(r.voucher_debit) || 0) > 0;
-    const bg = i % 2 === 0 ? "#fff" : "#f9f9f9";
-    rows += `<tr style="background:${bg}">
+    rows += `<tr style="background:${i%2===0?"#fff":"#f9f9f9"}">
       <td style="${TD};white-space:nowrap">${fmtDate(r.voucher_date)}</td>
-      <td style="${TD}">${isDr ? "To" : "By"}</td>
-      <td style="${TD}">${r.voucher_particular || ""}</td>
-      <td style="${TD}">${r.voucher_type || ""}</td>
-      <td style="${TD};font-family:monospace">${r.voucher_no || ""}</td>
-      <td style="${TD};text-align:right">${isDr ? fmtAmt(r.voucher_debit) : ""}</td>
-      <td style="${TD};text-align:right">${!isDr ? fmtAmt(r.voucher_credit) : ""}</td>
+      <td style="${TD}">${isDr?"To":"By"}</td>
+      <td style="${TD}">${r.voucher_particular||""}</td>
+      <td style="${TD}">${r.voucher_type||""}</td>
+      <td style="${TD};font-family:monospace">${r.voucher_no||""}</td>
+      <td style="${TD};text-align:right">${isDr?fmtAmt(r.voucher_debit):""}</td>
+      <td style="${TD};text-align:right">${!isDr?fmtAmt(r.voucher_credit):""}</td>
     </tr>`;
   });
 
   const grandDr = totalDr + (openBal > 0 ? openBal : 0);
   const grandCr = totalCr + (openBal < 0 ? Math.abs(openBal) : 0) + Math.abs(closeBal);
-
-  rows += `<tr style="background:#f0f0f0">
-    <td style="${TD}" colspan="5"><b>Closing Balance</b></td>
-    <td style="${TD};text-align:right"><b>${closeBal > 0 ? fmtAmt(closeBal) : ""}</b></td>
-    <td style="${TD};text-align:right"><b>${closeBal < 0 ? fmtAmt(Math.abs(closeBal)) : ""}</b></td>
-  </tr>
-  <tr style="background:#ddd">
-    <td style="${TD}" colspan="5"><b>Grand Total</b></td>
-    <td style="${TD};text-align:right"><b>${fmtAmt(grandDr)}</b></td>
-    <td style="${TD};text-align:right"><b>${fmtAmt(grandCr)}</b></td>
-  </tr>`;
+  rows += `
+    <tr style="background:#f0f0f0"><td style="${TD}" colspan="5"><b>Closing Balance</b></td>
+      <td style="${TD};text-align:right"><b>${closeBal>0?fmtAmt(closeBal):""}</b></td>
+      <td style="${TD};text-align:right"><b>${closeBal<0?fmtAmt(Math.abs(closeBal)):""}</b></td></tr>
+    <tr style="background:#ddd"><td style="${TD}" colspan="5"><b>Grand Total</b></td>
+      <td style="${TD};text-align:right"><b>${fmtAmt(grandDr)}</b></td>
+      <td style="${TD};text-align:right"><b>${fmtAmt(grandCr)}</b></td></tr>`;
 
   return `<div style="font-family:Arial;font-size:12px;max-width:960px">
     <div style="text-align:center;padding:12px 4px 6px;border-bottom:2px solid #1a1a2e;margin-bottom:6px">
@@ -189,81 +118,16 @@ function buildLedgerHTML(info, txns) {
     </div>
     <div style="padding:6px 8px;font-size:11px;color:#555;display:flex;justify-content:space-between;border-top:1px solid #ddd;margin-top:4px">
       <span>Total Transactions: <b>${txns.length}</b></span>
-      <span>Net Balance: <b>${fmtAmt(Math.abs(closeBal))} ${closeBal >= 0 ? "(Dr)" : "(Cr)"}</b></span>
+      <span>Net Balance: <b>${fmtAmt(Math.abs(closeBal))} ${closeBal>=0?"(Dr)":"(Cr)"}</b></span>
     </div>
   </div>`;
 }
 
-// ── PIVOT TABLE BUILDER (server-side, guaranteed correct) ─────────────────────
-function buildPivotHTML(data, rowField, valField, months) {
-  // Group data
-  const pivot = {};
-  const rowTotals = {};
-  const colTotals = {};
-  months.forEach(m => colTotals[m] = 0);
-
-  data.forEach(r => {
-    const rowKey = r[rowField] || "Unknown";
-    // Get month from date field
-    const dateVal = r.date || r.created_at || "";
-    const month = String(dateVal).substring(0, 7); // YYYY-MM
-
-    if (!pivot[rowKey]) pivot[rowKey] = {};
-    pivot[rowKey][month] = (pivot[rowKey][month] || 0) + (parseFloat(r[valField]) || 0);
-    rowTotals[rowKey] = (rowTotals[rowKey] || 0) + (parseFloat(r[valField]) || 0);
-    if (months.includes(month)) colTotals[month] = (colTotals[month] || 0) + (parseFloat(r[valField]) || 0);
-  });
-
-  // Sort rows by total desc, filter out zero rows
-  const sortedRows = Object.entries(rowTotals)
-    .filter(([, total]) => total > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([name]) => name);
-
-  if (!sortedRows.length) return "<p>No data found.</p>";
-
-  const TH = `padding:8px 12px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;white-space:nowrap;text-align:center`;
-  const THL = `padding:8px 12px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left`;
-  const TD = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap`;
-  const TDL = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:left;white-space:nowrap`;
-  const TDTOT = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#fff3cd;font-weight:bold`;
-  const TDGRAND = `padding:7px 10px;border:1px solid #bbb;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#e0e0e0;font-weight:bold`;
-
-  // Header
-  let header = `<tr><th style="${THL}">Team Member / Party</th>`;
-  months.forEach(m => { header += `<th style="${TH}">${fmtMonth(m)}</th>`; });
-  header += `<th style="${TH};background:#333">Total</th></tr>`;
-
-  // Rows
-  let rows = "";
-  sortedRows.forEach((name, idx) => {
-    const bg = idx % 2 === 0 ? "#fff" : "#f9f9f9";
-    let row = `<tr style="background:${bg}"><td style="${TDL}"><b>${name}</b></td>`;
-    months.forEach(m => {
-      const val = pivot[name]?.[m] || 0;
-      row += `<td style="${TD}">${val > 0 ? fmtAmt(val) : "-"}</td>`;
-    });
-    row += `<td style="${TDTOT}">${fmtAmt(rowTotals[name])}</td></tr>`;
-    rows += row;
-  });
-
-  // Grand Total row
-  const grandTotal = Object.values(rowTotals).reduce((s, v) => s + v, 0);
-  let grandRow = `<tr><td style="${TDGRAND};text-align:left">Grand Total</td>`;
-  months.forEach(m => {
-    grandRow += `<td style="${TDGRAND}">${colTotals[m] > 0 ? fmtAmt(colTotals[m]) : "-"}</td>`;
-  });
-  grandRow += `<td style="${TDGRAND};background:#ffc107">${fmtAmt(grandTotal)}</td></tr>`;
-
-  return `<div style="overflow-x:auto;font-family:Arial">
-    <table style="border-collapse:collapse;min-width:900px">
-      <thead>${header}</thead>
-      <tbody>${rows}${grandRow}</tbody>
-    </table>
-    <div style="font-size:11px;color:#555;margin-top:6px;padding:4px">
-      Total Records: <b>${data.length}</b> &nbsp;|&nbsp; Grand Total: <b>${fmtAmt(grandTotal)}</b>
-    </div>
-  </div>`;
+// ── RUN SQL ───────────────────────────────────────────────────────────────────
+async function runSQL(sql) {
+  const { data, error } = await supabase.rpc("execute_sql", { query: sql });
+  if (error) throw new Error(error.message);
+  return data || [];
 }
 
 // ── CHAT HISTORY ──────────────────────────────────────────────────────────────
@@ -281,182 +145,257 @@ app.delete("/history/:sid", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── STEP 1: AI PLAN ───────────────────────────────────────────────────────────
-async function aiPlan(userMessage, chatHistory) {
-  const planPrompt = `${getSchema()}
+// ── THE BRAIN: AI generates SQL + formats answer ──────────────────────────────
+async function processQuery(userMessage, chatHistory) {
 
-YOUR TASK: Analyze the user's message (using conversation history for context) and return a JSON query plan.
-Return ONLY raw JSON — no markdown, no explanation.
+  const SYSTEM = `You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
+Today: ${new Date().toISOString().split("T")[0]}. Financial year: Apr 2025 – Mar 2026.
 
-CRITICAL RULES:
-1. For salary/team member pivot → expenses table, sub_group:["Salary"], select MUST include "party_name,date,amount"
-2. For ANY pivot table → always set date_gte and date_lte. Default full year: 2025-04-01 to 2026-03-31
-3. "last year" = 2024-04-01 to 2025-03-31, "this year" = 2025-04-01 to 2026-03-31
-4. NEVER add gt_total_price filter unless explicitly asked
-5. For "list all clients" → sales table, select:"company_name,created_at", no price filter
-6. Use conversation history for follow-up questions
+You have access to a PostgreSQL database. You will:
+1. Write a SQL query to get the data
+2. Format the result as HTML
 
-JSON format:
+=== DATABASE SCHEMA ===
+
+TABLE: public.sales
+  id SERIAL, invoice_no TEXT, company_name TEXT, address TEXT, state TEXT,
+  gst_no TEXT, contact_person TEXT, phone TEXT, description TEXT,
+  total_price NUMERIC, category TEXT, invoice_pdf TEXT, login TEXT,
+  created_at TIMESTAMP
+
+  category values: 'GOOGLE SHEET - RETAINERSHIP','GOOGLE SHEET - CUSTOM','GOOGLE SHEET - READY',
+  'GOOGLE SHEET - AMC','PHP - PANSARI','PHP - OTHERS','WHATSAPP CREDIT','WA Wallet',
+  'ERP - CALL SYSTEM','ERP - READY PRODUCTS','MOBILE APP - PANSARI','MOBILE APP - OTHERS',
+  'WEB FORM','TALLY'
+
+TABLE: public.expenses
+  id SERIAL, date DATE, voucher_number TEXT, party_name TEXT, group TEXT,
+  sub_group TEXT, design_number TEXT, amount NUMERIC, type TEXT
+
+  *** IMPORTANT: For salary entries, employee name is in design_number column ***
+  *** party_name is often 'NA' for salary rows ***
+  sub_group values: 'Salary','OFFICE RENT','Phone and Internet','Technical Exp','Travel Exp',
+  'Utility Direc','INSURANCE','Repair & Maintenance','BRANDING EXP','COMMISSION EXP',
+  'Stationery','Legal & Prof Exp','Employees Welfare','Financial Exp','Computer Maintenance',
+  'Bad Debts','OFFICE EXP','Telephone Exp','Indirect Expenses','Other Expense'
+
+TABLE: public.pending
+  id SERIAL, bill_date DATE, bill_ref_no TEXT, party_name TEXT, party_group TEXT,
+  sub_group TEXT, sales_person TEXT, pending_amount TEXT, due_date DATE, overdue_days INT
+
+TABLE: public.ledger
+  id SERIAL, name TEXT, subgroup TEXT, "group" TEXT, email TEXT,
+  contact_person TEXT, mobile TEXT, opening_balance NUMERIC, closing_balance NUMERIC,
+  voucher_date DATE, voucher_particular TEXT, voucher_type TEXT, voucher_no TEXT,
+  voucher_debit NUMERIC, voucher_credit NUMERIC
+
+TABLE: public.chat_history
+  id SERIAL, session_id TEXT, role TEXT, content TEXT, created_at TIMESTAMP
+
+=== LANGUAGE UNDERSTANDING ===
+Understand Hindi, Hinglish, typos perfectly:
+- client/customer/party/company = company_name in sales, name in ledger, party_name in pending
+- salary/salari/tankhwa = sub_group = 'Salary' in expenses (employee name in design_number)
+- lgdr/ldgr/khata = ledger query
+- dikhao/batao/show/de/dedo = show/display
+- is saal = this year = Apr 2025 - Mar 2026
+- pichle saal/last year = Apr 2024 - Mar 2025
+- rent/kiraya = sub_group = 'OFFICE RENT'
+
+=== YOUR RESPONSE FORMAT ===
+Return ONLY this JSON (no markdown):
 {
-  "intent": "description",
-  "needs_clarification": false,
-  "clarification_question": "",
-  "clarification_options": [],
-  "response_format": "pivot_table | ledger | table | list | text",
-  "ledger_search": "",
-  "pivot_months": ["2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"],
-  "pivot_row_field": "party_name",
-  "pivot_val_field": "amount",
-  "queries": [
-    {
-      "table": "sales|expenses|pending|ledger",
-      "select": "*",
-      "filters": {
-        "date_gte": "2025-04-01",
-        "date_lte": "2026-03-31",
-        "in_sub_group": ["Salary"]
-      },
-      "order_by": "date",
-      "order_asc": true,
-      "limit": 5000,
-      "purpose": "salary_pivot"
-    }
-  ]
+  "query_type": "ledger | data | clarify",
+  "ledger_search": "company name if ledger query",
+  "sql": "SELECT ... (only for data queries, read-only SELECT)",
+  "clarify_message": "question if unclear",
+  "clarify_options": []
 }
 
-Filter keys:
-  date_gte, date_lte         → date range (always set for pivot queries)
-  ilike_name                 → ledger name search
-  ilike_company_name         → sales company_name search
-  ilike_party_name           → expenses/pending party search
-  in_sub_group               → array of sub_group values
-  in_category                → array of category values
-  gt_total_price             → only use when explicitly needed
-  gte_overdue_days, lte_overdue_days → pending filters
+=== SQL RULES ===
+- Only SELECT statements (never INSERT/UPDATE/DELETE)
+- Always LIMIT 5000 unless aggregating
+- For pivot/monthly: use DATE_TRUNC('month', date_col) or TO_CHAR(date_col,'YYYY-MM')
+- For salary pivot: GROUP BY design_number, TO_CHAR(date,'YYYY-MM')
+- For amounts: ROUND(SUM(amount)::numeric, 0)
+- Escape single quotes properly
+- Use ILIKE for text searches (case insensitive)
+- For "top N": use ORDER BY total DESC LIMIT N
 
-EXAMPLES:
-- "team member wise salary apr 2025" → expenses, in_sub_group:["Salary"], date_gte:"2025-04-01", date_lte:"2026-03-31", select:"party_name,date,amount", response_format:"pivot_table", pivot_row_field:"party_name", pivot_val_field:"amount"
-- "list all clients" → sales, select:"company_name,created_at", no filters
-- "top 5 clients by sales" → sales, select:"company_name,total_price,category", order_by:"total_price"
-- "category wise month pivot" → sales, select:"category,created_at,total_price", date range, response_format:"pivot_table", pivot_row_field:"category", pivot_val_field:"total_price"
-- "pansri ka ledger" → response_format:"ledger", ledger_search:"pansari"
+=== SQL EXAMPLES ===
+"team member wise salary apr 2025 to mar 2026 pivot":
+SELECT design_number as name, TO_CHAR(date,'YYYY-MM') as month, ROUND(SUM(amount)::numeric,0) as total
+FROM expenses WHERE sub_group='Salary' AND date >= '2025-04-01' AND date <= '2026-03-31'
+AND design_number != '' AND design_number IS NOT NULL
+GROUP BY design_number, TO_CHAR(date,'YYYY-MM') ORDER BY design_number, month
+
+"top 5 clients by sales":
+SELECT company_name, phone, contact_person, ROUND(SUM(total_price)::numeric,0) as total_sales
+FROM sales WHERE total_price > 0 GROUP BY company_name, phone, contact_person
+ORDER BY total_sales DESC LIMIT 5
+
+"category wise month wise sales apr 25 to mar 26":
+SELECT category, TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total
+FROM sales WHERE created_at >= '2025-04-01' AND created_at <= '2026-03-31' AND total_price > 0
+GROUP BY category, TO_CHAR(created_at,'YYYY-MM') ORDER BY category, month
+
+"60-90 days pending":
+SELECT party_name, bill_ref_no, pending_amount, overdue_days FROM pending
+WHERE overdue_days >= 60 AND overdue_days <= 90 ORDER BY overdue_days DESC
+
+"salary + rent + travel total":
+SELECT sub_group, ROUND(SUM(amount)::numeric,0) as total FROM expenses
+WHERE sub_group IN ('Salary','OFFICE RENT','Travel Exp') GROUP BY sub_group ORDER BY total DESC
+
+"clients with no invoice this year but had last year":
+SELECT ly.company_name, ROUND(SUM(ly.total_price)::numeric,0) as last_year_revenue
+FROM sales ly WHERE ly.created_at >= '2024-04-01' AND ly.created_at < '2025-04-01'
+AND ly.company_name NOT IN (
+  SELECT DISTINCT company_name FROM sales
+  WHERE created_at >= '2025-04-01' AND created_at < '2026-04-01'
+)
+GROUP BY ly.company_name ORDER BY last_year_revenue DESC
+
+"list all clients":
+SELECT DISTINCT company_name, phone, contact_person FROM sales ORDER BY company_name LIMIT 500
 `;
 
   const messages = [
-    ...chatHistory.slice(-8).map(h => ({ role: h.role, content: h.content })),
+    ...chatHistory.slice(-10).map(h => ({ role: h.role, content: h.content })),
     { role: "user", content: userMessage }
   ];
 
-  const text = await openai(planPrompt, messages, 1000);
-  const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON in plan");
+  const planText = await openai(SYSTEM, messages, 1500);
+  const match = planText.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("No JSON from AI");
   return JSON.parse(match[0]);
 }
 
-// ── STEP 2: RUN QUERIES ───────────────────────────────────────────────────────
-async function runQueries(plan) {
-  const results = [];
-  const dateColMap = { sales: "created_at", expenses: "date", pending: "due_date", ledger: "voucher_date" };
+// ── BUILD PIVOT FROM RAW DATA ─────────────────────────────────────────────────
+function buildPivotFromSQL(rows) {
+  // Detect if this is pivot data (has 'month' column)
+  if (!rows.length || !rows[0].hasOwnProperty("month")) return null;
 
-  for (const q of plan.queries) {
-    let query = supabase.from(q.table).select(q.select || "*");
-    const f = q.filters || {};
-    const dc = dateColMap[q.table] || "created_at";
+  const nameCol = rows[0].hasOwnProperty("name") ? "name" :
+                  rows[0].hasOwnProperty("category") ? "category" :
+                  rows[0].hasOwnProperty("design_number") ? "design_number" : null;
+  if (!nameCol) return null;
 
-    if (f.date_gte)           query = query.gte(dc, f.date_gte);
-    if (f.date_lte)           query = query.lte(dc, f.date_lte);
-    if (f.ilike_name)         query = query.ilike("name", `%${f.ilike_name}%`);
-    if (f.ilike_company_name) query = query.ilike("company_name", `%${f.ilike_company_name}%`);
-    if (f.ilike_party_name)   query = query.ilike("party_name", `%${f.ilike_party_name}%`);
-    if (f.in_sub_group)       query = query.in("sub_group", [].concat(f.in_sub_group));
-    if (f.in_category)        query = query.in("category", [].concat(f.in_category));
-    if (f.gt_total_price !== undefined) query = query.gt("total_price", f.gt_total_price);
-    if (f.gte_overdue_days !== undefined) query = query.gte("overdue_days", f.gte_overdue_days);
-    if (f.lte_overdue_days !== undefined) query = query.lte("overdue_days", f.lte_overdue_days);
+  const months = [...new Set(rows.map(r => r.month))].sort();
+  const pivot = {};
+  const rowTotals = {};
+  const colTotals = {};
+  months.forEach(m => colTotals[m] = 0);
 
-    if (q.order_by) query = query.order(q.order_by, { ascending: q.order_asc === true });
-    query = query.limit(q.limit || 5000);
+  rows.forEach(r => {
+    const name = r[nameCol] || "Other";
+    const month = r.month;
+    const val = parseFloat(r.total || r.amount || r.total_sales || 0);
+    if (!pivot[name]) pivot[name] = {};
+    pivot[name][month] = (pivot[name][month] || 0) + val;
+    rowTotals[name] = (rowTotals[name] || 0) + val;
+    colTotals[month] = (colTotals[month] || 0) + val;
+  });
 
-    const { data, error } = await query;
-    // Clean null/undefined
-    const cleaned = (data || []).map(row => {
-      const c = {};
-      for (const [k, v] of Object.entries(row)) {
-        c[k] = (v === null || v === undefined || v === "EMPTY") ? "" : v;
-      }
-      return c;
+  const sortedNames = Object.entries(rowTotals).sort((a,b) => b[1]-a[1]).map(([n]) => n);
+  const grandTotal = Object.values(rowTotals).reduce((s,v) => s+v, 0);
+
+  const TH  = `padding:8px 10px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;white-space:nowrap;text-align:center`;
+  const THL = `padding:8px 10px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left`;
+  const TD  = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap`;
+  const TDL = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:left;white-space:nowrap`;
+  const TOT = `padding:7px 10px;border:1px solid #ccc;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#fff3cd;font-weight:bold`;
+  const GRD = `padding:7px 10px;border:1px solid #bbb;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#e0e0e0;font-weight:bold`;
+
+  let header = `<tr><th style="${THL}">Name</th>`;
+  months.forEach(m => { header += `<th style="${TH}">${fmtMonth(m)}</th>`; });
+  header += `<th style="${TH};background:#333">Total</th></tr>`;
+
+  let bodyRows = "";
+  sortedNames.forEach((name, idx) => {
+    const bg = idx % 2 === 0 ? "#fff" : "#f9f9f9";
+    let row = `<tr style="background:${bg}"><td style="${TDL}"><b>${name}</b></td>`;
+    months.forEach(m => {
+      const val = pivot[name]?.[m] || 0;
+      row += `<td style="${TD}">${val > 0 ? fmtAmt(val) : "-"}</td>`;
     });
+    row += `<td style="${TOT}">${fmtAmt(rowTotals[name])}</td></tr>`;
+    bodyRows += row;
+  });
 
-    results.push({
-      purpose: q.purpose || q.table,
-      table: q.table,
-      data: cleaned,
-      error: error?.message || null,
-      count: cleaned.length
-    });
-  }
-  return results;
+  let grandRow = `<tr><td style="${GRD};text-align:left">Grand Total</td>`;
+  months.forEach(m => { grandRow += `<td style="${GRD}">${colTotals[m] > 0 ? fmtAmt(colTotals[m]) : "-"}</td>`; });
+  grandRow += `<td style="${GRD};background:#ffc107">${fmtAmt(grandTotal)}</td></tr>`;
+
+  return `<div style="overflow-x:auto;font-family:Arial">
+    <table style="border-collapse:collapse;min-width:700px">
+      <thead>${header}</thead>
+      <tbody>${bodyRows}${grandRow}</tbody>
+    </table>
+    <div style="font-size:11px;color:#555;margin-top:8px">
+      Rows: <b>${sortedNames.length}</b> &nbsp;|&nbsp; Grand Total: <b>${fmtAmt(grandTotal)}</b>
+    </div>
+  </div>`;
 }
 
-// ── STEP 3: FORMAT ANSWER ─────────────────────────────────────────────────────
-async function aiAnswer(userMessage, plan, queryResults, chatHistory) {
-  // For pivot tables — build server-side (guaranteed correct)
-  if (plan.response_format === "pivot_table") {
-    const qr = queryResults[0];
-    if (!qr || !qr.data.length) {
-      return `No data found for the requested period.`;
-    }
-    const months = plan.pivot_months || [
-      "2025-04","2025-05","2025-06","2025-07","2025-08","2025-09",
-      "2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"
-    ];
-    const rowField = plan.pivot_row_field || "category";
-    const valField = plan.pivot_val_field || "total_price";
-    return buildPivotHTML(qr.data, rowField, valField, months);
+// ── BUILD REGULAR TABLE FROM SQL DATA ────────────────────────────────────────
+function buildTableHTML(rows) {
+  if (!rows.length) return "<p style='padding:12px;color:#666'>No data found.</p>";
+
+  const cols = Object.keys(rows[0]);
+  const TH = `padding:8px 12px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left`;
+  const TD = `padding:7px 12px;border:1px solid #ddd;font-size:12px;font-family:Arial`;
+
+  // Detect amount columns
+  const amtCols = cols.filter(c => /total|amount|price|balance|revenue|sales/i.test(c));
+
+  let header = cols.map(c => `<th style="${TH}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</th>`).join("");
+
+  let bodyRows = "";
+  const colSums = {};
+  amtCols.forEach(c => colSums[c] = 0);
+
+  rows.forEach((r, i) => {
+    const bg = i % 2 === 0 ? "#fff" : "#f9f9f9";
+    let row = `<tr style="background:${bg}">`;
+    cols.forEach(c => {
+      const val = r[c];
+      const isAmt = amtCols.includes(c);
+      if (isAmt && val !== null && val !== "") {
+        const num = parseFloat(val) || 0;
+        colSums[c] = (colSums[c] || 0) + num;
+        row += `<td style="${TD};text-align:right">${fmtAmt(num)}</td>`;
+      } else {
+        row += `<td style="${TD}">${val === null || val === "" || val === "NA" ? "-" : val}</td>`;
+      }
+    });
+    row += `</tr>`;
+    bodyRows += row;
+  });
+
+  // Grand total row if there are amount columns
+  let totalRow = "";
+  if (amtCols.length > 0) {
+    totalRow = `<tr style="background:#e0e0e0;font-weight:bold">`;
+    cols.forEach((c, idx) => {
+      if (idx === 0) {
+        totalRow += `<td style="${TD};font-weight:bold">Grand Total</td>`;
+      } else if (amtCols.includes(c)) {
+        totalRow += `<td style="${TD};text-align:right;font-weight:bold">${fmtAmt(colSums[c])}</td>`;
+      } else {
+        totalRow += `<td style="${TD}"></td>`;
+      }
+    });
+    totalRow += `</tr>`;
   }
 
-  // For all others — AI formats
-  const dataSummary = queryResults.map(r => {
-    if (r.error) return `[${r.purpose}] ERROR: ${r.error}`;
-    if (!r.data.length) return `[${r.purpose}] No records found`;
-    return `[${r.purpose}] ${r.count} records:\n${JSON.stringify(r.data.slice(0, 400))}`;
-  }).join("\n\n---\n\n");
-
-  const noSalesNote = queryResults.find(r => r.purpose === "last_year_sales") ? `
-LOST CLIENTS: Find company_names in last_year_sales NOT in this_year_sales.
-Show: Rank | Company | Last Year Revenue. Sort by revenue desc.
-` : "";
-
-  const answerPrompt = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
-Reply in ENGLISH only. Understand Hindi/Hinglish/typos.
-User intent: ${plan.intent}
-
-HTML TABLE STYLE:
-<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
-Header: background:#1a1a2e; color:white
-Even rows: #f9f9f9, Odd: #fff
-Grand Total row: background:#e0e0e0; font-weight:bold — ALWAYS ADD THIS ROW AT BOTTOM
-Amount format: Rs. X,XX,XXX (Indian, no decimals)
-Date format: DD-Mon-YY (e.g. 15-Apr-25) — NEVER show 2025-04-15
-
-RULES:
-- NEVER show "undefined", "null", "EMPTY" — use "-" instead
-- ALWAYS add Grand Total row at the bottom of every table
-- Use ONLY data provided below
-- For client lists: show numbered list with company names
-- Start directly with the answer
-
-${noSalesNote}
-
-DATA:
-${dataSummary}`;
-
-  const messages = [
-    ...chatHistory.slice(-6).map(h => ({ role: h.role, content: h.content })),
-    { role: "user", content: userMessage }
-  ];
-
-  return await openai(answerPrompt, messages, 4000);
+  return `<div style="overflow-x:auto;font-family:Arial">
+    <table style="border-collapse:collapse;width:100%;min-width:400px">
+      <thead><tr>${header}</tr></thead>
+      <tbody>${bodyRows}${totalRow}</tbody>
+    </table>
+    <div style="font-size:11px;color:#555;margin-top:8px">Total Records: <b>${rows.length}</b></div>
+  </div>`;
 }
 
 // ── MAIN CHAT ROUTE ───────────────────────────────────────────────────────────
@@ -482,28 +421,31 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: `No ledger found for ${exactName}.`, type: "text" });
     }
 
-    // Step 1: Plan
+    // AI decides what to do
     let plan;
     try {
-      plan = await aiPlan(message, history);
-      console.log("[PLAN]", JSON.stringify(plan, null, 2));
+      plan = await processQuery(message, history);
+      console.log("[PLAN]", JSON.stringify(plan));
     } catch(e) {
       console.error("[PLAN ERROR]", e.message);
-      return res.json({ reply: "Could not understand your query. Please try rephrasing.", type: "text" });
+      return res.json({ reply: "Could not understand. Please try rephrasing.", type: "text" });
     }
 
     // Clarification needed
-    if (plan.needs_clarification) {
-      const options = plan.clarification_options || [];
+    if (plan.query_type === "clarify") {
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
-        { session_id, role: "assistant", content: plan.clarification_question }
+        { session_id, role: "assistant", content: plan.clarify_message }
       ]);
-      return res.json({ reply: plan.clarification_question, type: options.length ? "suggestions" : "text", options });
+      return res.json({
+        reply: plan.clarify_message,
+        type: plan.clarify_options?.length ? "suggestions" : "text",
+        options: plan.clarify_options || []
+      });
     }
 
-    // Step 2: Ledger
-    if (plan.response_format === "ledger") {
+    // Ledger
+    if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
       if (!search) return res.json({ reply: "Please tell me the company name.", type: "text" });
 
@@ -531,42 +473,40 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: html, type: "html" });
     }
 
-    // Step 3: Run queries
-    let queryResults;
-    try {
-      queryResults = await runQueries(plan);
-      console.log("[QUERIES]", queryResults.map(r => `${r.purpose}:${r.count}`).join(", "));
-    } catch(e) {
-      console.error("[QUERY ERROR]", e.message);
-      return res.json({ reply: "Database error: " + e.message, type: "text" });
+    // Data query — run SQL
+    if (!plan.sql) {
+      return res.json({ reply: "Could not generate a query. Please rephrase.", type: "text" });
     }
 
-    const totalRows = queryResults.reduce((s, r) => s + r.count, 0);
-    if (totalRows === 0) {
-      const options = ["Show all sales", "Show all expenses", "Show pending payments", "Show ledger"];
+    console.log("[SQL]", plan.sql);
+    let rows;
+    try {
+      rows = await runSQL(plan.sql);
+    } catch(e) {
+      console.error("[SQL ERROR]", e.message);
+      // Try fallback with Supabase client
+      return res.json({ reply: `Database error: ${e.message}`, type: "text" });
+    }
+
+    if (!rows || !rows.length) {
+      const options = ["Show all sales", "Show all expenses", "Show pending payments"];
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
         { session_id, role: "assistant", content: "No data found" }
       ]);
-      return res.json({ reply: `No data found for: "${message}". What would you like to see?`, type: "suggestions", options });
+      return res.json({ reply: `No data found for: "${message}"`, type: "suggestions", options });
     }
 
-    // Step 4: Format
-    let reply;
-    try {
-      reply = await aiAnswer(message, plan, queryResults, history);
-    } catch(e) {
-      console.error("[ANSWER ERROR]", e.message);
-      return res.json({ reply: "Could not format answer: " + e.message, type: "text" });
-    }
+    // Build HTML — pivot or regular table
+    const pivotHTML = buildPivotFromSQL(rows);
+    const reply = pivotHTML || buildTableHTML(rows);
 
     if (session_id) await supabase.from("chat_history").insert([
       { session_id, role: "user", content: message },
       { session_id, role: "assistant", content: reply }
     ]);
 
-    const replyType = /<table|<div|<tr|<td|<th/i.test(reply) ? "html" : "text";
-    return res.json({ reply, type: replyType });
+    return res.json({ reply, type: "html" });
 
   } catch(err) {
     console.error("[CHAT ERROR]", err);
@@ -575,4 +515,4 @@ app.post("/chat", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`MIS Chatbot running at http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`));
