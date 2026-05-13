@@ -224,10 +224,10 @@
 </div>
 
 <script>
-  let SESSION_ID = localStorage.getItem("mis_session_id");
+  let SESSION_ID = sessionStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
     SESSION_ID = "s_" + Math.random().toString(36).slice(2);
-    localStorage.setItem("mis_session_id", SESSION_ID);
+    sessionStorage.setItem("mis_session_id", SESSION_ID);
   }
   let history = [];
   let pendingExactName = null;
