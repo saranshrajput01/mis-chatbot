@@ -15,7 +15,6 @@ const supabase = createClient(
 );
 
 // ── LIVE SCHEMA AUTO-DISCOVERY ────────────────────────────────────────────────
-// Fetches real column names from DB at startup — no hardcoding needed
 let liveSchema = "";
 
 async function fetchLiveSchema() {
@@ -179,7 +178,6 @@ app.delete("/history/:sid", async (req, res) => {
 // ── THE BRAIN: AI generates SQL + formats answer ──────────────────────────────
 async function processQuery(userMessage, chatHistory) {
 
-  // Refresh schema on each request (cached after first load)
   if (!liveSchema) await fetchLiveSchema();
 
   const SYSTEM = `You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
@@ -285,76 +283,28 @@ Return ONLY this JSON (no markdown):
 CRITICAL SQL RULES (follow strictly):
 1. SUBQUERY GROUPING: If using subquery, ALL non-aggregated columns in outer SELECT must be in outer GROUP BY
 2. CTE preferred over subquery: Use WITH cte AS (...) SELECT ... FROM cte WHERE ...
-3. For ratio/comparison queries use CTE:
-   WITH monthly AS (
-     SELECT TO_CHAR(date,'YYYY-MM') as month, SUM(amount) as expense FROM expenses GROUP BY 1
-   ), sales AS (
-     SELECT TO_CHAR(created_at,'YYYY-MM') as month, SUM(total_price) as revenue FROM sales GROUP BY 1
-   )
-   SELECT e.month, e.expense, s.revenue, ROUND(e.expense::numeric/NULLIF(s.revenue,0), 2) as ratio
-   FROM monthly e JOIN sales s ON e.month = s.month ORDER BY e.month
+3. For ratio/comparison queries use CTE
 4. Never use ungrouped columns from outer query inside subquery
 5. For HAVING with ratio: calculate ratio in CTE first, then filter in outer query
 6. NULLIF(x, 0) to avoid division by zero
 7. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
 
 8. COMPANY NAME DEDUPLICATION (CRITICAL):
-   - Sales table has same companies stored in different cases (e.g. "PANSARI INDUSTRIES" and "Pansari Industries")
-   - ALWAYS use UPPER(company_name) for grouping to merge duplicates:
-     GROUP BY UPPER(company_name)
-   - For display, use MAX(company_name) or MIN(company_name) to pick one version:
-     SELECT MAX(company_name) as company_name, SUM(total_price) as total_sales
-     FROM sales GROUP BY UPPER(company_name)
-   - Same rule for pending table: GROUP BY UPPER(party_name), display: MAX(party_name)
-   - Same rule for ledger table: GROUP BY UPPER(name), display: MAX(name)
+   - ALWAYS use UPPER(company_name) for grouping to merge duplicates
+   - For display, use MAX(company_name)
+   - Same rule for pending table: GROUP BY UPPER(party_name)
+   - Same rule for ledger table: GROUP BY UPPER(name)
    - NEVER group by raw company_name/party_name without UPPER() wrapping
 
 === SQL EXAMPLES ===
-"team member wise salary apr 2025 to mar 2026 pivot":
-SELECT design_number as name, TO_CHAR(date,'YYYY-MM') as month, ROUND(SUM(amount)::numeric,0) as total
-FROM expenses WHERE sub_group='Salary' AND date >= '2025-04-01' AND date <= '2026-03-31'
-AND design_number != '' AND design_number IS NOT NULL
-GROUP BY design_number, TO_CHAR(date,'YYYY-MM') ORDER BY design_number, month
-
 "top 5 clients by sales":
-SELECT company_name, phone, contact_person, ROUND(SUM(total_price)::numeric,0) as total_sales
-FROM sales WHERE total_price > 0 GROUP BY company_name, phone, contact_person
+SELECT MAX(company_name) as company_name, ROUND(SUM(total_price)::numeric,0) as total_sales
+FROM sales WHERE total_price > 0 GROUP BY UPPER(company_name)
 ORDER BY total_sales DESC LIMIT 5
 
-"category wise month wise sales apr 25 to mar 26":
-SELECT category, TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total
-FROM sales WHERE created_at >= '2025-04-01' AND created_at <= '2026-03-31' AND total_price > 0
-GROUP BY category, TO_CHAR(created_at,'YYYY-MM') ORDER BY category, month
-
 "60-90 days pending":
-SELECT party_name, bill_ref_no, ROUND(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric,0) as pending_amount, overdue_days FROM pending
-WHERE overdue_days >= 60 AND overdue_days <= 90 ORDER BY overdue_days DESC
-
-"client wise aging pending (0-30, 31-60, 61-90, 91-120 days buckets)":
-SELECT party_name,
-  ROUND(SUM(CASE WHEN overdue_days <= 30 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "0-30 Days",
-  ROUND(SUM(CASE WHEN overdue_days BETWEEN 31 AND 60 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "31-60 Days",
-  ROUND(SUM(CASE WHEN overdue_days BETWEEN 61 AND 90 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "61-90 Days",
-  ROUND(SUM(CASE WHEN overdue_days BETWEEN 91 AND 120 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "91-120 Days"
-FROM pending GROUP BY party_name
-HAVING SUM(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric) > 0
-ORDER BY party_name
-
-"salary + rent + travel total":
-SELECT sub_group, ROUND(SUM(amount)::numeric,0) as total FROM expenses
-WHERE sub_group IN ('Salary','OFFICE RENT','Travel Exp') GROUP BY sub_group ORDER BY total DESC
-
-"clients with no invoice this year but had last year":
-SELECT ly.company_name, ROUND(SUM(ly.total_price)::numeric,0) as last_year_revenue
-FROM sales ly WHERE ly.created_at >= '2024-04-01' AND ly.created_at < '2025-04-01'
-AND ly.company_name NOT IN (
-  SELECT DISTINCT company_name FROM sales
-  WHERE created_at >= '2025-04-01' AND created_at < '2026-04-01'
-)
-GROUP BY ly.company_name ORDER BY last_year_revenue DESC
-
-"list all clients":
-SELECT DISTINCT company_name, phone, contact_person FROM sales ORDER BY company_name LIMIT 500
+SELECT party_name, bill_ref_no, ROUND(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric,0) as pending_amount, overdue_days
+FROM pending WHERE overdue_days >= 60 AND overdue_days <= 90 ORDER BY overdue_days DESC
 `;
 
   const messages = [
@@ -370,7 +320,6 @@ SELECT DISTINCT company_name, phone, contact_person FROM sales ORDER BY company_
 
 // ── BUILD PIVOT FROM RAW DATA ─────────────────────────────────────────────────
 function buildPivotFromSQL(rows) {
-  // Detect if this is pivot data (has 'month' column)
   if (!rows.length || !rows[0].hasOwnProperty("month")) return null;
 
   const nameCol = rows[0].hasOwnProperty("name") ? "name" :
@@ -443,7 +392,6 @@ function buildTableHTML(rows) {
   const TH = `padding:6px 10px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left;white-space:nowrap`;
   const TD = `padding:5px 8px;border:1px solid #ddd;font-size:12px;font-family:Arial;white-space:nowrap`;
 
-  // Parse any amount string (handles "₹1,090", "Rs. 1,090", "1090", 1090)
   function parseAnyAmt(v) {
     if (v === null || v === undefined || v === "" || v === "-") return null;
     const s = String(v).replace(/[₹Rs.\s,]/g, "").trim();
@@ -451,36 +399,22 @@ function buildTableHTML(rows) {
     return isNaN(n) ? null : n;
   }
 
-  // Smart amount detection:
-  // 1. Never format phone/mobile/contact/id/code/number/gst/pin/zip columns
-  // 2. Never format columns where values are too long (phone numbers > 12 digits)
-  // 3. Format everything else that looks like a money value
-
   const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design/i;
 
   const allAmtCols = cols.filter(col => {
-    // Skip obviously non-money columns by name
     if (NON_AMOUNT_COLS.test(col)) return false;
-
-    // Skip day-bucket columns — handle separately
     if (/^\d+[-–]\d+/i.test(col.trim())) return false;
-
-    // Check actual values — if numeric and reasonable length → it's money
     const sampleValues = rows.slice(0, 5).map(r => r[col]).filter(v => v !== null && v !== "" && v !== "-");
     if (!sampleValues.length) return false;
-
     return sampleValues.some(v => {
       const str = String(v).replace(/[₹Rs.\s,]/g, "").trim();
-      // Money: numeric, not too long (phone numbers are 10+ digits without decimals)
       const num = parseFloat(str);
       if (isNaN(num)) return false;
-      // If it's a whole number with more than 10 digits → probably phone number
       if (Number.isInteger(num) && str.length > 10) return false;
       return true;
     });
   });
 
-  // Day-bucket columns also get amount formatting
   const bucketCols = cols.filter(c => /^\d+[-–]\d+/i.test(c.trim()));
   bucketCols.forEach(c => { if (!allAmtCols.includes(c)) allAmtCols.push(c); });
 
@@ -508,7 +442,6 @@ function buildTableHTML(rows) {
     bodyRows += row;
   });
 
-  // Grand total row
   let totalRow = "";
   if (allAmtCols.length > 0) {
     totalRow = `<tr style="background:#e0e0e0;font-weight:bold">`;
@@ -539,7 +472,6 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "Message required" });
 
   try {
-    // Suggestion click → ledger
     if (exactName) {
       const { data } = await supabase.from("ledger")
         .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
@@ -556,7 +488,6 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: `No ledger found for ${exactName}.`, type: "text" });
     }
 
-    // AI decides what to do
     let plan;
     try {
       plan = await processQuery(message, history);
@@ -566,7 +497,6 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "Could not understand. Please try rephrasing.", type: "text" });
     }
 
-    // Clarification needed
     if (plan.query_type === "clarify") {
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
@@ -579,7 +509,6 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // Ledger
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
       if (!search) return res.json({ reply: "Please tell me the company name.", type: "text" });
@@ -608,7 +537,6 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: html, type: "html" });
     }
 
-    // Data query — run SQL
     if (!plan.sql) {
       return res.json({ reply: "Could not generate a query. Please rephrase.", type: "text" });
     }
@@ -619,7 +547,6 @@ app.post("/chat", async (req, res) => {
       rows = await runSQL(plan.sql);
     } catch(e) {
       console.error("[SQL ERROR]", e.message);
-      // Try fallback with Supabase client
       return res.json({ reply: `Database error: ${e.message}`, type: "text" });
     }
 
@@ -632,7 +559,6 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: `No data found for: "${message}"`, type: "suggestions", options });
     }
 
-    // Build HTML — pivot or regular table
     const pivotHTML = buildPivotFromSQL(rows);
     const reply = pivotHTML || buildTableHTML(rows);
 
@@ -652,15 +578,15 @@ app.post("/chat", async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
-  await fetchLiveSchema(); // Load real schema at startup
+  await fetchLiveSchema();
 });
+
 // ── SEND WHATSAPP REPLY ──────────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
   try {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "https://app.mis.work/api/v1/message/create";
 
-    // Clean phone number - remove whatsapp: prefix if present
     const phone = to.replace("whatsapp:", "").replace(/[^0-9]/g, "");
 
     const resp = await fetch(WA_API_URL, {
@@ -682,33 +608,31 @@ async function sendWhatsAppReply(to, message) {
 }
 
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
-const WP_API_KEY = process.env.WHATSAPP_API_KEY || null;
-
 app.post("/whatsapp", async (req, res) => {
   try {
-    // Log all headers to see what app.mis.work sends
+    // ✅ PEHLE body log karo — chahe message mile ya na mile
+    console.log("[WHATSAPP RAW BODY]", JSON.stringify(req.body));
     console.log("[WHATSAPP HEADERS]", JSON.stringify(req.headers));
-    const body = req.body;
-    const message = body.message || body.query || body.text || body.Body || body.body ||
-      (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
-    const sender = body.from || body.From || body.sender || body.phone || "user";
 
+    const body = req.body;
+
+    // Extract message from all possible fields
+    const message = body.message || body.query || body.text || body.Body || body.body ||
+      body.data?.message || body.data?.text ||
+      (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
+      (Array.isArray(body.messages) ? body.messages[0]?.body : null) ||
+      (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
+
+    const sender = body.from || body.From || body.sender || body.phone ||
+      body.data?.from || body.data?.sender || body.mobile || "user";
+
+    console.log("[WHATSAPP EXTRACTED]", sender, "->", message);
+
+    // ✅ BAAD MEIN check karo
     if (!message) {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
-    console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
-    // app.mis.work specific fields
-    const wpMessage = body.message || body.text || body.Body || 
-      body.data?.message || body.data?.text ||
-      (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
-      (Array.isArray(body.messages) ? body.messages[0]?.body : null) || "";
-    const wpSender = body.from || body.sender || body.mobile || 
-      body.data?.from || body.data?.sender || "user";
-    if (!message && wpMessage) {
-      Object.assign(body, { message: wpMessage, from: wpSender });
-    }
-    console.log("[WHATSAPP EXTRACTED]", wpSender, "->", wpMessage || message);
     if (!liveSchema) await fetchLiveSchema();
 
     let plan;
@@ -725,10 +649,13 @@ app.post("/whatsapp", async (req, res) => {
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) return res.json({ success: true, reply: "Multiple found: " + uniqueNames.slice(0,5).join(", "), options: uniqueNames.slice(0,5), sender });
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
-      return res.json({ success: true, reply: `Ledger: ${data[0].name} | Balance: Rs.${data[0].closing_balance} | Transactions: ${txns.length}`, type: "ledger", data: { company: data[0].name, closing_balance: data[0].closing_balance, transactions: txns.slice(0,20) }, sender });
+      const replyText = `Ledger: ${data[0].name} | Balance: Rs.${data[0].closing_balance} | Transactions: ${txns.length}`;
+      await sendWhatsAppReply(sender, replyText);
+      return res.json({ success: true, reply: replyText, sender });
     }
 
     if (plan.query_type === "clarify") {
+      await sendWhatsAppReply(sender, plan.clarify_message);
       return res.json({ success: true, reply: plan.clarify_message, options: plan.clarify_options || [], sender });
     }
 
@@ -739,17 +666,10 @@ app.post("/whatsapp", async (req, res) => {
     catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
 
     if (!rows || !rows.length) {
-      const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
-      await supabase.from("chat_history").insert([
-        { session_id: wpSession, role: "user", content: message },
-        { session_id: wpSession, role: "assistant", content: "No data found" }
-      ]);
-      // Send reply back to WhatsApp
       await sendWhatsAppReply(sender, "No data found for: " + message);
       return res.json({ success: true, reply: "No data found", data: [], sender });
     }
 
-    // Save to chat_history
     const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
     const replyText = rows.slice(0,5).map((r,i) => {
       return (i+1) + ". " + Object.entries(r).map(([k,v]) => k+": "+v).join(" | ");
@@ -760,12 +680,12 @@ app.post("/whatsapp", async (req, res) => {
       { session_id: wpSession, role: "assistant", content: replyText }
     ]);
 
-    // Send reply back to WhatsApp
     await sendWhatsAppReply(sender, replyText);
 
     return res.json({ success: true, reply: replyText, type: "data", count: rows.length, data: rows, sender });
 
   } catch(err) {
+    console.error("[WHATSAPP ERROR]", err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
