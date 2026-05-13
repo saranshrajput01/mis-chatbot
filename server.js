@@ -364,17 +364,14 @@ function buildTableHTML(rows) {
     return isNaN(n) ? null : n;
   }
 
-  // Detect amount columns — by name OR by checking if values look like amounts
-  const amtCols = cols.filter(c => {
-    if (/total|amount|price|balance|revenue|sales|pending|debit|credit/i.test(c)) return true;
-    // Check first non-empty row value
-    const sample = rows.find(r => r[c] !== null && r[c] !== "");
-    if (!sample) return false;
-    return parseAnyAmt(sample[c]) !== null && typeof sample[c] !== "string" || /[₹\d]/.test(String(sample[c]));
-  });
+  // Detect amount columns ONLY by column name — never guess by value
+  // This prevents phone numbers being formatted as money
+  const amtCols = cols.filter(c =>
+    /^(total|amount|price|balance|revenue|sales|pending_amount|debit|credit|grand_total|total_sales|total_price|closing_balance|opening_balance|last_year_revenue|cost|value|salary|expense)$/i.test(c.trim())
+  );
 
-  // Also detect day-bucket columns like "0-30", "31-60" etc
-  const bucketCols = cols.filter(c => /^\d+[-–]\d+|days/i.test(c));
+  // Detect day-bucket columns like "0-30 Days", "31-60 Days"
+  const bucketCols = cols.filter(c => /^\d+[-–]\d+/i.test(c.trim()));
   const allAmtCols = [...new Set([...amtCols, ...bucketCols])];
 
   let header = cols.map(c => `<th style="${TH}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</th>`).join("");
