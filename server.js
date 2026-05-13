@@ -610,15 +610,14 @@ async function sendWhatsAppReply(to, message) {
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
 app.post("/whatsapp", async (req, res) => {
   try {
+    const body = req.body;
+
+    console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
+
     // ✅ Outgoing messages ignore karo — loop rokne ke liye
     if (body.boundType === "out") {
       return res.json({ success: true, ignored: true });
     }
-
-    console.log("[WHATSAPP RAW BODY]", JSON.stringify(req.body));
-    console.log("[WHATSAPP HEADERS]", JSON.stringify(req.headers));
-
-    const body = req.body;
 
     // Extract message from all possible fields
     // app.mis.work sends message in body.value
