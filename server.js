@@ -658,21 +658,24 @@ app.listen(PORT, async () => {
 async function sendWhatsAppReply(to, message) {
   try {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
-    const WA_API_URL = "https://app.mis.work/api/send-message";
-    
-    await fetch(WA_API_URL, {
+    const WA_API_URL = "https://app.mis.work/api/v1/message/create";
+
+    // Clean phone number - remove whatsapp: prefix if present
+    const phone = to.replace("whatsapp:", "").replace(/[^0-9]/g, "");
+
+    const resp = await fetch(WA_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": "Bearer " + WA_API_KEY
       },
       body: JSON.stringify({
-        to: to,
-        message: message,
-        type: "text"
+        receiverMobileNo: phone,
+        message: [message]
       })
     });
-    console.log("[WHATSAPP REPLY SENT]", to);
+    const result = await resp.json();
+    console.log("[WHATSAPP REPLY]", JSON.stringify(result));
   } catch(e) {
     console.error("[WHATSAPP REPLY ERROR]", e.message);
   }
