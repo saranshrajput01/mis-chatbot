@@ -33,75 +33,65 @@ async function openai(systemPrompt, messages, maxTokens = 2000) {
 // ── DATABASE SCHEMA ───────────────────────────────────────────────────────────
 function getSchema() {
   return `
-You are a smart Sales & Finance Assistant for "Mis Work India Private Limited" — an IT/software company in Delhi.
+You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
 Today's date: ${new Date().toISOString().split("T")[0]}
-Current financial year: April 2025 to March 2026
+Current financial year: April 2025 to March 2026 (2026-03-31 is the last day)
 
-SYNONYM MAPPINGS (treat all these as the same):
-- client = customer = party = company = client name = party name = customer name
+SYNONYM MAPPINGS:
+- client = customer = party = company = client name = party name
 - show = dikhao = batao = de = dedo = dikha = share = give = bta
-- ledger = lgdr = ldgr = khata = account statement = balanc
-- invoice = bill = invois = receipt
+- ledger = lgdr = ldgr = khata
+- invoice = bill = invois
 - salary = salari = tankhwa = wages
 - rent = kiraya = office rent
-- expense = kharcha = kharch = cost = expenditure
-- pending = baaki = baki = overdue = due
-- month wise = monthly = mahina wise = mahine ka
-- team member = employee = staff = party_name in expenses
+- expense = kharcha = kharch = cost
+- pending = baaki = baki = overdue
+- team member = employee = staff = party_name in expenses table
 
 DATABASE TABLES:
 
 === TABLE: sales ===
-- created_at (timestamp)     → invoice date [USE for date filtering]
-- invoice_no (text)          → e.g. "MIS-24-25-123"
-- company_name (text)        → CLIENT name [also called: party, customer, client, INVOICE TO]
-- address, state, gst_no (text)
-- contact_person (text)      → person name at client company
-- phone (text)
-- description (text)         → work description
-- total_price (numeric)      → invoice amount in Rs. [NEVER filter this unless asked]
-- category (text)            → product/service type
-- invoice_pdf (text)         → Google Drive PDF URL
-- login (text)               → our salesperson name
+- created_at (timestamp)   → invoice date
+- invoice_no (text)        → e.g. "MIS-24-25-123"
+- company_name (text)      → CLIENT/customer name
+- address, state, gst_no, contact_person, phone (text)
+- description (text)       → work description
+- total_price (numeric)    → invoice amount
+- category (text)          → product/service type
+- invoice_pdf (text)       → PDF URL
+- login (text)             → salesperson
 
-Category values (EXACT spelling):
-"GOOGLE SHEET - RETAINERSHIP","GOOGLE SHEET - CUSTOM","GOOGLE SHEET - READY","GOOGLE SHEET - AMC",
-"PHP - PANSARI","PHP - OTHERS","WHATSAPP CREDIT","WA Wallet",
-"ERP - CALL SYSTEM","ERP - READY PRODUCTS",
-"MOBILE APP - PANSARI","MOBILE APP - OTHERS","WEB FORM","TALLY"
+Categories: "GOOGLE SHEET - RETAINERSHIP","GOOGLE SHEET - CUSTOM","GOOGLE SHEET - READY",
+"GOOGLE SHEET - AMC","PHP - PANSARI","PHP - OTHERS","WHATSAPP CREDIT","WA Wallet",
+"ERP - CALL SYSTEM","ERP - READY PRODUCTS","MOBILE APP - PANSARI","MOBILE APP - OTHERS",
+"WEB FORM","TALLY"
 
 === TABLE: expenses ===
-- date (date)                → expense date [USE for date filtering]
+- date (date)              → expense date
 - voucher_number (int)
-- party_name (text)          → vendor OR team member name (for salary, this is the employee name)
-- group (text)               → main group e.g. "OFFICE EXP","Indirect Expenses"
-- sub_group (text)           → expense category
-- design_number (text)       → description/narration of expense
-- amount (numeric)           → Rs.
-- type (text)                → "Dr" or "Cr"
+- party_name (text)        → *** THIS IS THE TEAM MEMBER / EMPLOYEE NAME for salary entries ***
+                             *** ALWAYS fetch party_name when user asks about team members ***
+- group (text)             → main group
+- sub_group (text)         → expense category (e.g. "Salary")
+- design_number (text)     → description/narration
+- amount (numeric)         → Rs.
+- type (text)              → "Dr" or "Cr"
 
-Sub_group values (EXACT spelling):
-"Salary","OFFICE RENT","Phone and Internet","Technical Exp","Travel Exp","Utility Direc",
-"INSURANCE","Repair & Maintenance","BRANDING EXP","COMMISSION EXP","Stationery",
-"Legal & Prof Exp","Employees Welfare","Financial Exp","Computer Maintenance",
+Sub_groups: "Salary","OFFICE RENT","Phone and Internet","Technical Exp","Travel Exp",
+"Utility Direc","INSURANCE","Repair & Maintenance","BRANDING EXP","COMMISSION EXP",
+"Stationery","Legal & Prof Exp","Employees Welfare","Financial Exp","Computer Maintenance",
 "Bad Debts","Factory Related","OFFICE EXP","Telephone Exp","Indirect Expenses","Other Expense"
 
 === TABLE: pending ===
-- bill_date (date), bill_ref_no (text)
-- party_name (text)          → client name
-- party_group (text), sub_group (text)
-- sales_person (text)
-- pending_amount (text)      → stored as "₹1,090" format
-- due_date (date)
-- overdue_days (int)         → number of days overdue
+- bill_date, bill_ref_no, party_name, party_group, sub_group, sales_person (text)
+- pending_amount (text)    → "₹1,090" format
+- due_date (date), overdue_days (int)
 
 === TABLE: ledger ===
-- name (text)                → company/party name [USE ilike for search]
-- subgroup, group (text)
-- email, contact_person, mobile (text)
+- name (text)              → company name
+- subgroup, group, email, contact_person, mobile (text)
 - opening_balance, closing_balance (numeric)
-- voucher_date (date)
-- voucher_particular, voucher_type, voucher_no (text)
+- voucher_date (date), voucher_particular, voucher_type, voucher_no (text)
 - voucher_debit, voucher_credit (numeric)
 `;
 }
@@ -120,7 +110,6 @@ function fmtDate(d) {
   return String(dt.getDate()).padStart(2,"0") + "-" + months[dt.getMonth()] + "-" + String(dt.getFullYear()).slice(2);
 }
 
-// Format YYYY-MM to "Apr-25" style
 function fmtMonth(ym) {
   if (!ym) return "";
   const [y, m] = ym.split("-");
@@ -138,8 +127,8 @@ function buildLedgerHTML(info, txns) {
   const totalDr   = txns.reduce((s, r) => s + (parseFloat(r.voucher_debit) || 0), 0);
   const totalCr   = txns.reduce((s, r) => s + (parseFloat(r.voucher_credit) || 0), 0);
 
-  const TD = `padding:6px 10px;border:1px solid #ddd;font-size:12px;font-family:Arial`;
-  const TH = `padding:7px 10px;border:1px solid #555;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff`;
+  const TD = `padding:7px 12px;border:1px solid #ddd;font-size:12px;font-family:Arial`;
+  const TH = `padding:8px 12px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff`;
 
   let rows = `<tr>
     <td style="${TD};white-space:nowrap"><b>01-Apr-25</b></td>
@@ -172,7 +161,7 @@ function buildLedgerHTML(info, txns) {
     <td style="${TD};text-align:right"><b>${closeBal < 0 ? fmtAmt(Math.abs(closeBal)) : ""}</b></td>
   </tr>
   <tr style="background:#ddd">
-    <td style="${TD}" colspan="5"><b>Total</b></td>
+    <td style="${TD}" colspan="5"><b>Grand Total</b></td>
     <td style="${TD};text-align:right"><b>${fmtAmt(grandDr)}</b></td>
     <td style="${TD};text-align:right"><b>${fmtAmt(grandCr)}</b></td>
   </tr>`;
@@ -189,10 +178,8 @@ function buildLedgerHTML(info, txns) {
     <div style="overflow-x:auto">
       <table style="width:100%;border-collapse:collapse">
         <thead><tr>
-          <th style="${TH}">Date</th>
-          <th style="${TH}">&nbsp;</th>
-          <th style="${TH}">Particulars</th>
-          <th style="${TH}">Vch Type</th>
+          <th style="${TH}">Date</th><th style="${TH}">&nbsp;</th>
+          <th style="${TH}">Particulars</th><th style="${TH}">Vch Type</th>
           <th style="${TH}">Vch No.</th>
           <th style="${TH};text-align:right">Debit (Rs.)</th>
           <th style="${TH};text-align:right">Credit (Rs.)</th>
@@ -207,7 +194,79 @@ function buildLedgerHTML(info, txns) {
   </div>`;
 }
 
-// ── CHAT HISTORY ROUTES ───────────────────────────────────────────────────────
+// ── PIVOT TABLE BUILDER (server-side, guaranteed correct) ─────────────────────
+function buildPivotHTML(data, rowField, valField, months) {
+  // Group data
+  const pivot = {};
+  const rowTotals = {};
+  const colTotals = {};
+  months.forEach(m => colTotals[m] = 0);
+
+  data.forEach(r => {
+    const rowKey = r[rowField] || "Unknown";
+    // Get month from date field
+    const dateVal = r.date || r.created_at || "";
+    const month = String(dateVal).substring(0, 7); // YYYY-MM
+
+    if (!pivot[rowKey]) pivot[rowKey] = {};
+    pivot[rowKey][month] = (pivot[rowKey][month] || 0) + (parseFloat(r[valField]) || 0);
+    rowTotals[rowKey] = (rowTotals[rowKey] || 0) + (parseFloat(r[valField]) || 0);
+    if (months.includes(month)) colTotals[month] = (colTotals[month] || 0) + (parseFloat(r[valField]) || 0);
+  });
+
+  // Sort rows by total desc, filter out zero rows
+  const sortedRows = Object.entries(rowTotals)
+    .filter(([, total]) => total > 0)
+    .sort((a, b) => b[1] - a[1])
+    .map(([name]) => name);
+
+  if (!sortedRows.length) return "<p>No data found.</p>";
+
+  const TH = `padding:8px 12px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;white-space:nowrap;text-align:center`;
+  const THL = `padding:8px 12px;border:1px solid #444;font-size:11px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left`;
+  const TD = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap`;
+  const TDL = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:left;white-space:nowrap`;
+  const TDTOT = `padding:7px 10px;border:1px solid #ddd;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#fff3cd;font-weight:bold`;
+  const TDGRAND = `padding:7px 10px;border:1px solid #bbb;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#e0e0e0;font-weight:bold`;
+
+  // Header
+  let header = `<tr><th style="${THL}">Team Member / Party</th>`;
+  months.forEach(m => { header += `<th style="${TH}">${fmtMonth(m)}</th>`; });
+  header += `<th style="${TH};background:#333">Total</th></tr>`;
+
+  // Rows
+  let rows = "";
+  sortedRows.forEach((name, idx) => {
+    const bg = idx % 2 === 0 ? "#fff" : "#f9f9f9";
+    let row = `<tr style="background:${bg}"><td style="${TDL}"><b>${name}</b></td>`;
+    months.forEach(m => {
+      const val = pivot[name]?.[m] || 0;
+      row += `<td style="${TD}">${val > 0 ? fmtAmt(val) : "-"}</td>`;
+    });
+    row += `<td style="${TDTOT}">${fmtAmt(rowTotals[name])}</td></tr>`;
+    rows += row;
+  });
+
+  // Grand Total row
+  const grandTotal = Object.values(rowTotals).reduce((s, v) => s + v, 0);
+  let grandRow = `<tr><td style="${TDGRAND};text-align:left">Grand Total</td>`;
+  months.forEach(m => {
+    grandRow += `<td style="${TDGRAND}">${colTotals[m] > 0 ? fmtAmt(colTotals[m]) : "-"}</td>`;
+  });
+  grandRow += `<td style="${TDGRAND};background:#ffc107">${fmtAmt(grandTotal)}</td></tr>`;
+
+  return `<div style="overflow-x:auto;font-family:Arial">
+    <table style="border-collapse:collapse;min-width:900px">
+      <thead>${header}</thead>
+      <tbody>${rows}${grandRow}</tbody>
+    </table>
+    <div style="font-size:11px;color:#555;margin-top:6px;padding:4px">
+      Total Records: <b>${data.length}</b> &nbsp;|&nbsp; Grand Total: <b>${fmtAmt(grandTotal)}</b>
+    </div>
+  </div>`;
+}
+
+// ── CHAT HISTORY ──────────────────────────────────────────────────────────────
 app.get("/history/:sid", async (req, res) => {
   try {
     const { data } = await supabase.from("chat_history")
@@ -222,71 +281,65 @@ app.delete("/history/:sid", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── STEP 1: AI PLANS WHAT TO FETCH ───────────────────────────────────────────
+// ── STEP 1: AI PLAN ───────────────────────────────────────────────────────────
 async function aiPlan(userMessage, chatHistory) {
   const planPrompt = `${getSchema()}
 
-YOUR TASK: Read the user's question (considering the full conversation history for context) and return a JSON plan describing what database queries to run.
+YOUR TASK: Analyze the user's message (using conversation history for context) and return a JSON query plan.
+Return ONLY raw JSON — no markdown, no explanation.
 
-CRITICAL RULES FOR PLANNING:
-1. ALWAYS use conversation history to understand follow-up questions. If user says "unka phone number do" after asking about a company, they mean that company's phone number.
-2. If the query is too vague or ambiguous to answer, set "needs_clarification": true and provide "clarification_question" with 2-3 options.
-3. NEVER return empty queries for valid questions. "list of all clients" → query sales table for company_name.
-4. For salary/team member queries → query expenses table with sub_group = "Salary", party_name has employee names.
-5. For "list of clients" → query sales table, select distinct company_name.
-6. gt_total_price: 0 is ONLY needed when user wants to exclude zero-amount records. For listing clients, DO NOT add this filter.
+CRITICAL RULES:
+1. For salary/team member pivot → expenses table, sub_group:["Salary"], select MUST include "party_name,date,amount"
+2. For ANY pivot table → always set date_gte and date_lte. Default full year: 2025-04-01 to 2026-03-31
+3. "last year" = 2024-04-01 to 2025-03-31, "this year" = 2025-04-01 to 2026-03-31
+4. NEVER add gt_total_price filter unless explicitly asked
+5. For "list all clients" → sales table, select:"company_name,created_at", no price filter
+6. Use conversation history for follow-up questions
 
-WHEN TO ASK CLARIFICATION (set needs_clarification: true):
-- Query is completely unrelated to sales/finance/expenses/ledger/pending
-- Query has multiple possible meanings that would give very different answers
-- Example: "show me data" → ask "What data? Sales, expenses, pending, or ledger?"
-
-Return ONLY raw JSON (no markdown, no explanation):
+JSON format:
 {
-  "intent": "clear description of what user wants",
+  "intent": "description",
   "needs_clarification": false,
   "clarification_question": "",
   "clarification_options": [],
-  "response_format": "ledger | pivot_table | table | list | text",
-  "ledger_search": "company name if ledger query",
-  "pivot_months": ["2025-04","2025-05",...],
-  "pivot_row_field": "category or party_name",
-  "pivot_val_field": "total_price or amount",
+  "response_format": "pivot_table | ledger | table | list | text",
+  "ledger_search": "",
+  "pivot_months": ["2025-04","2025-05","2025-06","2025-07","2025-08","2025-09","2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"],
+  "pivot_row_field": "party_name",
+  "pivot_val_field": "amount",
   "queries": [
     {
-      "table": "sales | expenses | pending | ledger",
-      "select": "specific columns or *",
-      "filters": {},
-      "order_by": "column",
-      "order_asc": false,
+      "table": "sales|expenses|pending|ledger",
+      "select": "*",
+      "filters": {
+        "date_gte": "2025-04-01",
+        "date_lte": "2026-03-31",
+        "in_sub_group": ["Salary"]
+      },
+      "order_by": "date",
+      "order_asc": true,
       "limit": 5000,
-      "purpose": "descriptive label"
+      "purpose": "salary_pivot"
     }
   ]
 }
 
-FILTER KEYS (use exactly these in filters{}):
-  date_gte              → start date YYYY-MM-DD
-  date_lte              → end date YYYY-MM-DD
-  ilike_name            → partial company search in ledger.name
-  ilike_company_name    → partial search in sales.company_name
-  ilike_party_name      → partial search in expenses/pending.party_name
-  in_sub_group          → array of sub_group values e.g. ["Salary","OFFICE RENT"]
-  in_category           → array of category values
-  gt_total_price        → exclude records below this amount (use ONLY when explicitly needed)
-  gte_overdue_days      → minimum overdue days
-  lte_overdue_days      → maximum overdue days
+Filter keys:
+  date_gte, date_lte         → date range (always set for pivot queries)
+  ilike_name                 → ledger name search
+  ilike_company_name         → sales company_name search
+  ilike_party_name           → expenses/pending party search
+  in_sub_group               → array of sub_group values
+  in_category                → array of category values
+  gt_total_price             → only use when explicitly needed
+  gte_overdue_days, lte_overdue_days → pending filters
 
 EXAMPLES:
-- "list all clients" → sales table, select:"company_name", no filters, purpose:"all_clients"
-- "top 5 clients by revenue" → sales table, select:"company_name,total_price", purpose:"top_clients"  
-- "salary expenses" → expenses, in_sub_group:["Salary"], purpose:"salary_data"
-- "team member wise salary pivot" → expenses, in_sub_group:["Salary"], response_format:"pivot_table", pivot_row_field:"party_name"
+- "team member wise salary apr 2025" → expenses, in_sub_group:["Salary"], date_gte:"2025-04-01", date_lte:"2026-03-31", select:"party_name,date,amount", response_format:"pivot_table", pivot_row_field:"party_name", pivot_val_field:"amount"
+- "list all clients" → sales, select:"company_name,created_at", no filters
+- "top 5 clients by sales" → sales, select:"company_name,total_price,category", order_by:"total_price"
+- "category wise month pivot" → sales, select:"category,created_at,total_price", date range, response_format:"pivot_table", pivot_row_field:"category", pivot_val_field:"total_price"
 - "pansri ka ledger" → response_format:"ledger", ledger_search:"pansari"
-- "60-90 days pending" → pending, gte_overdue_days:60, lte_overdue_days:90
-- "salary + rent + travel total" → expenses, in_sub_group:["Salary","OFFICE RENT","Travel Exp"]
-- "total sales vs expenses month wise" → 2 queries: sales+expenses both with date range
-- "give me list of client name added last year" → sales, date_gte:"2024-04-01", date_lte:"2025-03-31", select:"company_name,created_at"
 `;
 
   const messages = [
@@ -294,13 +347,13 @@ EXAMPLES:
     { role: "user", content: userMessage }
   ];
 
-  const text = await openai(planPrompt, messages, 1200);
+  const text = await openai(planPrompt, messages, 1000);
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) throw new Error("No JSON in plan response");
+  if (!match) throw new Error("No JSON in plan");
   return JSON.parse(match[0]);
 }
 
-// ── STEP 2: EXECUTE SUPABASE QUERIES ─────────────────────────────────────────
+// ── STEP 2: RUN QUERIES ───────────────────────────────────────────────────────
 async function runQueries(plan) {
   const results = [];
   const dateColMap = { sales: "created_at", expenses: "date", pending: "due_date", ledger: "voucher_date" };
@@ -325,91 +378,77 @@ async function runQueries(plan) {
     query = query.limit(q.limit || 5000);
 
     const { data, error } = await query;
+    // Clean null/undefined
+    const cleaned = (data || []).map(row => {
+      const c = {};
+      for (const [k, v] of Object.entries(row)) {
+        c[k] = (v === null || v === undefined || v === "EMPTY") ? "" : v;
+      }
+      return c;
+    });
+
     results.push({
       purpose: q.purpose || q.table,
       table: q.table,
-      data: (data || []).map(row => {
-        // Clean undefined/null values for display
-        const cleaned = {};
-        for (const [k, v] of Object.entries(row)) {
-          cleaned[k] = (v === null || v === undefined || v === "EMPTY") ? "" : v;
-        }
-        return cleaned;
-      }),
+      data: cleaned,
       error: error?.message || null,
-      count: (data || []).length
+      count: cleaned.length
     });
   }
   return results;
 }
 
-// ── STEP 3: AI FORMATS THE ANSWER ────────────────────────────────────────────
+// ── STEP 3: FORMAT ANSWER ─────────────────────────────────────────────────────
 async function aiAnswer(userMessage, plan, queryResults, chatHistory) {
+  // For pivot tables — build server-side (guaranteed correct)
+  if (plan.response_format === "pivot_table") {
+    const qr = queryResults[0];
+    if (!qr || !qr.data.length) {
+      return `No data found for the requested period.`;
+    }
+    const months = plan.pivot_months || [
+      "2025-04","2025-05","2025-06","2025-07","2025-08","2025-09",
+      "2025-10","2025-11","2025-12","2026-01","2026-02","2026-03"
+    ];
+    const rowField = plan.pivot_row_field || "category";
+    const valField = plan.pivot_val_field || "total_price";
+    return buildPivotHTML(qr.data, rowField, valField, months);
+  }
+
+  // For all others — AI formats
   const dataSummary = queryResults.map(r => {
     if (r.error) return `[${r.purpose}] ERROR: ${r.error}`;
-    if (!r.data.length) return `[${r.purpose}] No records found (0 results)`;
-    return `[${r.purpose}] ${r.count} total records:\n${JSON.stringify(r.data.slice(0, 400))}`;
+    if (!r.data.length) return `[${r.purpose}] No records found`;
+    return `[${r.purpose}] ${r.count} records:\n${JSON.stringify(r.data.slice(0, 400))}`;
   }).join("\n\n---\n\n");
 
-  // Build month labels for pivot
-  const monthLabels = (plan.pivot_months || []).map(m => `"${m}":"${fmtMonth(m)}"`).join(",");
-
-  const pivotNote = plan.response_format === "pivot_table" ? `
-PIVOT TABLE INSTRUCTIONS:
-- Build a pivot: rows = ${plan.pivot_row_field || "category"}, columns = months
-- Month display format mapping: {${monthLabels}}
-- Show month names like "Apr-25", "May-25" NOT "2025-04"
-- Values = sum of ${plan.pivot_val_field || "total_price"} per row per month
-- Calculate directly from raw JSON records provided
-- Skip rows where ALL values are zero or empty
-- Show "-" for zero/empty cells (not "0" or "undefined")
-- Last column = Total (sum of row), last row = Grand Total
-- Sort rows by Total descending (highest first)
-- Table header: background:#1a1a2e; color:white
-- Alternating row colors: white and #f9f9f9
-- Total column background: #fff3cd
-- Grand Total row background: #e0e0e0; font-weight:bold
-` : "";
-
   const noSalesNote = queryResults.find(r => r.purpose === "last_year_sales") ? `
-LOST CLIENTS ANALYSIS:
-- From "this_year_sales" extract all unique company_names
-- From "last_year_sales" extract all unique company_names with their total revenue
-- Find companies in last_year_sales NOT in this_year_sales
-- Show: Rank | Company Name | Last Year Revenue | Category
-- Sort by last year revenue (highest first)
-- Show count of lost clients and total potential revenue at bottom
+LOST CLIENTS: Find company_names in last_year_sales NOT in this_year_sales.
+Show: Rank | Company | Last Year Revenue. Sort by revenue desc.
 ` : "";
 
   const answerPrompt = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
-Always reply in ENGLISH. You understand Hindi, Hinglish, and typos perfectly.
+Reply in ENGLISH only. Understand Hindi/Hinglish/typos.
+User intent: ${plan.intent}
 
-User's intent: ${plan.intent}
+HTML TABLE STYLE:
+<table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
+Header: background:#1a1a2e; color:white
+Even rows: #f9f9f9, Odd: #fff
+Grand Total row: background:#e0e0e0; font-weight:bold — ALWAYS ADD THIS ROW AT BOTTOM
+Amount format: Rs. X,XX,XXX (Indian, no decimals)
+Date format: DD-Mon-YY (e.g. 15-Apr-25) — NEVER show 2025-04-15
 
-HTML TABLE STYLING RULES (apply to ALL tables):
-- Table: <table border='1' cellpadding='8' cellspacing='0' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial;margin-top:8px'>
-- Header: <th style='background:#1a1a2e;color:#fff;padding:8px 10px;text-align:left;font-size:12px'>
-- Even rows: background:#fff; Odd rows: background:#f9f9f9
-- Amount cells: text-align:right
-- Total/summary rows: background:#e8e8e8; font-weight:bold
-- NO undefined, NO null, NO "EMPTY" in output — skip or show "-" instead
-- Date columns: show as "15-Apr-25" format (DD-Mon-YY), NOT "2025-04-15"
-- Month columns in pivot: show as "Apr-25" format, NOT "2025-04"
-- Amount format: Rs. X,XX,XXX (Indian format, no decimals)
+RULES:
+- NEVER show "undefined", "null", "EMPTY" — use "-" instead
+- ALWAYS add Grand Total row at the bottom of every table
+- Use ONLY data provided below
+- For client lists: show numbered list with company names
+- Start directly with the answer
 
-${pivotNote}
 ${noSalesNote}
 
-GENERAL RULES:
-- Use ONLY the database data below. NEVER invent numbers.
-- Always show totals and record counts.
-- If PDF URL present: <a href="URL" target="_blank" style="color:#1a73e8">View PDF</a>
-- Start response directly with the answer (no intro text like "Here is your data").
-- For "list of clients" — show a numbered list or table of unique company names.
-- For combined expense queries — show each category as a row, grand total at bottom.
-- If data has company_name, show it. If party_name, show it. Never show the column name as value.
-
-DATABASE DATA:
+DATA:
 ${dataSummary}`;
 
   const messages = [
@@ -426,7 +465,7 @@ app.post("/chat", async (req, res) => {
   if (!message) return res.status(400).json({ error: "Message required" });
 
   try {
-    // ── User clicked suggestion → show ledger ──
+    // Suggestion click → ledger
     if (exactName) {
       const { data } = await supabase.from("ledger")
         .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
@@ -443,49 +482,42 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: `No ledger found for ${exactName}.`, type: "text" });
     }
 
-    // ── STEP 1: AI Plan ──
+    // Step 1: Plan
     let plan;
     try {
       plan = await aiPlan(message, history);
       console.log("[PLAN]", JSON.stringify(plan, null, 2));
     } catch(e) {
       console.error("[PLAN ERROR]", e.message);
-      return res.json({ reply: "I could not understand your query. Could you please rephrase it?", type: "text" });
+      return res.json({ reply: "Could not understand your query. Please try rephrasing.", type: "text" });
     }
 
-    // ── AI needs clarification ──
+    // Clarification needed
     if (plan.needs_clarification) {
-      const clarifyMsg = plan.clarification_question || "Could you please clarify what you need?";
       const options = plan.clarification_options || [];
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
-        { session_id, role: "assistant", content: clarifyMsg }
+        { session_id, role: "assistant", content: plan.clarification_question }
       ]);
-      return res.json({
-        reply: clarifyMsg,
-        type: options.length ? "suggestions" : "text",
-        options
-      });
+      return res.json({ reply: plan.clarification_question, type: options.length ? "suggestions" : "text", options });
     }
 
-    // ── STEP 2: Ledger special handling ──
+    // Step 2: Ledger
     if (plan.response_format === "ledger") {
       const search = (plan.ledger_search || "").trim();
-      if (!search) return res.json({ reply: "Please tell me the company name for the ledger.", type: "text" });
+      if (!search) return res.json({ reply: "Please tell me the company name.", type: "text" });
 
       const { data } = await supabase.from("ledger")
         .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(2000);
 
-      if (!data || !data.length) {
-        return res.json({ reply: `No ledger found matching "${search}". Please check the company name.`, type: "text" });
-      }
+      if (!data || !data.length) return res.json({ reply: `No ledger found for "${search}".`, type: "text" });
 
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) {
         if (session_id) await supabase.from("chat_history").insert([
           { session_id, role: "user", content: message },
-          { session_id, role: "assistant", content: "Multiple companies found. Please select one." }
+          { session_id, role: "assistant", content: "Multiple companies found" }
         ]);
         return res.json({ reply: "Multiple companies found. Which one?", type: "suggestions", options: uniqueNames.slice(0, 8) });
       }
@@ -499,7 +531,7 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: html, type: "html" });
     }
 
-    // ── STEP 3: Run DB queries ──
+    // Step 3: Run queries
     let queryResults;
     try {
       queryResults = await runQueries(plan);
@@ -510,25 +542,22 @@ app.post("/chat", async (req, res) => {
     }
 
     const totalRows = queryResults.reduce((s, r) => s + r.count, 0);
-
-    // If no data found — ask clarification instead of dead end
     if (totalRows === 0) {
-      const clarifyMsg = `I searched the database but found no results for: "${message}".\n\nCould you clarify what you are looking for?`;
-      const options = ["Show all sales data", "Show all expenses", "Show pending payments", "Show ledger"];
+      const options = ["Show all sales", "Show all expenses", "Show pending payments", "Show ledger"];
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
-        { session_id, role: "assistant", content: clarifyMsg }
+        { session_id, role: "assistant", content: "No data found" }
       ]);
-      return res.json({ reply: clarifyMsg, type: "suggestions", options });
+      return res.json({ reply: `No data found for: "${message}". What would you like to see?`, type: "suggestions", options });
     }
 
-    // ── STEP 4: AI formats answer ──
+    // Step 4: Format
     let reply;
     try {
       reply = await aiAnswer(message, plan, queryResults, history);
     } catch(e) {
       console.error("[ANSWER ERROR]", e.message);
-      return res.json({ reply: "Could not format the answer: " + e.message, type: "text" });
+      return res.json({ reply: "Could not format answer: " + e.message, type: "text" });
     }
 
     if (session_id) await supabase.from("chat_history").insert([
