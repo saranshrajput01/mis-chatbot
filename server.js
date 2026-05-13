@@ -60,23 +60,12 @@ function normalizeCompany(text = "") {
     .trim();
 }
 
-// ── REAL SALES CATEGORIES from DB ────────────────────────────────────────────
-// GOOGLE SHEET - RETAINERSHIP, WHATSAPP CREDIT, GOOGLE SHEET - CUSTOM,
-// PHP - OTHERS, GOOGLE SHEET - READY, GOOGLE SHEET - AMC, WEB FORM,
-// MOBILE APP - PANSARI, PHP - PANSARI, ERP - READY PRODUCTS, TALLY,
-// MOBILE APP - OTHERS, ERP - CALL SYSTEM, WA Wallet
-
-// ── REAL EXPENSE SUB_GROUPS from DB ──────────────────────────────────────────
-// OFFICE RENT, Other Expense, Phone and Internet, Technical Exp, Financial Exp,
-// Employees Welfare, Travel Exp, Utility Direc, OFFICE EXP, Telephone Exp,
-// Salary, INSURANCE, Bad Debts, Computer Maintenance, Stationery,
-// Legal & Prof Exp, Factory Related, BRANDING EXP, Maintenance Fee,
-// Repair & Maintenance, Indirect Expenses, COMMISSION EXP
-
+// ── DETECT QUERY TYPE ─────────────────────────────────────────────────────────
 function detectType(q) {
   const ql = q.toLowerCase();
   if (/ledger|khata|statement|account\s*detail|balanc/i.test(ql)) return "LEDGER";
   if (/pending|overdue|baaki|baki|\bdue\b|60.?day|90.?day|120.?day|30.?day|180.?day|60-90|90-120|ageing|aging/i.test(ql)) return "PENDING";
+  if (/no\s*sale|zero\s*sale|without\s*sale|not\s*sold|inactive|dead\s*client|koi\s*sale\s*nahi|sale\s*nahi/i.test(ql)) return "NO_SALES";
   if (/salary|salari|wages|tankhwa|payroll/i.test(ql)) return "EXPENSE";
   if (/rent|kiraya|lease/i.test(ql)) return "EXPENSE";
   if (/invoice|bill|invois|invioce|mis-/i.test(ql)) return "INVOICE";
@@ -213,6 +202,108 @@ async function handleLedger(question, exactName) {
   return { type: "html", content: buildLedgerHTML(companyRows[0], txns) };
 }
 
+// ── NO SALES HANDLER ──────────────────────────────────────────────────────────
+async function handleNoSales(question) {
+  const q = question.toLowerCase();
+
+  // Parse date range from question
+  const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+
+  // Detect range like "apr 2025 to mar 2026" or "last 12 months" or "last 6 months"
+  let startMonth = null, endMonth = null;
+
+  // "last N months"
+  const lastNMatch = q.match(/last\s*(\d+)\s*month/i);
+  if (lastNMatch) {
+    const n = parseInt(lastNMatch[1]);
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const start = new Date(end.getFullYear(), end.getMonth() - (n - 1), 1);
+    startMonth = start.toISOString().substring(0, 7);
+    endMonth = end.toISOString().substring(0, 7);
+  } else {
+    // Try to find explicit months like "apr 2025 to mar 2026"
+    const months = [];
+    for (const [mn, mv] of Object.entries(monthMap)) {
+      const yearMatch = new RegExp(mn + "\\s*(20\\d\\d)", "gi").exec(q);
+      if (yearMatch) months.push({ month: mv, year: yearMatch[1] });
+    }
+    if (months.length >= 2) {
+      startMonth = months[0].year + "-" + months[0].month;
+      endMonth = months[1].year + "-" + months[1].month;
+    } else if (months.length === 1) {
+      // Single month - just that month
+      startMonth = months[0].year + "-" + months[0].month;
+      endMonth = startMonth;
+    } else {
+      // Default: last 12 months
+      const now = new Date();
+      const end = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const start = new Date(end.getFullYear(), end.getMonth() - 11, 1);
+      startMonth = start.toISOString().substring(0, 7);
+      endMonth = end.toISOString().substring(0, 7);
+    }
+  }
+
+  // Get all sales in the date range
+  const { data: salesData } = await supabase.from("sales")
+    .select("company_name,total_price,category,created_at")
+    .gte("created_at", startMonth + "-01")
+    .lte("created_at", endMonth + "-31")
+    .gt("total_price", 0)
+    .limit(5000);
+
+  // Get all ledger companies (active clients)
+  const { data: ledgerData } = await supabase.from("ledger")
+    .select("name,subgroup,closing_balance")
+    .limit(5000);
+
+  if (!ledgerData || !ledgerData.length) return "No client data found.";
+
+  // Find unique clients who had sales in this period
+  const clientsWithSales = new Set(
+    (salesData || []).map(r => (r.company_name || "").toLowerCase().trim())
+  );
+
+  // Find unique ledger clients
+  const uniqueLedgerClients = {};
+  ledgerData.forEach(r => {
+    if (r.name && r.name.trim()) {
+      const key = r.name.trim();
+      if (!uniqueLedgerClients[key]) uniqueLedgerClients[key] = r;
+    }
+  });
+
+  // Clients with NO sales in this period
+  const noSalesClients = Object.values(uniqueLedgerClients).filter(r => {
+    const norm = (r.name || "").toLowerCase().trim();
+    return !clientsWithSales.has(norm);
+  });
+
+  // Apply category filter if mentioned
+  let catFilter = null;
+  if (/google\s*sheet/i.test(q)) catFilter = "google";
+  else if (/erp/i.test(q)) catFilter = "erp";
+  else if (/whatsapp/i.test(q)) catFilter = "whatsapp";
+  else if (/tally/i.test(q)) catFilter = "tally";
+  else if (/php/i.test(q)) catFilter = "php";
+  else if (/mobile\s*app/i.test(q)) catFilter = "mobile";
+
+  let finalList = noSalesClients;
+  if (catFilter) {
+    finalList = noSalesClients.filter(r => (r.subgroup || "").toLowerCase().includes(catFilter));
+  }
+
+  if (!finalList.length) {
+    return `All clients had at least one sale between ${startMonth} and ${endMonth}.`;
+  }
+
+  const ctx = `CLIENTS WITH NO SALES from ${startMonth} to ${endMonth} (${finalList.length} clients):\nClient Name|Subgroup|Closing Balance\n` +
+    finalList.slice(0, 100).map(r => `${r.name}|${r.subgroup||"N/A"}|Rs.${(r.closing_balance||0).toLocaleString("en-IN")}`).join("\n");
+
+  return ctx;
+}
+
 // ── CONTEXT FETCHER ───────────────────────────────────────────────────────────
 async function fetchContext(question, type) {
   const q = question.toLowerCase();
@@ -247,9 +338,8 @@ async function fetchContext(question, type) {
 
   // ── EXPENSE ──
   else if (type === "EXPENSE") {
-    // Map user keywords to actual DB sub_group values
     const catMap = {
-      "salary":"Salary", "salari":"Salary", "wages":"Salary",
+      "salary":"Salary", "salari":"Salary", "wages":"Salary", "tankhwa":"Salary",
       "office rent":"OFFICE RENT", "rent":"OFFICE RENT", "kiraya":"OFFICE RENT",
       "phone":"Phone and Internet", "internet":"Phone and Internet", "telephone":"Telephone Exp",
       "travel":"Travel Exp", "conveyance":"Travel Exp", "petrol":"Travel Exp",
@@ -274,16 +364,38 @@ async function fetchContext(question, type) {
       if (q.includes(k)) { matchedCat = v; break; }
     }
 
+    // Month/year filter for expenses
+    const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
+    let monthFilter = null, yearFilter = null;
+    for (const [mn,mv] of Object.entries(monthMap)) { if(q.includes(mn)){monthFilter=mv;break;} }
+    const yearMatch2 = q.match(/20(2[0-9])/);
+    if (yearMatch2) yearFilter = yearMatch2[0];
+
     if (matchedCat) {
-      const { data } = await supabase.from("expenses")
+      let query = supabase.from("expenses")
         .select("date,party_name,design_number,amount,sub_group")
         .ilike("sub_group", "%" + matchedCat + "%")
         .order("date", { ascending: false }).limit(500);
-      if (data && data.length) {
-        const tot = data.reduce((s,r) => s+(r.amount||0), 0);
-        ctx = `${matchedCat} EXPENSES (Rs.${tot.toLocaleString("en-IN")}, ${data.length} records):\nDate|Party|Description|Amount\n`;
-        data.forEach(r => { ctx += `${(r.date||"").split("T")[0]}|${r.party_name||""}|${r.design_number||""}|Rs.${(r.amount||0).toLocaleString("en-IN")}\n`; });
-      } else ctx = `No ${matchedCat} expense records found.`;
+
+      const { data } = await query;
+      let filtered = data || [];
+
+      // Apply month/year filter
+      if (monthFilter || yearFilter) {
+        filtered = filtered.filter(r => {
+          const d = (r.date || "").substring(0, 7);
+          if (monthFilter && yearFilter) return d === yearFilter + "-" + monthFilter;
+          if (monthFilter) return d.endsWith("-" + monthFilter);
+          if (yearFilter) return d.startsWith(yearFilter);
+          return true;
+        });
+      }
+
+      if (filtered.length) {
+        const tot = filtered.reduce((s,r) => s+(r.amount||0), 0);
+        ctx = `${matchedCat} EXPENSES (Rs.${tot.toLocaleString("en-IN")}, ${filtered.length} records):\nDate|Party|Description|Amount\n`;
+        filtered.forEach(r => { ctx += `${(r.date||"").split("T")[0]}|${r.party_name||""}|${r.design_number||""}|Rs.${(r.amount||0).toLocaleString("en-IN")}\n`; });
+      } else ctx = `No ${matchedCat} expense records found${monthFilter ? " for this period" : ""}.`;
     }
     else if (/month|mahina|monthly|compare|trend/i.test(q)) {
       const { data } = await supabase.from("expenses").select("date,amount,sub_group").limit(2000);
@@ -306,7 +418,6 @@ async function fetchContext(question, type) {
       }
     }
     else {
-      // Default: full expense summary
       const { data } = await supabase.from("expenses").select("sub_group,amount").limit(2000);
       if (data && data.length) {
         const bg = {};
@@ -330,7 +441,6 @@ async function fetchContext(question, type) {
         });
       } else ctx = `Invoice ${invMatch[0]} not found.`;
     } else {
-      // Search by company name
       const co = normalizeCompany(question.replace(/invoice|bill|invoices|bills|till\s*date|all|give|show|me|latest|recent/gi, " "));
       if (co.length > 1) {
         const words = co.split(" ").filter(w => w.length > 2);
@@ -352,13 +462,9 @@ async function fetchContext(question, type) {
 
   // ── SALES ──
   else if (type === "SALES") {
-    // Actual CATEGORY values: GOOGLE SHEET - RETAINERSHIP, WHATSAPP CREDIT, GOOGLE SHEET - CUSTOM,
-    // PHP - OTHERS, GOOGLE SHEET - READY, GOOGLE SHEET - AMC, WEB FORM, MOBILE APP - PANSARI,
-    // PHP - PANSARI, ERP - READY PRODUCTS, TALLY, MOBILE APP - OTHERS, ERP - CALL SYSTEM, WA Wallet
-
     const salesCatMap = {
       "erp call":"ERP - CALL SYSTEM", "erp-call":"ERP - CALL SYSTEM", "erp call system":"ERP - CALL SYSTEM",
-      "erp ready":"ERP - READY PRODUCTS", "erp product":"ERP - READY PRODUCTS",
+      "erp ready":"ERP - READY PRODUCTS", "erp product":"ERP - READY PRODUCTS", "erp - ready":"ERP - READY PRODUCTS",
       "google sheet retainer":"GOOGLE SHEET - RETAINERSHIP", "retainer":"GOOGLE SHEET - RETAINERSHIP", "retainership":"GOOGLE SHEET - RETAINERSHIP",
       "google sheet custom":"GOOGLE SHEET - CUSTOM", "custom sheet":"GOOGLE SHEET - CUSTOM",
       "google sheet ready":"GOOGLE SHEET - READY", "ready sheet":"GOOGLE SHEET - READY",
@@ -375,7 +481,6 @@ async function fetchContext(question, type) {
       if (q.includes(k)) { salesCat = v; break; }
     }
 
-    // Month/year filter
     const monthMap = { jan:"01",feb:"02",mar:"03",apr:"04",may:"05",jun:"06",jul:"07",aug:"08",sep:"09",oct:"10",nov:"11",dec:"12" };
     let monthFilter = null, yearFilter = null;
     for (const [mn,mv] of Object.entries(monthMap)) { if(q.includes(mn)){monthFilter=mv;break;} }
@@ -384,15 +489,13 @@ async function fetchContext(question, type) {
 
     const { data } = await supabase.from("sales")
       .select("company_name,total_price,description,invoice_no,created_at,category")
-      .order("created_at", { ascending: false }).limit(2000);
+      .order("created_at", { ascending: false }).limit(5000);
 
     if (data && data.length) {
       let filtered = data.filter(r => r.total_price > 0);
 
-      // Apply category filter
       if (salesCat) filtered = filtered.filter(r => (r.category||"").toUpperCase() === salesCat.toUpperCase());
 
-      // Apply month/year filter
       if (monthFilter || yearFilter) {
         filtered = filtered.filter(r => {
           const d = (r.created_at||"").substring(0,7);
@@ -407,21 +510,18 @@ async function fetchContext(question, type) {
       const n = topMatch ? parseInt(topMatch[1]) : 10;
 
       if (/month.?wise|monthly|month.*sale|sale.*month/i.test(q)) {
-        // Month-wise sales breakdown
         const bm = {};
         filtered.forEach(r => { const m=(r.created_at||"").substring(0,7); if(m) bm[m]=(bm[m]||0)+(r.total_price||0); });
         ctx = `MONTH-WISE SALES${salesCat?" ("+salesCat+")":""}:\nMonth|Total Sales\n`;
         Object.entries(bm).sort().forEach(([m,a]) => { ctx += `${m}|Rs.${a.toLocaleString("en-IN")}\n`; });
         ctx += `GRAND TOTAL: Rs.${filtered.reduce((s,r)=>s+(r.total_price||0),0).toLocaleString("en-IN")}`;
       } else if (/categor|category.?wise|by\s*categor|type|breakdow/i.test(q)) {
-        // Category-wise sales
         const bc = {};
         filtered.forEach(r => { bc[r.category||"Unknown"]=(bc[r.category||"Unknown"]||0)+(r.total_price||0); });
         ctx = "SALES BY CATEGORY:\nCategory|Total Sales\n";
         Object.entries(bc).sort((a,b)=>b[1]-a[1]).forEach(([c,a]) => { ctx += `${c}|Rs.${a.toLocaleString("en-IN")}\n`; });
         ctx += `GRAND TOTAL: Rs.${filtered.reduce((s,r)=>s+(r.total_price||0),0).toLocaleString("en-IN")}`;
       } else {
-        // Client-wise top sales
         const byC = {};
         filtered.forEach(r => { byC[r.company_name||"Unknown"]=(byC[r.company_name||"Unknown"]||0)+(r.total_price||0); });
         const sorted = Object.entries(byC).sort((a,b)=>b[1]-a[1]);
@@ -439,7 +539,6 @@ async function fetchContext(question, type) {
     const words = cleaned.split(" ").filter(w => w.length > 2);
     const primary = words.sort((a,b) => b.length-a.length)[0];
 
-    // Search in both ledger and sales
     const [{ data: ledgerData }, { data: salesData }] = await Promise.all([
       supabase.from("ledger").select("name,mobile,contact_person,email").ilike("name","%" + primary + "%").limit(5),
       supabase.from("sales").select("company_name,contact_person,phone").ilike("company_name","%" + primary + "%").limit(5)
@@ -495,7 +594,7 @@ app.post("/chat", async (req, res) => {
   try {
     const type = detectType(message);
 
-    // LEDGER: Direct HTML, no AI
+    // LEDGER: Direct HTML
     if (type === "LEDGER") {
       const result = await handleLedger(message, exactName || null);
       if (session_id && result.type !== "suggestions") {
@@ -519,7 +618,41 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: ctx, type: "text" });
     }
 
-    // ALL OTHERS: OpenAI
+    // NO SALES: Direct handler
+    if (type === "NO_SALES") {
+      const ctx = await handleNoSales(message);
+      // Pass to AI for formatting
+      const sys = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
+Reply in ENGLISH ONLY. Use HTML tables for data display.
+Table style: <table border='1' cellpadding='6' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
+RULES: NEVER invent data. Use ONLY the DATABASE DATA below. Format amounts as Rs. X,XX,XXX.
+DATABASE DATA:\n${ctx}`;
+
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": "Bearer " + process.env.OPENAI_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: sys },
+            { role: "user", content: message }
+          ],
+          max_tokens: 2000, temperature: 0.1
+        })
+      });
+      const d = await response.json();
+      const reply = d.choices?.[0]?.message?.content || "No data found.";
+      if (session_id) {
+        await supabase.from("chat_history").insert([
+          { session_id, role: "user", content: message },
+          { session_id, role: "assistant", content: reply }
+        ]);
+      }
+      const replyType = /<table|<div|<tr|<td|<th/i.test(reply) ? "html" : "text";
+      return res.json({ reply, type: replyType });
+    }
+
+    // ALL OTHERS: AI with context
     const ctx = await fetchContext(message, type);
 
     const sys = `You are a Sales & Finance Assistant for Mis Work India Private Limited.
@@ -530,6 +663,7 @@ Examples:
 - "month wise sale dikhao" = Show month-wise sales breakdown
 - "60-90 days ka pending batao" = Show pending with overdue 60-90 days
 - "pansari ka invoice dikhao" = Show all invoices for Pansari
+- "salary kitni gayi is mahine" = Show salary expenses this month
 
 DATA DISPLAY: Use HTML tables for all data.
 Table: <table border='1' cellpadding='6' style='border-collapse:collapse;width:100%;font-size:12px;font-family:Arial'>
@@ -538,7 +672,7 @@ AVAILABLE SALES CATEGORIES (use exact names):
 ERP - CALL SYSTEM | ERP - READY PRODUCTS | GOOGLE SHEET - RETAINERSHIP | GOOGLE SHEET - CUSTOM | GOOGLE SHEET - READY | GOOGLE SHEET - AMC | WHATSAPP CREDIT | WA Wallet | WEB FORM | MOBILE APP - PANSARI | MOBILE APP - OTHERS | PHP - PANSARI | PHP - OTHERS | TALLY
 
 AVAILABLE EXPENSE CATEGORIES:
-Salary | OFFICE RENT | Phone and Internet | Technical Exp | Travel Exp | Utility Direc | INSURANCE | Repair & Maintenance | BRANDING EXP | COMMISSION EXP | Stationery | Legal & Prof Exp | Employees Welfare | Financial Exp | Computer Maintenance | Bad Debts | Factory Related | OFFICE EXP
+Salary | OFFICE RENT | Phone and Internet | Technical Exp | Travel Exp | Utility Direc | INSURANCE | Repair & Maintenance | BRANDING EXP | COMMISSION EXP | Stationery | Legal & Prof Exp | Employees Welfare | Financial Exp | Computer Maintenance | Bad Debts | Factory Related | OFFICE EXP | Telephone Exp | Maintenance Fee | Indirect Expenses | Other Expense
 
 RULES:
 - NEVER invent data. Use ONLY the DATABASE DATA below.
