@@ -239,12 +239,28 @@ Return ONLY this JSON (no markdown):
 === SQL RULES ===
 - Only SELECT statements (never INSERT/UPDATE/DELETE)
 - Always LIMIT 5000 unless aggregating
-- For pivot/monthly: use DATE_TRUNC('month', date_col) or TO_CHAR(date_col,'YYYY-MM')
+- For pivot/monthly: use TO_CHAR(date_col,'YYYY-MM') for grouping
 - For salary pivot: GROUP BY design_number, TO_CHAR(date,'YYYY-MM')
 - For amounts: ROUND(SUM(amount)::numeric, 0)
 - Escape single quotes properly
 - Use ILIKE for text searches (case insensitive)
 - For "top N": use ORDER BY total DESC LIMIT N
+
+CRITICAL SQL RULES (follow strictly):
+1. SUBQUERY GROUPING: If using subquery, ALL non-aggregated columns in outer SELECT must be in outer GROUP BY
+2. CTE preferred over subquery: Use WITH cte AS (...) SELECT ... FROM cte WHERE ...
+3. For ratio/comparison queries use CTE:
+   WITH monthly AS (
+     SELECT TO_CHAR(date,'YYYY-MM') as month, SUM(amount) as expense FROM expenses GROUP BY 1
+   ), sales AS (
+     SELECT TO_CHAR(created_at,'YYYY-MM') as month, SUM(total_price) as revenue FROM sales GROUP BY 1
+   )
+   SELECT e.month, e.expense, s.revenue, ROUND(e.expense::numeric/NULLIF(s.revenue,0), 2) as ratio
+   FROM monthly e JOIN sales s ON e.month = s.month ORDER BY e.month
+4. Never use ungrouped columns from outer query inside subquery
+5. For HAVING with ratio: calculate ratio in CTE first, then filter in outer query
+6. NULLIF(x, 0) to avoid division by zero
+7. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
 
 === SQL EXAMPLES ===
 "team member wise salary apr 2025 to mar 2026 pivot":
