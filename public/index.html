@@ -137,7 +137,7 @@
       return first && first !== "grand total" && first !== "total";
     });
 
-    if (rows.length < 2 || rows.length > 50) return;
+    if (rows.length < 2 || rows.length > 100) return;
 
     // Find label column and value columns
     const labelCol = 0;
@@ -150,13 +150,19 @@
       if (rows[0]) {
         headers.forEach((h, i) => {
           if (i > 0 && h.toLowerCase() !== "total") {
-            const val = rows[0].cells[i]?.textContent?.replace(/[Rs.,\s]/g, "");
+            const val = rows[0].cells[i]?.textContent?.replace(/[Rs.,\s₹]/g, "");
             if (val && !isNaN(parseFloat(val))) valCols.push(i);
           }
         });
       }
     }
     if (!valCols.length) return;
+    // Remove "total" column from valCols if multiple cols exist
+    const totalIdx = headers.findIndex(h => /^total$/i.test(h.trim()));
+    if (totalIdx > -1 && valCols.length > 1) {
+      const filtered = valCols.filter(i => i !== totalIdx);
+      if (filtered.length) valCols.length = 0, filtered.forEach(i => valCols.push(i));
+    }
 
     const labels = rows.map(r => r.cells[labelCol]?.textContent?.trim() || "");
     const parseNum = t => parseFloat((t || "").replace(/[Rs.,\s₹]/g, "")) || 0;
@@ -173,6 +179,9 @@
     wrap.className = "chart-wrap";
 
     let chartType, datasets, chartTitle;
+
+    const isAging = headers.some(h => /\d+.*day|day.*\d+/i.test(h));
+    const isBucket = valCols.length >= 2 && !isTimeSeries;
 
     if (isTimeSeries && valCols.length <= 3) {
       // Line chart for time series
@@ -208,11 +217,23 @@
         borderColor: rows.map((_, i) => COLORS[i % COLORS.length]),
         borderWidth: 1
       }];
+    } else if (isBucket || isAging) {
+      // Stacked bar for aging/bucket data
+      chartType = "bar";
+      chartTitle = "📊 Aging / Bucket Chart";
+      datasets = valCols.slice(0, 6).map((ci, idx) => ({
+        label: headers[ci],
+        data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
+        backgroundColor: COLORS[idx] + "cc",
+        borderColor: COLORS[idx],
+        borderWidth: 1,
+        stack: "stack"
+      }));
     } else {
       // Multi-bar for comparison
       chartType = "bar";
       chartTitle = "📊 Comparison Chart";
-      datasets = valCols.slice(0, 3).map((ci, idx) => ({
+      datasets = valCols.slice(0, 4).map((ci, idx) => ({
         label: headers[ci],
         data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
         backgroundColor: COLORS[idx] + "cc",

@@ -240,8 +240,18 @@ FROM sales WHERE created_at >= '2025-04-01' AND created_at <= '2026-03-31' AND t
 GROUP BY category, TO_CHAR(created_at,'YYYY-MM') ORDER BY category, month
 
 "60-90 days pending":
-SELECT party_name, bill_ref_no, pending_amount, overdue_days FROM pending
+SELECT party_name, bill_ref_no, ROUND(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric,0) as pending_amount, overdue_days FROM pending
 WHERE overdue_days >= 60 AND overdue_days <= 90 ORDER BY overdue_days DESC
+
+"client wise aging pending (0-30, 31-60, 61-90, 91-120 days buckets)":
+SELECT party_name,
+  ROUND(SUM(CASE WHEN overdue_days <= 30 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "0-30 Days",
+  ROUND(SUM(CASE WHEN overdue_days BETWEEN 31 AND 60 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "31-60 Days",
+  ROUND(SUM(CASE WHEN overdue_days BETWEEN 61 AND 90 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "61-90 Days",
+  ROUND(SUM(CASE WHEN overdue_days BETWEEN 91 AND 120 THEN REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric ELSE 0 END),0) as "91-120 Days"
+FROM pending GROUP BY party_name
+HAVING SUM(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric) > 0
+ORDER BY party_name
 
 "salary + rent + travel total":
 SELECT sub_group, ROUND(SUM(amount)::numeric,0) as total FROM expenses
@@ -307,7 +317,7 @@ function buildPivotFromSQL(rows) {
   const TOT = `padding:7px 10px;border:1px solid #ccc;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#fff3cd;font-weight:bold`;
   const GRD = `padding:7px 10px;border:1px solid #bbb;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#e0e0e0;font-weight:bold`;
 
-  let header = `<tr><th style="${THL}">Product Category / Name</th>`;
+  let header = `<tr><th style="${THL}">Name</th>`;
   months.forEach(m => { header += `<th style="${TH}">${fmtMonth(m)}</th>`; });
   header += `<th style="${TH};background:#333">Total</th></tr>`;
 
@@ -328,7 +338,7 @@ function buildPivotFromSQL(rows) {
   grandRow += `<td style="${GRD};background:#ffc107">${fmtAmt(grandTotal)}</td></tr>`;
 
   return `<div style="overflow-x:auto;font-family:Arial">
-    <table style="border-collapse:collapse;min-width:900px;width:100%">
+    <table style="border-collapse:collapse;min-width:700px">
       <thead>${header}</thead>
       <tbody>${bodyRows}${grandRow}</tbody>
     </table>
@@ -343,28 +353,46 @@ function buildTableHTML(rows) {
   if (!rows.length) return "<p style='padding:12px;color:#666'>No data found.</p>";
 
   const cols = Object.keys(rows[0]);
-  const TH = `padding:8px 12px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left`;
-  const TD = `padding:7px 12px;border:1px solid #ddd;font-size:12px;font-family:Arial`;
+  const TH = `padding:6px 10px;border:1px solid #444;font-size:12px;font-family:Arial;font-weight:bold;background:#1a1a2e;color:#fff;text-align:left;white-space:nowrap`;
+  const TD = `padding:5px 8px;border:1px solid #ddd;font-size:12px;font-family:Arial;white-space:nowrap`;
 
-  // Detect amount columns
-  const amtCols = cols.filter(c => /total|amount|price|balance|revenue|sales/i.test(c));
+  // Parse any amount string (handles "₹1,090", "Rs. 1,090", "1090", 1090)
+  function parseAnyAmt(v) {
+    if (v === null || v === undefined || v === "" || v === "-") return null;
+    const s = String(v).replace(/[₹Rs.\s,]/g, "").trim();
+    const n = parseFloat(s);
+    return isNaN(n) ? null : n;
+  }
+
+  // Detect amount columns — by name OR by checking if values look like amounts
+  const amtCols = cols.filter(c => {
+    if (/total|amount|price|balance|revenue|sales|pending|debit|credit/i.test(c)) return true;
+    // Check first non-empty row value
+    const sample = rows.find(r => r[c] !== null && r[c] !== "");
+    if (!sample) return false;
+    return parseAnyAmt(sample[c]) !== null && typeof sample[c] !== "string" || /[₹\d]/.test(String(sample[c]));
+  });
+
+  // Also detect day-bucket columns like "0-30", "31-60" etc
+  const bucketCols = cols.filter(c => /^\d+[-–]\d+|days/i.test(c));
+  const allAmtCols = [...new Set([...amtCols, ...bucketCols])];
 
   let header = cols.map(c => `<th style="${TH}">${c.replace(/_/g," ").replace(/\b\w/g,l=>l.toUpperCase())}</th>`).join("");
 
   let bodyRows = "";
   const colSums = {};
-  amtCols.forEach(c => colSums[c] = 0);
+  allAmtCols.forEach(c => colSums[c] = 0);
 
   rows.forEach((r, i) => {
     const bg = i % 2 === 0 ? "#fff" : "#f9f9f9";
     let row = `<tr style="background:${bg}">`;
     cols.forEach(c => {
       const val = r[c];
-      const isAmt = amtCols.includes(c);
-      if (isAmt && val !== null && val !== "") {
-        const num = parseFloat(val) || 0;
+      const isAmt = allAmtCols.includes(c);
+      if (isAmt) {
+        const num = parseAnyAmt(val) || 0;
         colSums[c] = (colSums[c] || 0) + num;
-        row += `<td style="${TD};text-align:right">${fmtAmt(num)}</td>`;
+        row += `<td style="${TD};text-align:right">${num > 0 ? fmtAmt(num) : "-"}</td>`;
       } else {
         row += `<td style="${TD}">${val === null || val === "" || val === "NA" ? "-" : val}</td>`;
       }
@@ -373,14 +401,14 @@ function buildTableHTML(rows) {
     bodyRows += row;
   });
 
-  // Grand total row if there are amount columns
+  // Grand total row
   let totalRow = "";
-  if (amtCols.length > 0) {
+  if (allAmtCols.length > 0) {
     totalRow = `<tr style="background:#e0e0e0;font-weight:bold">`;
     cols.forEach((c, idx) => {
       if (idx === 0) {
         totalRow += `<td style="${TD};font-weight:bold">Grand Total</td>`;
-      } else if (amtCols.includes(c)) {
+      } else if (allAmtCols.includes(c)) {
         totalRow += `<td style="${TD};text-align:right;font-weight:bold">${fmtAmt(colSums[c])}</td>`;
       } else {
         totalRow += `<td style="${TD}"></td>`;
