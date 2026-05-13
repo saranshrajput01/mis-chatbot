@@ -587,7 +587,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
-    const phone = to.split("@")[0].replace(/[^0-9]/g, "") || "918750285420";
+    const phone = "918750285420";
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
