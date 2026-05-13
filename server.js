@@ -617,13 +617,15 @@ app.post("/whatsapp", async (req, res) => {
     const body = req.body;
 
     // Extract message from all possible fields
-    const message = body.message || body.query || body.text || body.Body || body.body ||
+    // app.mis.work sends message in body.value
+    const message = body.value || body.message || body.query || body.text || body.Body || body.body ||
       body.data?.message || body.data?.text ||
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
       (Array.isArray(body.messages) ? body.messages[0]?.body : null) ||
       (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
 
-    const sender = body.from || body.From || body.sender || body.phone ||
+    // app.mis.work sends sender number in body.senderNumber
+    const sender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "user";
 
     console.log("[WHATSAPP EXTRACTED]", sender, "->", message);
