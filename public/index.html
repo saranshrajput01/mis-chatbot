@@ -75,7 +75,7 @@
       padding: 10px 14px;
       border-radius: 12px;
       font-size: 13px;
-      line-height: 1.6;
+      line-height: 1.5;
       word-break: break-word;
     }
     .bubble.bot {
@@ -93,66 +93,48 @@
     /* ── HTML TABLE BUBBLE ── */
     .bubble.html-content {
       max-width: 98%;
-      padding: 12px;
+      padding: 10px;
       background: #fff;
       overflow-x: auto;
       box-shadow: 0 1px 6px rgba(0,0,0,0.12);
       border-radius: 10px;
     }
 
-    /* ── GLOBAL TABLE STYLES (applied to ALL AI-generated tables) ── */
+    /* ── GLOBAL TABLE OVERRIDE — compact like category table ── */
     .bubble table,
     .bubble.html-content table {
       border-collapse: collapse !important;
-      width: 100% !important;
       font-size: 12px !important;
       font-family: Arial, sans-serif !important;
-      margin: 6px 0 !important;
     }
     .bubble table th,
     .bubble.html-content table th {
+      padding: 6px 10px !important;
+      border: 1px solid #444 !important;
       background: #1a1a2e !important;
       color: #fff !important;
-      padding: 9px 12px !important;
-      text-align: left !important;
       font-size: 12px !important;
       white-space: nowrap !important;
-      border: 1px solid #444 !important;
+      text-align: left !important;
     }
     .bubble table td,
     .bubble.html-content table td {
-      padding: 8px 12px !important;
+      padding: 5px 8px !important;
       border: 1px solid #ddd !important;
       font-size: 12px !important;
-      vertical-align: middle !important;
+      white-space: nowrap !important;
     }
-    /* Alternating rows */
-    .bubble table tbody tr:nth-child(even),
-    .bubble.html-content table tbody tr:nth-child(even) {
+    .bubble table tbody tr:nth-child(even) td,
+    .bubble.html-content table tbody tr:nth-child(even) td {
       background: #f9f9f9 !important;
     }
-    .bubble table tbody tr:nth-child(odd),
-    .bubble.html-content table tbody tr:nth-child(odd) {
+    .bubble table tbody tr:nth-child(odd) td,
+    .bubble.html-content table tbody tr:nth-child(odd) td {
       background: #fff !important;
     }
-    /* Grand total / summary rows */
-    .bubble table tr.grand-total td,
-    .bubble.html-content table tr.grand-total td,
-    .bubble table tfoot tr td,
-    .bubble.html-content table tfoot tr td {
-      background: #e0e0e0 !important;
-      font-weight: bold !important;
-    }
-    /* Hover effect */
-    .bubble table tbody tr:hover,
-    .bubble.html-content table tbody tr:hover {
+    .bubble table tbody tr:hover td,
+    .bubble.html-content table tbody tr:hover td {
       background: #eef4ff !important;
-    }
-    /* Amount cells right-align */
-    .bubble table td.amt,
-    .bubble.html-content table td.amt {
-      text-align: right !important;
-      font-family: monospace !important;
     }
 
     /* ── SUGGESTIONS ── */
@@ -163,7 +145,7 @@
       margin-top: 8px;
     }
     .suggestion-btn {
-      padding: 6px 13px;
+      padding: 5px 12px;
       border: 1.5px solid #1a73e8;
       background: #fff;
       color: #1a73e8;
@@ -174,7 +156,7 @@
     }
     .suggestion-btn:hover { background: #1a73e8; color: #fff; }
 
-    /* ── TYPING INDICATOR ── */
+    /* ── TYPING ── */
     .typing { display: flex; align-items: center; gap: 4px; padding: 10px 13px; }
     .typing span {
       width: 7px; height: 7px; border-radius: 50%; background: #999;
@@ -218,7 +200,6 @@
 </head>
 <body>
 
-<!-- HEADER -->
 <div id="header">
   <div class="brand">
     <div class="logo">M</div>
@@ -233,10 +214,8 @@
   </div>
 </div>
 
-<!-- CHAT -->
 <div id="chat"></div>
 
-<!-- INPUT -->
 <div id="inputBar">
   <input id="msgInput" type="text" placeholder="Ask about invoices, ledger, payments, expenses..." />
   <button id="sendBtn" onclick="sendMessage()">
@@ -245,7 +224,6 @@
 </div>
 
 <script>
-  // ── SESSION ──────────────────────────────────────────────────────────────────
   let SESSION_ID = localStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
     SESSION_ID = "s_" + Math.random().toString(36).slice(2);
@@ -254,45 +232,26 @@
   let history = [];
   let pendingExactName = null;
 
-  // ── POST-PROCESS HTML: fix tables coming from AI ─────────────────────────────
-  function fixTableHTML(html) {
-    // 1. Remove undefined / null text
+  // Fix HTML coming from server
+  function fixHTML(html) {
+    // Remove undefined/null/EMPTY
     html = html.replace(/\bundefined\b/gi, "-");
     html = html.replace(/\bnull\b/gi, "-");
     html = html.replace(/\bEMPTY\b/g, "-");
-
-    // 2. Ensure Grand Total row has bold + highlight class
-    html = html.replace(
-      /<tr[^>]*>\s*<td[^>]*>\s*(?:Grand\s*Total|GRAND\s*TOTAL|Total)[^<]*<\/td>/gi,
-      (match) => {
-        if (!match.includes('class=')) {
-          return match.replace('<tr', '<tr class="grand-total"');
-        }
-        return match;
-      }
-    );
-
-    // 3. Fix date format: 2025-04-15 → 15-Apr-25, 2025-04 → Apr-25
-    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    // Full date: 2025-04-15
-    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, m, d) => {
-      return d + "-" + MONTHS[parseInt(m)-1] + "-" + y.slice(2);
-    });
-    // Month only: 2025-04
-    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, m) => {
-      return MONTHS[parseInt(m)-1] + "-" + y.slice(2);
-    });
-
-    // 4. Remove blank <br> at top/bottom
+    // Fix date format: 2025-04-15 → 15-Apr-25
+    const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, mo, d) =>
+      d + "-" + M[parseInt(mo)-1] + "-" + y.slice(2));
+    // Fix month: 2025-04 → Apr-25
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, mo) =>
+      M[parseInt(mo)-1] + "-" + y.slice(2));
+    // Clean br tags
     html = html.replace(/^(\s*<br\s*\/?>\s*)+/gi, "").replace(/(\s*<br\s*\/?>\s*)+$/gi, "").trim();
-
     return html;
   }
 
-  // ── RENDER MESSAGE ───────────────────────────────────────────────────────────
   function addMessage(role, content, type = "text", options = []) {
     const chat = document.getElementById("chat");
-
     const wrap = document.createElement("div");
     wrap.className = "bubble-wrap " + (role === "user" ? "user" : "bot");
 
@@ -304,7 +263,7 @@
 
     if (type === "html") {
       bubble.className = "bubble html-content";
-      bubble.innerHTML = fixTableHTML(content);
+      bubble.innerHTML = fixHTML(content);
 
     } else if (type === "suggestions") {
       bubble.className = "bubble bot";
@@ -316,14 +275,12 @@
         btn.className = "suggestion-btn";
         btn.textContent = opt;
         btn.onclick = () => {
-          // If it looks like a company name (for ledger), set exactName
-          const isSystemOption = ["Show all sales data","Show all expenses","Show pending payments","Show ledger"].includes(opt);
-          if (isSystemOption) {
+          const systemOpts = ["Show all sales","Show all expenses","Show pending payments","Show ledger"];
+          if (systemOpts.includes(opt)) {
             sendMessage(opt);
           } else {
-            // Check if last user message was about invoice/bill
-            const lastUserMsg = [...document.querySelectorAll('.bubble.user')].pop();
-            const isInvoice = lastUserMsg && /invoice|bill/i.test(lastUserMsg.textContent);
+            const lastUser = [...document.querySelectorAll('.bubble.user')].pop();
+            const isInvoice = lastUser && /invoice|bill/i.test(lastUser.textContent);
             if (isInvoice) {
               sendMessage("give me invoice of " + opt);
             } else {
@@ -340,7 +297,7 @@
       bubble.className = "bubble " + (role === "user" ? "user" : "bot");
       const hasHTML = /<table|<div|<tr|<td|<th/i.test(content);
       if (hasHTML && role === "assistant") {
-        bubble.innerHTML = fixTableHTML(content);
+        bubble.innerHTML = fixHTML(content);
       } else {
         bubble.textContent = content;
       }
@@ -352,16 +309,13 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
-  // ── TYPING ───────────────────────────────────────────────────────────────────
   function showTyping() {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
     wrap.className = "bubble-wrap bot";
     wrap.id = "typing-indicator";
-    wrap.innerHTML = `
-      <div class="avatar bot">M</div>
-      <div class="bubble bot typing"><span></span><span></span><span></span></div>
-    `;
+    wrap.innerHTML = `<div class="avatar bot">M</div>
+      <div class="bubble bot typing"><span></span><span></span><span></span></div>`;
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
   }
@@ -371,7 +325,6 @@
     if (el) el.remove();
   }
 
-  // ── SEND MESSAGE ─────────────────────────────────────────────────────────────
   async function sendMessage(overrideText) {
     const input = document.getElementById("msgInput");
     const text = overrideText || input.value.trim();
@@ -380,7 +333,6 @@
     addMessage("user", text);
     history.push({ role: "user", content: text });
     if (!overrideText) input.value = "";
-
     showTyping();
 
     try {
@@ -409,18 +361,15 @@
     }
   }
 
-  // ── CLEAR ────────────────────────────────────────────────────────────────────
   function clearChat() {
     document.getElementById("chat").innerHTML = "";
     history = [];
   }
 
-  // ── ENTER KEY ────────────────────────────────────────────────────────────────
   document.getElementById("msgInput").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // ── LOAD HISTORY ON PAGE OPEN ─────────────────────────────────────────────────
   (async () => {
     try {
       const res = await fetch("/history/" + SESSION_ID);
