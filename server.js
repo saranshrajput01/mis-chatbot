@@ -654,6 +654,30 @@ app.listen(PORT, async () => {
   console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
   await fetchLiveSchema(); // Load real schema at startup
 });
+// ── SEND WHATSAPP REPLY ──────────────────────────────────────────────────────
+async function sendWhatsAppReply(to, message) {
+  try {
+    const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
+    const WA_API_URL = "https://app.mis.work/api/send-message";
+    
+    await fetch(WA_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer " + WA_API_KEY
+      },
+      body: JSON.stringify({
+        to: to,
+        message: message,
+        type: "text"
+      })
+    });
+    console.log("[WHATSAPP REPLY SENT]", to);
+  } catch(e) {
+    console.error("[WHATSAPP REPLY ERROR]", e.message);
+  }
+}
+
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
 const WP_API_KEY = process.env.WHATSAPP_API_KEY || null;
 
@@ -704,16 +728,32 @@ app.post("/whatsapp", async (req, res) => {
     try { rows = await runSQL(plan.sql); }
     catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
 
-    if (!rows || !rows.length) return res.json({ success: true, reply: "No data found for: " + message, data: [], sender });
+    if (!rows || !rows.length) {
+      const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
+      await supabase.from("chat_history").insert([
+        { session_id: wpSession, role: "user", content: message },
+        { session_id: wpSession, role: "assistant", content: "No data found" }
+      ]);
+      // Send reply back to WhatsApp
+      await sendWhatsAppReply(sender, "No data found for: " + message);
+      return res.json({ success: true, reply: "No data found", data: [], sender });
+    }
 
     // Save to chat_history
     const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
+    const replyText = rows.slice(0,5).map((r,i) => {
+      return (i+1) + ". " + Object.entries(r).map(([k,v]) => k+": "+v).join(" | ");
+    }).join("\n");
+
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: message },
-      { session_id: wpSession, role: "assistant", content: JSON.stringify(rows.slice(0,10)) }
+      { session_id: wpSession, role: "assistant", content: replyText }
     ]);
 
-    return res.json({ success: true, reply: `Found ${rows.length} records`, type: "data", count: rows.length, data: rows, sender });
+    // Send reply back to WhatsApp
+    await sendWhatsAppReply(sender, replyText);
+
+    return res.json({ success: true, reply: replyText, type: "data", count: rows.length, data: rows, sender });
 
   } catch(err) {
     res.status(500).json({ success: false, error: err.message });
