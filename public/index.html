@@ -296,11 +296,8 @@
   }
 
   // ── CLEAR ───────────────────────────────────────────────────────────────────
-  async function clearChat() {
-    await fetch("/history/" + SESSION_ID, { method: "DELETE" });
-    localStorage.removeItem("mis_session_id");
-    SESSION_ID = "s_" + Math.random().toString(36).slice(2);
-    localStorage.setItem("mis_session_id", SESSION_ID);
+  function clearChat() {
+    // Sirf screen clear karo — Supabase data safe rahega
     document.getElementById("chat").innerHTML = "";
     history = [];
   }
