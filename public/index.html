@@ -140,29 +140,31 @@
     if (rows.length < 2 || rows.length > 100) return;
 
     // Find label column and value columns
+    // ONLY build chart for meaningful financial columns — never for phone/address/contact
     const labelCol = 0;
     const valCols = [];
     headers.forEach((h, i) => {
-      if (i > 0 && /total|amount|sales|revenue|expense|price|ratio/i.test(h)) valCols.push(i);
-    });
-    if (!valCols.length) {
-      // Try to find numeric columns
-      if (rows[0]) {
-        headers.forEach((h, i) => {
-          if (i > 0 && h.toLowerCase() !== "total") {
-            const val = rows[0].cells[i]?.textContent?.replace(/[Rs.,\s₹]/g, "");
-            if (val && !isNaN(parseFloat(val))) valCols.push(i);
-          }
-        });
+      if (i > 0 && /total|amount|sales|revenue|expense|price|ratio|pending|balance|salary|cost|days|profit|loss/i.test(h)) {
+        valCols.push(i);
       }
-    }
+    });
+    // If no financial columns found → skip chart entirely
     if (!valCols.length) return;
-    // Remove "total" column from valCols if multiple cols exist
+
+    // Remove pure "Total" summary column if multiple cols (keep individual breakdowns)
     const totalIdx = headers.findIndex(h => /^total$/i.test(h.trim()));
     if (totalIdx > -1 && valCols.length > 1) {
       const filtered = valCols.filter(i => i !== totalIdx);
-      if (filtered.length) valCols.length = 0, filtered.forEach(i => valCols.push(i));
+      if (filtered.length) { valCols.length = 0; filtered.forEach(i => valCols.push(i)); }
     }
+
+    // Validate: check that values are actually numbers (not phone strings)
+    const sampleRow = rows[0];
+    const hasRealNumbers = valCols.some(ci => {
+      const txt = sampleRow?.cells[ci]?.textContent?.replace(/[Rs.\s,₹]/g, "") || "";
+      return txt.length > 0 && txt.length < 15 && !isNaN(parseFloat(txt));
+    });
+    if (!hasRealNumbers) return;
 
     const labels = rows.map(r => r.cells[labelCol]?.textContent?.trim() || "");
     const parseNum = t => parseFloat((t || "").replace(/[Rs.,\s₹]/g, "")) || 0;
