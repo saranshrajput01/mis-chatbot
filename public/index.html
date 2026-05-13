@@ -4,196 +4,78 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>MIS Work India — Sales Assistant</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
 
-    body {
-      font-family: Arial, sans-serif;
-      background: #f0f2f5;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── HEADER ── */
-    #header {
-      background: #1a1a2e;
-      color: #fff;
-      padding: 10px 18px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      flex-shrink: 0;
-    }
+    /* HEADER */
+    #header { background: #1a1a2e; color: #fff; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
     #header .brand { display: flex; align-items: center; gap: 10px; }
-    #header .logo {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: #4a90d9; display: flex; align-items: center;
-      justify-content: center; font-weight: bold; font-size: 14px;
-    }
+    #header .logo { width: 36px; height: 36px; border-radius: 50%; background: #4a90d9; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
     #header .title { font-size: 15px; font-weight: 700; }
     #header .subtitle { font-size: 11px; opacity: 0.7; }
     #header .right { display: flex; align-items: center; gap: 14px; }
     #header .online { font-size: 11px; color: #4caf50; }
     #header .online::before { content: "● "; }
-    #clearBtn {
-      background: none; border: 1px solid rgba(255,255,255,0.3);
-      color: #fff; padding: 4px 10px; border-radius: 4px;
-      cursor: pointer; font-size: 11px;
-    }
+    #clearBtn { background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
     #clearBtn:hover { background: rgba(255,255,255,0.1); }
 
-    /* ── CHAT AREA ── */
-    #chat {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
+    /* CHAT */
+    #chat { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 12px; }
 
-    /* ── BUBBLES ── */
-    .bubble-wrap {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
+    /* BUBBLES */
+    .bubble-wrap { display: flex; align-items: flex-start; gap: 8px; }
     .bubble-wrap.user { flex-direction: row-reverse; }
-
-    .avatar {
-      width: 28px; height: 28px; border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 11px; font-weight: bold; flex-shrink: 0;
-      margin-top: 2px;
-    }
-    .avatar.bot  { background: #1a1a2e; color: #fff; }
+    .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; margin-top: 2px; }
+    .avatar.bot { background: #1a1a2e; color: #fff; }
     .avatar.user { background: #4a90d9; color: #fff; }
+    .bubble { max-width: 80%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+    .bubble.bot { background: #fff; color: #222; border-top-left-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .bubble.user { background: #1a73e8; color: #fff; border-top-right-radius: 2px; }
+    .bubble.html-content { max-width: 98%; padding: 10px; background: #fff; overflow-x: auto; box-shadow: 0 1px 6px rgba(0,0,0,0.12); border-radius: 10px; }
 
-    .bubble {
-      max-width: 80%;
-      padding: 10px 14px;
-      border-radius: 12px;
-      font-size: 13px;
-      line-height: 1.5;
-      word-break: break-word;
-    }
-    .bubble.bot {
-      background: #fff;
-      color: #222;
-      border-top-left-radius: 2px;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-    }
-    .bubble.user {
-      background: #1a73e8;
-      color: #fff;
-      border-top-right-radius: 2px;
-    }
+    /* TABLE STYLES */
+    .bubble table, .bubble.html-content table { border-collapse: collapse !important; font-size: 12px !important; font-family: Arial !important; }
+    .bubble table th, .bubble.html-content table th { padding: 6px 10px !important; border: 1px solid #444 !important; background: #1a1a2e !important; color: #fff !important; font-size: 12px !important; white-space: nowrap !important; text-align: left !important; }
+    .bubble table td, .bubble.html-content table td { padding: 5px 8px !important; border: 1px solid #ddd !important; font-size: 12px !important; white-space: nowrap !important; }
+    .bubble table tbody tr:nth-child(even) td, .bubble.html-content table tbody tr:nth-child(even) td { background: #f9f9f9 !important; }
+    .bubble table tbody tr:nth-child(odd) td, .bubble.html-content table tbody tr:nth-child(odd) td { background: #fff !important; }
+    .bubble table tbody tr:hover td, .bubble.html-content table tbody tr:hover td { background: #eef4ff !important; }
 
-    /* ── HTML TABLE BUBBLE ── */
-    .bubble.html-content {
-      max-width: 98%;
-      padding: 10px;
-      background: #fff;
-      overflow-x: auto;
-      box-shadow: 0 1px 6px rgba(0,0,0,0.12);
-      border-radius: 10px;
-    }
+    /* DOWNLOAD BUTTON */
+    .download-bar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .dl-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
+    .dl-btn.pdf { background: #e53935; color: #fff; }
+    .dl-btn.pdf:hover { background: #c62828; }
+    .dl-btn.img { background: #1a73e8; color: #fff; }
+    .dl-btn.img:hover { background: #1558b0; }
+    .dl-btn.csv { background: #2e7d32; color: #fff; }
+    .dl-btn.csv:hover { background: #1b5e20; }
 
-    /* ── GLOBAL TABLE OVERRIDE — compact like category table ── */
-    .bubble table,
-    .bubble.html-content table {
-      border-collapse: collapse !important;
-      font-size: 12px !important;
-      font-family: Arial, sans-serif !important;
-    }
-    .bubble table th,
-    .bubble.html-content table th {
-      padding: 6px 10px !important;
-      border: 1px solid #444 !important;
-      background: #1a1a2e !important;
-      color: #fff !important;
-      font-size: 12px !important;
-      white-space: nowrap !important;
-      text-align: left !important;
-    }
-    .bubble table td,
-    .bubble.html-content table td {
-      padding: 5px 8px !important;
-      border: 1px solid #ddd !important;
-      font-size: 12px !important;
-      white-space: nowrap !important;
-    }
-    .bubble table tbody tr:nth-child(even) td,
-    .bubble.html-content table tbody tr:nth-child(even) td {
-      background: #f9f9f9 !important;
-    }
-    .bubble table tbody tr:nth-child(odd) td,
-    .bubble.html-content table tbody tr:nth-child(odd) td {
-      background: #fff !important;
-    }
-    .bubble table tbody tr:hover td,
-    .bubble.html-content table tbody tr:hover td {
-      background: #eef4ff !important;
-    }
+    /* CHART */
+    .chart-wrap { margin-top: 12px; background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
+    .chart-title { font-size: 12px; font-weight: bold; color: #1a1a2e; margin-bottom: 8px; }
 
-    /* ── SUGGESTIONS ── */
-    .suggestions-wrap {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      margin-top: 8px;
-    }
-    .suggestion-btn {
-      padding: 5px 12px;
-      border: 1.5px solid #1a73e8;
-      background: #fff;
-      color: #1a73e8;
-      border-radius: 20px;
-      cursor: pointer;
-      font-size: 12px;
-      transition: all 0.15s;
-    }
+    /* SUGGESTIONS */
+    .suggestions-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
+    .suggestion-btn { padding: 5px 12px; border: 1.5px solid #1a73e8; background: #fff; color: #1a73e8; border-radius: 20px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
     .suggestion-btn:hover { background: #1a73e8; color: #fff; }
 
-    /* ── TYPING ── */
+    /* TYPING */
     .typing { display: flex; align-items: center; gap: 4px; padding: 10px 13px; }
-    .typing span {
-      width: 7px; height: 7px; border-radius: 50%; background: #999;
-      display: inline-block; animation: bounce 1.2s infinite;
-    }
+    .typing span { width: 7px; height: 7px; border-radius: 50%; background: #999; display: inline-block; animation: bounce 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: 0.2s; }
     .typing span:nth-child(3) { animation-delay: 0.4s; }
-    @keyframes bounce {
-      0%, 80%, 100% { transform: translateY(0); }
-      40% { transform: translateY(-6px); }
-    }
+    @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
 
-    /* ── INPUT BAR ── */
-    #inputBar {
-      background: #fff;
-      border-top: 1px solid #ddd;
-      padding: 10px 14px;
-      display: flex;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-    #msgInput {
-      flex: 1;
-      padding: 9px 14px;
-      border: 1.5px solid #ddd;
-      border-radius: 24px;
-      font-size: 13px;
-      outline: none;
-      transition: border-color 0.2s;
-    }
+    /* INPUT */
+    #inputBar { background: #fff; border-top: 1px solid #ddd; padding: 10px 14px; display: flex; gap: 8px; flex-shrink: 0; }
+    #msgInput { flex: 1; padding: 9px 14px; border: 1.5px solid #ddd; border-radius: 24px; font-size: 13px; outline: none; transition: border-color 0.2s; }
     #msgInput:focus { border-color: #1a73e8; }
-    #sendBtn {
-      width: 40px; height: 40px; border-radius: 50%;
-      background: #1a73e8; border: none; color: #fff;
-      cursor: pointer; display: flex; align-items: center; justify-content: center;
-      flex-shrink: 0; transition: background 0.2s;
-    }
+    #sendBtn { width: 40px; height: 40px; border-radius: 50%; background: #1a73e8; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s; }
     #sendBtn:hover { background: #1558b0; }
     #sendBtn svg { width: 18px; height: 18px; fill: white; }
   </style>
@@ -231,25 +113,220 @@
   }
   let history = [];
   let pendingExactName = null;
+  let chartCounter = 0;
 
-  // Fix HTML coming from server
+  // ── FIX HTML ─────────────────────────────────────────────────────────────────
   function fixHTML(html) {
-    // Remove undefined/null/EMPTY
-    html = html.replace(/\bundefined\b/gi, "-");
-    html = html.replace(/\bnull\b/gi, "-");
-    html = html.replace(/\bEMPTY\b/g, "-");
-    // Fix date format: 2025-04-15 → 15-Apr-25
+    html = html.replace(/\bundefined\b/gi, "-").replace(/\bnull\b/gi, "-").replace(/\bEMPTY\b/g, "-");
     const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, mo, d) =>
-      d + "-" + M[parseInt(mo)-1] + "-" + y.slice(2));
-    // Fix month: 2025-04 → Apr-25
-    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, mo) =>
-      M[parseInt(mo)-1] + "-" + y.slice(2));
-    // Clean br tags
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, mo, d) => d + "-" + M[parseInt(mo)-1] + "-" + y.slice(2));
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, mo) => M[parseInt(mo)-1] + "-" + y.slice(2));
     html = html.replace(/^(\s*<br\s*\/?>\s*)+/gi, "").replace(/(\s*<br\s*\/?>\s*)+$/gi, "").trim();
     return html;
   }
 
+  // ── AUTO CHART DETECTION ──────────────────────────────────────────────────────
+  function tryBuildChart(container, lastQuery) {
+    const tables = container.querySelectorAll("table");
+    if (!tables.length) return;
+
+    const table = tables[0];
+    const headers = [...table.querySelectorAll("th")].map(th => th.textContent.trim());
+    const rows = [...table.querySelectorAll("tbody tr")].filter(r => {
+      const first = r.cells[0]?.textContent?.trim().toLowerCase();
+      return first && first !== "grand total" && first !== "total";
+    });
+
+    if (rows.length < 2 || rows.length > 50) return;
+
+    // Find label column and value columns
+    const labelCol = 0;
+    const valCols = [];
+    headers.forEach((h, i) => {
+      if (i > 0 && /total|amount|sales|revenue|expense|price|ratio/i.test(h)) valCols.push(i);
+    });
+    if (!valCols.length) {
+      // Try to find numeric columns
+      if (rows[0]) {
+        headers.forEach((h, i) => {
+          if (i > 0 && h.toLowerCase() !== "total") {
+            const val = rows[0].cells[i]?.textContent?.replace(/[Rs.,\s]/g, "");
+            if (val && !isNaN(parseFloat(val))) valCols.push(i);
+          }
+        });
+      }
+    }
+    if (!valCols.length) return;
+
+    const labels = rows.map(r => r.cells[labelCol]?.textContent?.trim() || "");
+    const parseNum = t => parseFloat((t || "").replace(/[Rs.,\s₹]/g, "")) || 0;
+
+    // Decide chart type
+    const isTimeSeries = labels.some(l => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(l));
+    const isCategory = headers[labelCol] && /category|product|type/i.test(headers[labelCol]);
+    const isSingle = valCols.length === 1;
+
+    const COLORS = ["#1a73e8","#e53935","#2e7d32","#f57c00","#7b1fa2","#00838f","#c62828","#558b2f","#ad1457","#1565c0","#4527a0","#00695c"];
+
+    const chartId = "chart_" + (++chartCounter);
+    const wrap = document.createElement("div");
+    wrap.className = "chart-wrap";
+
+    let chartType, datasets, chartTitle;
+
+    if (isTimeSeries && valCols.length <= 3) {
+      // Line chart for time series
+      chartType = "line";
+      chartTitle = "📈 Trend Chart";
+      datasets = valCols.map((ci, idx) => ({
+        label: headers[ci],
+        data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
+        borderColor: COLORS[idx],
+        backgroundColor: COLORS[idx] + "22",
+        tension: 0.3,
+        fill: true,
+        pointRadius: 4,
+        borderWidth: 2
+      }));
+    } else if (isCategory && isSingle && rows.length <= 15) {
+      // Pie chart for category breakdown
+      chartType = "pie";
+      chartTitle = "🥧 Category Breakdown";
+      datasets = [{
+        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
+        backgroundColor: COLORS.slice(0, rows.length),
+        borderWidth: 1
+      }];
+    } else if (isSingle) {
+      // Bar chart
+      chartType = "bar";
+      chartTitle = "📊 Bar Chart";
+      datasets = [{
+        label: headers[valCols[0]] || "Amount",
+        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
+        backgroundColor: rows.map((_, i) => COLORS[i % COLORS.length] + "cc"),
+        borderColor: rows.map((_, i) => COLORS[i % COLORS.length]),
+        borderWidth: 1
+      }];
+    } else {
+      // Multi-bar for comparison
+      chartType = "bar";
+      chartTitle = "📊 Comparison Chart";
+      datasets = valCols.slice(0, 3).map((ci, idx) => ({
+        label: headers[ci],
+        data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
+        backgroundColor: COLORS[idx] + "cc",
+        borderColor: COLORS[idx],
+        borderWidth: 1
+      }));
+    }
+
+    wrap.innerHTML = `
+      <div class="chart-title">${chartTitle}</div>
+      <canvas id="${chartId}" style="max-height:300px"></canvas>
+    `;
+    container.appendChild(wrap);
+
+    setTimeout(() => {
+      const ctx = document.getElementById(chartId);
+      if (!ctx) return;
+      new Chart(ctx, {
+        type: chartType,
+        data: { labels, datasets },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: { position: chartType === "pie" ? "right" : "top", labels: { font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const v = ctx.parsed.y !== undefined ? ctx.parsed.y : ctx.parsed;
+                  return " Rs. " + (v || 0).toLocaleString("en-IN");
+                }
+              }
+            }
+          },
+          scales: chartType !== "pie" ? {
+            y: { ticks: { callback: v => "Rs." + (v/1000).toFixed(0) + "K", font: { size: 10 } } },
+            x: { ticks: { font: { size: 10 } } }
+          } : {}
+        }
+      });
+    }, 100);
+  }
+
+  // ── CSV EXPORT ────────────────────────────────────────────────────────────────
+  function tableToCSV(table) {
+    const rows = [];
+    table.querySelectorAll("tr").forEach(r => {
+      const cells = [...r.querySelectorAll("th,td")].map(c => '"' + c.textContent.trim().replace(/"/g, '""') + '"');
+      rows.push(cells.join(","));
+    });
+    return rows.join("\n");
+  }
+
+  // ── ADD DOWNLOAD BUTTONS ──────────────────────────────────────────────────────
+  function addDownloadButtons(bubble, isLedger = false) {
+    const bar = document.createElement("div");
+    bar.className = "download-bar";
+
+    // PDF Button
+    const pdfBtn = document.createElement("button");
+    pdfBtn.className = "dl-btn pdf";
+    pdfBtn.innerHTML = "⬇ Download PDF";
+    pdfBtn.onclick = async () => {
+      pdfBtn.textContent = "Generating...";
+      try {
+        const { jsPDF } = window.jspdf;
+        const canvas = await html2canvas(bubble, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+        const imgData = canvas.toDataURL("image/png");
+        const pdf = new jsPDF({ orientation: canvas.width > canvas.height ? "l" : "p", unit: "px", format: [canvas.width/2, canvas.height/2] });
+        pdf.addImage(imgData, "PNG", 0, 0, canvas.width/2, canvas.height/2);
+        pdf.save("MIS_Report_" + new Date().toISOString().split("T")[0] + ".pdf");
+      } catch(e) { alert("PDF error: " + e.message); }
+      pdfBtn.innerHTML = "⬇ Download PDF";
+    };
+
+    // Image Button
+    const imgBtn = document.createElement("button");
+    imgBtn.className = "dl-btn img";
+    imgBtn.innerHTML = "🖼 Save as Image";
+    imgBtn.onclick = async () => {
+      imgBtn.textContent = "Saving...";
+      try {
+        const canvas = await html2canvas(bubble, { scale: 2, useCORS: true, backgroundColor: "#fff" });
+        const link = document.createElement("a");
+        link.download = "MIS_Report_" + new Date().toISOString().split("T")[0] + ".png";
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      } catch(e) { alert("Image error: " + e.message); }
+      imgBtn.innerHTML = "🖼 Save as Image";
+    };
+
+    bar.appendChild(pdfBtn);
+    bar.appendChild(imgBtn);
+
+    // CSV Button (only for tables)
+    const tables = bubble.querySelectorAll("table");
+    if (tables.length) {
+      const csvBtn = document.createElement("button");
+      csvBtn.className = "dl-btn csv";
+      csvBtn.innerHTML = "📥 Export CSV";
+      csvBtn.onclick = () => {
+        const csv = tableToCSV(tables[0]);
+        const blob = new Blob([csv], { type: "text/csv" });
+        const link = document.createElement("a");
+        link.download = "MIS_Data_" + new Date().toISOString().split("T")[0] + ".csv";
+        link.href = URL.createObjectURL(blob);
+        link.click();
+      };
+      bar.appendChild(csvBtn);
+    }
+
+    bubble.appendChild(bar);
+  }
+
+  // ── RENDER MESSAGE ─────────────────────────────────────────────────────────────
   function addMessage(role, content, type = "text", options = []) {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
@@ -265,6 +342,15 @@
       bubble.className = "bubble html-content";
       bubble.innerHTML = fixHTML(content);
 
+      // Auto chart — after render
+      setTimeout(() => {
+        const lastQ = history.filter(h => h.role === "user").pop()?.content || "";
+        tryBuildChart(bubble, lastQ);
+      }, 200);
+
+      // Download buttons — always for html responses
+      setTimeout(() => addDownloadButtons(bubble), 300);
+
     } else if (type === "suggestions") {
       bubble.className = "bubble bot";
       bubble.innerHTML = `<div style="margin-bottom:6px;font-weight:500">${content}</div>`;
@@ -275,8 +361,8 @@
         btn.className = "suggestion-btn";
         btn.textContent = opt;
         btn.onclick = () => {
-          const systemOpts = ["Show all sales","Show all expenses","Show pending payments","Show ledger"];
-          if (systemOpts.includes(opt)) {
+          const sysOpts = ["Show all sales","Show all expenses","Show pending payments","Show ledger"];
+          if (sysOpts.includes(opt)) {
             sendMessage(opt);
           } else {
             const lastUser = [...document.querySelectorAll('.bubble.user')].pop();
@@ -298,6 +384,10 @@
       const hasHTML = /<table|<div|<tr|<td|<th/i.test(content);
       if (hasHTML && role === "assistant") {
         bubble.innerHTML = fixHTML(content);
+        setTimeout(() => {
+          tryBuildChart(bubble, "");
+          addDownloadButtons(bubble);
+        }, 200);
       } else {
         bubble.textContent = content;
       }
@@ -309,27 +399,23 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
+  // ── TYPING ────────────────────────────────────────────────────────────────────
   function showTyping() {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
     wrap.className = "bubble-wrap bot";
     wrap.id = "typing-indicator";
-    wrap.innerHTML = `<div class="avatar bot">M</div>
-      <div class="bubble bot typing"><span></span><span></span><span></span></div>`;
+    wrap.innerHTML = `<div class="avatar bot">M</div><div class="bubble bot typing"><span></span><span></span><span></span></div>`;
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
   }
+  function removeTyping() { document.getElementById("typing-indicator")?.remove(); }
 
-  function removeTyping() {
-    const el = document.getElementById("typing-indicator");
-    if (el) el.remove();
-  }
-
+  // ── SEND ──────────────────────────────────────────────────────────────────────
   async function sendMessage(overrideText) {
     const input = document.getElementById("msgInput");
     const text = overrideText || input.value.trim();
     if (!text) return;
-
     addMessage("user", text);
     history.push({ role: "user", content: text });
     if (!overrideText) input.value = "";
@@ -338,38 +424,29 @@
     try {
       const body = { message: text, history, session_id: SESSION_ID };
       if (pendingExactName) { body.exactName = pendingExactName; pendingExactName = null; }
-
-      const res = await fetch("/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
+      const res = await fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       removeTyping();
-
-      const type    = data.type || "text";
-      const reply   = data.reply || data.message || "";
+      const type = data.type || "text";
+      const reply = data.reply || data.message || "";
       const options = data.options || [];
-
       addMessage("assistant", reply, type, options);
-      if (type !== "suggestions") {
-        history.push({ role: "assistant", content: reply });
-      }
+      if (type !== "suggestions") history.push({ role: "assistant", content: reply });
     } catch(e) {
       removeTyping();
       addMessage("assistant", "Server error. Please try again.", "text");
     }
   }
 
-  function clearChat() {
-    document.getElementById("chat").innerHTML = "";
-    history = [];
-  }
+  // ── CLEAR ─────────────────────────────────────────────────────────────────────
+  function clearChat() { document.getElementById("chat").innerHTML = ""; history = []; }
 
+  // ── ENTER ─────────────────────────────────────────────────────────────────────
   document.getElementById("msgInput").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
+  // ── LOAD HISTORY ──────────────────────────────────────────────────────────────
   (async () => {
     try {
       const res = await fetch("/history/" + SESSION_ID);
