@@ -631,10 +631,8 @@ app.post("/whatsapp", async (req, res) => {
     const sender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "user";
 
-    // body.id se actual sender number nikalo
-    // "false_84856138649813@lid_AC1D..." → split by "_" → [1] = "84856138649813@lid" → split "@" → "84856138649813"
-    // "true_918750285420@s.whatsapp.net" → split by "_" → [1] = "918750285420@s..." → split "@" → "918750285420"
-    const actualPhone = body.id?.split("_")[1]?.split("@")[0] || sender.split("@")[0] || "918750285420";
+    // body.receiverNumber mein sender ka actual number hota hai app.mis.work mein
+    const actualPhone = body.receiverNumber || body.senderNumber?.split("@")[0] || "918750285420";
     console.log("[WHATSAPP PHONE]", actualPhone);
 
     // ✅ BAAD MEIN check karo
