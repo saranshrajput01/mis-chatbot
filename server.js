@@ -587,7 +587,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
-    const phone = "918750285420";
+    const phone = body.senderNumber?.split("@")[0] || "918750285420";
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -610,7 +610,11 @@ async function sendWhatsAppReply(to, message) {
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
 app.post("/whatsapp", async (req, res) => {
   try {
-    // ✅ PEHLE body log karo — chahe message mile ya na mile
+    // ✅ Outgoing messages ignore karo — loop rokne ke liye
+    if (body.boundType === "out") {
+      return res.json({ success: true, ignored: true });
+    }
+
     console.log("[WHATSAPP RAW BODY]", JSON.stringify(req.body));
     console.log("[WHATSAPP HEADERS]", JSON.stringify(req.headers));
 
