@@ -706,6 +706,13 @@ app.post("/whatsapp", async (req, res) => {
 
     if (!rows || !rows.length) return res.json({ success: true, reply: "No data found for: " + message, data: [], sender });
 
+    // Save to chat_history
+    const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
+    await supabase.from("chat_history").insert([
+      { session_id: wpSession, role: "user", content: message },
+      { session_id: wpSession, role: "assistant", content: JSON.stringify(rows.slice(0,10)) }
+    ]);
+
     return res.json({ success: true, reply: `Found ${rows.length} records`, type: "data", count: rows.length, data: rows, sender });
 
   } catch(err) {
