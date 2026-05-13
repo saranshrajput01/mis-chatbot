@@ -50,7 +50,7 @@
       padding: 16px 12px;
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 12px;
     }
 
     /* ── BUBBLES ── */
@@ -65,37 +65,112 @@
       width: 28px; height: 28px; border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
       font-size: 11px; font-weight: bold; flex-shrink: 0;
+      margin-top: 2px;
     }
     .avatar.bot  { background: #1a1a2e; color: #fff; }
     .avatar.user { background: #4a90d9; color: #fff; }
 
     .bubble {
-      max-width: 78%;
-      padding: 9px 13px;
+      max-width: 80%;
+      padding: 10px 14px;
       border-radius: 12px;
       font-size: 13px;
-      line-height: 1.5;
+      line-height: 1.6;
       word-break: break-word;
     }
-    .bubble.bot  { background: #fff; color: #222; border-top-left-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-    .bubble.user { background: #1a73e8; color: #fff; border-top-right-radius: 2px; }
+    .bubble.bot {
+      background: #fff;
+      color: #222;
+      border-top-left-radius: 2px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+    .bubble.user {
+      background: #1a73e8;
+      color: #fff;
+      border-top-right-radius: 2px;
+    }
 
-    /* HTML ledger bubble — full width, no padding clipping */
+    /* ── HTML TABLE BUBBLE ── */
     .bubble.html-content {
-      max-width: 96%;
-      padding: 0;
+      max-width: 98%;
+      padding: 12px;
       background: #fff;
       overflow-x: auto;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.12);
-      border-radius: 8px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.12);
+      border-radius: 10px;
+    }
+
+    /* ── GLOBAL TABLE STYLES (applied to ALL AI-generated tables) ── */
+    .bubble table,
+    .bubble.html-content table {
+      border-collapse: collapse !important;
+      width: 100% !important;
+      font-size: 12px !important;
+      font-family: Arial, sans-serif !important;
+      margin: 6px 0 !important;
+    }
+    .bubble table th,
+    .bubble.html-content table th {
+      background: #1a1a2e !important;
+      color: #fff !important;
+      padding: 9px 12px !important;
+      text-align: left !important;
+      font-size: 12px !important;
+      white-space: nowrap !important;
+      border: 1px solid #444 !important;
+    }
+    .bubble table td,
+    .bubble.html-content table td {
+      padding: 8px 12px !important;
+      border: 1px solid #ddd !important;
+      font-size: 12px !important;
+      vertical-align: middle !important;
+    }
+    /* Alternating rows */
+    .bubble table tbody tr:nth-child(even),
+    .bubble.html-content table tbody tr:nth-child(even) {
+      background: #f9f9f9 !important;
+    }
+    .bubble table tbody tr:nth-child(odd),
+    .bubble.html-content table tbody tr:nth-child(odd) {
+      background: #fff !important;
+    }
+    /* Grand total / summary rows */
+    .bubble table tr.grand-total td,
+    .bubble.html-content table tr.grand-total td,
+    .bubble table tfoot tr td,
+    .bubble.html-content table tfoot tr td {
+      background: #e0e0e0 !important;
+      font-weight: bold !important;
+    }
+    /* Hover effect */
+    .bubble table tbody tr:hover,
+    .bubble.html-content table tbody tr:hover {
+      background: #eef4ff !important;
+    }
+    /* Amount cells right-align */
+    .bubble table td.amt,
+    .bubble.html-content table td.amt {
+      text-align: right !important;
+      font-family: monospace !important;
     }
 
     /* ── SUGGESTIONS ── */
-    .suggestions-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 6px; }
+    .suggestions-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin-top: 8px;
+    }
     .suggestion-btn {
-      padding: 5px 11px; border: 1.5px solid #1a73e8;
-      background: #fff; color: #1a73e8; border-radius: 20px;
-      cursor: pointer; font-size: 12px; transition: all 0.15s;
+      padding: 6px 13px;
+      border: 1.5px solid #1a73e8;
+      background: #fff;
+      color: #1a73e8;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
     }
     .suggestion-btn:hover { background: #1a73e8; color: #fff; }
 
@@ -170,7 +245,7 @@
 </div>
 
 <script>
-  // Persist session across reloads using localStorage
+  // ── SESSION ──────────────────────────────────────────────────────────────────
   let SESSION_ID = localStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
     SESSION_ID = "s_" + Math.random().toString(36).slice(2);
@@ -179,7 +254,42 @@
   let history = [];
   let pendingExactName = null;
 
-  // ── RENDER ──────────────────────────────────────────────────────────────────
+  // ── POST-PROCESS HTML: fix tables coming from AI ─────────────────────────────
+  function fixTableHTML(html) {
+    // 1. Remove undefined / null text
+    html = html.replace(/\bundefined\b/gi, "-");
+    html = html.replace(/\bnull\b/gi, "-");
+    html = html.replace(/\bEMPTY\b/g, "-");
+
+    // 2. Ensure Grand Total row has bold + highlight class
+    html = html.replace(
+      /<tr[^>]*>\s*<td[^>]*>\s*(?:Grand\s*Total|GRAND\s*TOTAL|Total)[^<]*<\/td>/gi,
+      (match) => {
+        if (!match.includes('class=')) {
+          return match.replace('<tr', '<tr class="grand-total"');
+        }
+        return match;
+      }
+    );
+
+    // 3. Fix date format: 2025-04-15 → 15-Apr-25, 2025-04 → Apr-25
+    const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    // Full date: 2025-04-15
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, m, d) => {
+      return d + "-" + MONTHS[parseInt(m)-1] + "-" + y.slice(2);
+    });
+    // Month only: 2025-04
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, m) => {
+      return MONTHS[parseInt(m)-1] + "-" + y.slice(2);
+    });
+
+    // 4. Remove blank <br> at top/bottom
+    html = html.replace(/^(\s*<br\s*\/?>\s*)+/gi, "").replace(/(\s*<br\s*\/?>\s*)+$/gi, "").trim();
+
+    return html;
+  }
+
+  // ── RENDER MESSAGE ───────────────────────────────────────────────────────────
   function addMessage(role, content, type = "text", options = []) {
     const chat = document.getElementById("chat");
 
@@ -193,12 +303,12 @@
     const bubble = document.createElement("div");
 
     if (type === "html") {
-      // ── LEDGER: render HTML directly, no text padding ──
       bubble.className = "bubble html-content";
-      bubble.innerHTML = content;
+      bubble.innerHTML = fixTableHTML(content);
+
     } else if (type === "suggestions") {
       bubble.className = "bubble bot";
-      bubble.innerHTML = `<div>${content}</div>`;
+      bubble.innerHTML = `<div style="margin-bottom:6px;font-weight:500">${content}</div>`;
       const sw = document.createElement("div");
       sw.className = "suggestions-wrap";
       (options || []).forEach(opt => {
@@ -206,29 +316,32 @@
         btn.className = "suggestion-btn";
         btn.textContent = opt;
         btn.onclick = () => {
-          // Check if current context is invoice or ledger
-          const lastUserMsg = [...document.querySelectorAll('.bubble.user')].pop();
-          const isInvoice = lastUserMsg && (lastUserMsg.textContent.toLowerCase().includes("invoice") || lastUserMsg.textContent.toLowerCase().includes("bill"));
-          if (isInvoice) {
-            sendMessage("give me invoice of " + opt);
+          // If it looks like a company name (for ledger), set exactName
+          const isSystemOption = ["Show all sales data","Show all expenses","Show pending payments","Show ledger"].includes(opt);
+          if (isSystemOption) {
+            sendMessage(opt);
           } else {
-            pendingExactName = opt;
-            sendMessage(opt + " ledger");
+            // Check if last user message was about invoice/bill
+            const lastUserMsg = [...document.querySelectorAll('.bubble.user')].pop();
+            const isInvoice = lastUserMsg && /invoice|bill/i.test(lastUserMsg.textContent);
+            if (isInvoice) {
+              sendMessage("give me invoice of " + opt);
+            } else {
+              pendingExactName = opt;
+              sendMessage(opt + " ledger");
+            }
           }
         };
         sw.appendChild(btn);
       });
       bubble.appendChild(sw);
+
     } else {
-      // ── TEXT / AI HTML ──
       bubble.className = "bubble " + (role === "user" ? "user" : "bot");
-      // If content has HTML tags (AI table response), render as HTML
       const hasHTML = /<table|<div|<tr|<td|<th/i.test(content);
-      if (hasHTML) {
-        const cleaned = content.replace(/^(\s*<br\s*\/?>\s*)+/gi, "").replace(/(\s*<br\s*\/?>\s*)+$/gi, "").trim();
-        bubble.innerHTML = cleaned;
+      if (hasHTML && role === "assistant") {
+        bubble.innerHTML = fixTableHTML(content);
       } else {
-        // Plain text — escape to prevent XSS, then show
         bubble.textContent = content;
       }
     }
@@ -239,6 +352,7 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
+  // ── TYPING ───────────────────────────────────────────────────────────────────
   function showTyping() {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
@@ -253,11 +367,11 @@
   }
 
   function removeTyping() {
-    const t = document.getElementById("typing-indicator");
-    if (t) t.remove();
+    const el = document.getElementById("typing-indicator");
+    if (el) el.remove();
   }
 
-  // ── SEND ────────────────────────────────────────────────────────────────────
+  // ── SEND MESSAGE ─────────────────────────────────────────────────────────────
   async function sendMessage(overrideText) {
     const input = document.getElementById("msgInput");
     const text = overrideText || input.value.trim();
@@ -289,25 +403,24 @@
       if (type !== "suggestions") {
         history.push({ role: "assistant", content: reply });
       }
-    } catch (e) {
+    } catch(e) {
       removeTyping();
-      addMessage("assistant", "Server error. Please try again.");
+      addMessage("assistant", "Server error. Please try again.", "text");
     }
   }
 
-  // ── CLEAR ───────────────────────────────────────────────────────────────────
+  // ── CLEAR ────────────────────────────────────────────────────────────────────
   function clearChat() {
-    // Sirf screen clear karo — Supabase data safe rahega
     document.getElementById("chat").innerHTML = "";
     history = [];
   }
 
-  // ── ENTER KEY ───────────────────────────────────────────────────────────────
+  // ── ENTER KEY ────────────────────────────────────────────────────────────────
   document.getElementById("msgInput").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // ── LOAD HISTORY ────────────────────────────────────────────────────────────
+  // ── LOAD HISTORY ON PAGE OPEN ─────────────────────────────────────────────────
   (async () => {
     try {
       const res = await fetch("/history/" + SESSION_ID);
