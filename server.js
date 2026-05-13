@@ -631,8 +631,8 @@ app.post("/whatsapp", async (req, res) => {
     const sender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "user";
 
-    // body.receiverNumber mein sender ka actual number hota hai app.mis.work mein
-    const actualPhone = body.receiverNumber || body.senderNumber?.split("@")[0] || "918750285420";
+    // senderNumber chatId format mein use karo reply ke liye
+    const actualPhone = body.senderNumber?.split("@")[0] || "918750285420";
     console.log("[WHATSAPP PHONE]", actualPhone);
 
     // ✅ BAAD MEIN check karo
