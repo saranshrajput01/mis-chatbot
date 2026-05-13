@@ -307,7 +307,7 @@ function buildPivotFromSQL(rows) {
   const TOT = `padding:7px 10px;border:1px solid #ccc;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#fff3cd;font-weight:bold`;
   const GRD = `padding:7px 10px;border:1px solid #bbb;font-size:11px;font-family:Arial;text-align:right;white-space:nowrap;background:#e0e0e0;font-weight:bold`;
 
-  let header = `<tr><th style="${THL}">Name</th>`;
+  let header = `<tr><th style="${THL}">Product Category / Name</th>`;
   months.forEach(m => { header += `<th style="${TH}">${fmtMonth(m)}</th>`; });
   header += `<th style="${TH};background:#333">Total</th></tr>`;
 
@@ -328,7 +328,7 @@ function buildPivotFromSQL(rows) {
   grandRow += `<td style="${GRD};background:#ffc107">${fmtAmt(grandTotal)}</td></tr>`;
 
   return `<div style="overflow-x:auto;font-family:Arial">
-    <table style="border-collapse:collapse;min-width:700px">
+    <table style="border-collapse:collapse;min-width:900px;width:100%">
       <thead>${header}</thead>
       <tbody>${bodyRows}${grandRow}</tbody>
     </table>
