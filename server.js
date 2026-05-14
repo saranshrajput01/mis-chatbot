@@ -634,7 +634,7 @@ async function sendWhatsAppReply(to, message) {
 
     const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
     console.log("[WHATSAPP SENDING TO]", phone);
-    
+
     message = String(message).slice(0, 900);
     console.log("[WHATSAPP Message ]", message);
 
@@ -650,19 +650,10 @@ async function sendWhatsAppReply(to, message) {
       })
     });
 
-    // ← YE NAYA HAI
     const text = await resp.text();
     console.log("[WA STATUS]", resp.status);
     console.log("[WA RESPONSE TEXT]", text);
 
-  } catch(e) {
-    console.error("[WHATSAPP REPLY ERROR]", e.message);
-  }
-}
-
-    const result = await resp.json();
-    console.log("[WHATSAPP REPLY]", JSON.stringify(result));
-    return result;
   } catch(e) {
     console.error("[WHATSAPP REPLY ERROR]", e.message);
   }
@@ -676,19 +667,18 @@ app.post("/whatsapp", async (req, res) => {
     const body = req.body;
     console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
 
-    // ✅ Outgoing messages ignore karo — loop rokne ke liye
+    // Outgoing messages ignore karo — loop rokne ke liye
     if (body.boundType === "out") {
       return res.json({ success: true, ignored: true });
     }
 
-    // Extract message — app.mis.work sends in body.value
+    // Extract message
     const message = body.value || body.message || body.query || body.text || body.Body || body.body ||
       body.data?.message || body.data?.text ||
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
       (Array.isArray(body.messages) ? body.messages[0]?.body : null) ||
       (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
 
-    // ✅ FIX 3: senderNumber se @lid hata ke clean number nikalo
     const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "918750285420";
     const actualPhone = String(rawSender).split("@")[0].replace(/[^0-9]/g, "") || "918750285420";
@@ -699,7 +689,6 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
-    // ✅ Remove "mis bot" prefix if present
     const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
     console.log("[WHATSAPP QUERY]", actualQuery);
     console.log("[PHONE]", actualPhone);
@@ -712,7 +701,7 @@ app.post("/whatsapp", async (req, res) => {
     try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
 
-    // ✅ AI decided not relevant — ignore
+    // AI decided not relevant — ignore
     if (plan.query_type === "not_relevant") {
       console.log("[WHATSAPP IGNORED] AI decided not relevant:", actualQuery);
       return res.json({ success: true, ignored: true });
@@ -760,7 +749,7 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: true, reply: "No data found", data: [] });
     }
 
-    // ✅ Smart reply format with emojis
+    // Smart reply format with emojis
     const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
     const cols = Object.keys(rows[0]);
 
@@ -784,7 +773,8 @@ app.post("/whatsapp", async (req, res) => {
       { session_id: wpSession, role: "assistant", content: finalReply }
     ]);
 
-    await sendWhatsAppReply(actualPhone, "hello testing");
+    // ✅ FIXED: finalReply bhej rahe hain, "hello testing" nahi
+    await sendWhatsAppReply(actualPhone, finalReply);
 
     return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
@@ -802,6 +792,7 @@ app.get("/whatsapp", (req, res) => {
   if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
   res.status(403).send("Forbidden");
 });
+
 process.on("unhandledRejection", (reason) => {
   console.error("\n========== UNHANDLED REJECTION ==========");
   console.error(reason);
