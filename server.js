@@ -630,9 +630,9 @@ app.listen(PORT, async () => {
 async function sendWhatsAppReply(to, message) {
   try {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
-    const WA_API_URL = "http://app.mis.work/api/v1/message/create";
+    const WA_API_URL = "https://app.mis.work/api/v1/message/create";
 
-    const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
+    const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "");
     console.log("[WHATSAPP SENDING TO]", phone);
 
     message = String(message).slice(0, 900);
