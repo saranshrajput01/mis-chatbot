@@ -640,21 +640,19 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
-    // ✅ "mis bot" trigger check — sirf "mis bot" se shuru hone wale messages process karo
-    const cleanMsg = message.trim().toLowerCase();
-    if (!cleanMsg.startsWith("mis bot")) {
-      console.log("[WHATSAPP IGNORED] Not a mis bot command:", message);
-      return res.json({ success: true, ignored: true, reason: "Not a mis bot command" });
+    // ✅ AI decides if message is business related
+    // Simple keyword check first for speed
+    const businessKeywords = /sales|invoice|client|customer|payment|pending|salary|expense|ledger|revenue|profit|report|total|amount|bill|party|stock|order|purchase|vendor|supplier|account|balance|due|overdue|receipt|tax|gst|mis bot|mis-bot|database|data|list|send me|show me|tell me|kitna|kitni|kaun|kya|how much|how many|top|bottom|best|worst|last|this month|last month|this year|last year|aaj|kal|mahina|saal|week|quarter/i;
+
+    if (!businessKeywords.test(message)) {
+      console.log("[WHATSAPP IGNORED] Not business related:", message);
+      return res.json({ success: true, ignored: true, reason: "Not business related" });
     }
 
-    // "mis bot" hata ke actual query nikalo
-    const actualQuery = message.trim().replace(/^mis bot\s*/i, "").trim();
-    if (!actualQuery) {
-      await sendWhatsAppReply(actualPhone, "🤖 *MIS Bot Ready!*\n\nMujhe kuch poochho!\nExample:\n_mis bot top 10 clients by sales_\n_mis bot salary list_\n_mis bot pending payments_");
-      return res.json({ success: true, reply: "Help message sent" });
-    }
-
+    // Remove "mis bot" prefix if present
+    const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
     console.log("[WHATSAPP QUERY]", actualQuery);
+
     if (!liveSchema) await fetchLiveSchema();
 
     let plan;
