@@ -583,10 +583,8 @@ app.listen(PORT, async () => {
 
 // ── SEND WHATSAPP REPLY ──────────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
-  
   try {
-    
-    const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+    const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
     const phone = to || "918750285420";
@@ -598,8 +596,8 @@ async function sendWhatsAppReply(to, message) {
         "x-api-key": WA_API_KEY
       },
       body: JSON.stringify({
-        receiverMobileNo: String(phone).trim(),
-        message: [String(message)]
+        receiverMobileNo: phone,
+        message: [message]
       })
     });
     const result = await resp.json();
@@ -634,26 +632,33 @@ app.post("/whatsapp", async (req, res) => {
       body.data?.from || body.data?.sender || body.mobile || "user";
 
     // senderNumber chatId format mein use karo reply ke liye
-    const actualPhone =
-    body.senderNumber ||
-    body.from ||
-    body.sender ||
-    sender;
-    console.log("FULL BODY =>", JSON.stringify(body, null, 2));
-    console.log("MESSAGE =>", message);
-    console.log("SENDER =>", sender);
-    console.log("ACTUAL PHONE =>", actualPhone);
+    const actualPhone = body.senderNumber?.split("@")[0] || "918750285420";
     console.log("[WHATSAPP PHONE]", actualPhone);
 
-    // ✅ BAAD MEIN check karo
+    // ✅ Message check
     if (!message) {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
+    // ✅ "mis bot" trigger check — sirf "mis bot" se shuru hone wale messages process karo
+    const cleanMsg = message.trim().toLowerCase();
+    if (!cleanMsg.startsWith("mis bot")) {
+      console.log("[WHATSAPP IGNORED] Not a mis bot command:", message);
+      return res.json({ success: true, ignored: true, reason: "Not a mis bot command" });
+    }
+
+    // "mis bot" hata ke actual query nikalo
+    const actualQuery = message.trim().replace(/^mis bot\s*/i, "").trim();
+    if (!actualQuery) {
+      await sendWhatsAppReply(actualPhone, "🤖 *MIS Bot Ready!*\n\nMujhe kuch poochho!\nExample:\n_mis bot top 10 clients by sales_\n_mis bot salary list_\n_mis bot pending payments_");
+      return res.json({ success: true, reply: "Help message sent" });
+    }
+
+    console.log("[WHATSAPP QUERY]", actualQuery);
     if (!liveSchema) await fetchLiveSchema();
 
     let plan;
-    try { plan = await processQuery(message, []); }
+    try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
 
     if (plan.query_type === "ledger") {
@@ -662,18 +667,26 @@ app.post("/whatsapp", async (req, res) => {
       const { data } = await supabase.from("ledger")
         .select("name,closing_balance,voucher_date,voucher_particular,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(500);
-      if (!data || !data.length) return res.json({ success: true, reply: `No ledger found for "${search}"`, sender });
+      if (!data || !data.length) {
+        await sendWhatsAppReply(actualPhone, `❌ No ledger found for "${search}"`);
+        return res.json({ success: true, reply: "No ledger found", sender });
+      }
       const uniqueNames = [...new Set(data.map(r => r.name))];
-      if (uniqueNames.length > 1) return res.json({ success: true, reply: "Multiple found: " + uniqueNames.slice(0,5).join(", "), options: uniqueNames.slice(0,5), sender });
+      if (uniqueNames.length > 1) {
+        const replyText = "🏢 Multiple companies found:\n" + uniqueNames.slice(0,5).map((n,i) => `${i+1}. ${n}`).join("\n") + "\n\nPlease specify exact name.";
+        await sendWhatsAppReply(actualPhone, replyText);
+        return res.json({ success: true, reply: replyText, sender });
+      }
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
-      const replyText = `Ledger: ${data[0].name} | Balance: Rs.${data[0].closing_balance} | Transactions: ${txns.length}`;
+      const bal = parseFloat(data[0].closing_balance) || 0;
+      const replyText = `📒 *Ledger: ${data[0].name}*\n\n💰 Balance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}\n📝 Transactions: ${txns.length}`;
       await sendWhatsAppReply(actualPhone, replyText);
       return res.json({ success: true, reply: replyText, sender });
     }
 
     if (plan.query_type === "clarify") {
-      await sendWhatsAppReply(actualPhone, plan.clarify_message);
-      return res.json({ success: true, reply: plan.clarify_message, options: plan.clarify_options || [], sender });
+      await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
+      return res.json({ success: true, reply: plan.clarify_message, sender });
     }
 
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
@@ -683,26 +696,37 @@ app.post("/whatsapp", async (req, res) => {
     catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
 
     if (!rows || !rows.length) {
-      await sendWhatsAppReply(actualPhone, "No data found for: " + message);
+      await sendWhatsAppReply(actualPhone, `❌ No data found for: "${actualQuery}"`);
       return res.json({ success: true, reply: "No data found", data: [], sender });
     }
 
-    const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
-    const replyText = rows
-    .slice(0, 10)
-    .map((r, i) => {
-      return `${i + 1}. ${r.company_name || r.name || "Client"} - Rs. ${r.total_sales || r.sales || 0}`;
-    })
-    .join("\n");
+    // ✅ Smart reply format with emojis
+    const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
+    const cols = Object.keys(rows[0]);
 
+    const replyText = "📊 *Results:*\n\n" + rows.slice(0, 10).map((r, i) => {
+      const name = r.company_name || r.name || r.design_number || r.party_name || r.invoice_no || "Item";
+      const amount = r.total_sales || r.total || r.amount || r.pending_amount || r.total_price || null;
+      const extra = cols.filter(c => !["company_name","name","design_number","party_name","invoice_no","total_sales","total","amount","pending_amount","total_price"].includes(c))
+        .slice(0,2).map(c => `${c}: ${r[c]}`).join(" | ");
+
+      let line = `${emojis[i] || `${i+1}.`} *${name}*`;
+      if (amount !== null) line += `\n   💰 Rs. ${Number(amount).toLocaleString("en-IN")}`;
+      if (extra) line += `\n   📌 ${extra}`;
+      return line;
+    }).join("\n\n");
+
+    const finalReply = replyText + `\n\n_Total: ${rows.length} records_`;
+
+    const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
     await supabase.from("chat_history").insert([
-      { session_id: wpSession, role: "user", content: message },
-      { session_id: wpSession, role: "assistant", content: replyText }
+      { session_id: wpSession, role: "user", content: actualQuery },
+      { session_id: wpSession, role: "assistant", content: finalReply }
     ]);
 
-    await sendWhatsAppReply(actualPhone, replyText);
+    await sendWhatsAppReply(actualPhone, finalReply);
 
-    return res.json({ success: true, reply: replyText, type: "data", count: rows.length, data: rows, sender });
+    return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows, sender });
 
   } catch(err) {
     console.error("[WHATSAPP ERROR]", err);
