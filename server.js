@@ -258,6 +258,12 @@ For GST details, address, billing info → always use sales table:
 
 === WHEN TO USE LEDGER (query_type:"ledger") ===
 ONLY when user explicitly says: ledger / lgdr / khata / statement / account statement
+
+=== WHEN MESSAGE IS NOT BUSINESS RELATED ===
+If the message is casual conversation (hello, hi, how are you, good morning, etc.) 
+OR completely unrelated to business/finance/sales/expenses, return:
+{"query_type": "not_relevant"}
+DO NOT respond to greetings or personal conversations.
 For a COMPANY transaction history. NEVER for contact/GST/address queries.
 
 === YOUR RESPONSE FORMAT ===
@@ -640,16 +646,7 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: false, error: "No message found", received: body });
     }
 
-    // ✅ AI decides if message is business related
-    // Simple keyword check first for speed
-    const businessKeywords = /sales|invoice|client|customer|payment|pending|salary|expense|ledger|revenue|profit|report|total|amount|bill|party|stock|order|purchase|vendor|supplier|account|balance|due|overdue|receipt|tax|gst|mis bot|mis-bot|database|data|list|send me|show me|tell me|kitna|kitni|kaun|kya|how much|how many|top|bottom|best|worst|last|this month|last month|this year|last year|aaj|kal|mahina|saal|week|quarter/i;
-
-    if (!businessKeywords.test(message)) {
-      console.log("[WHATSAPP IGNORED] Not business related:", message);
-      return res.json({ success: true, ignored: true, reason: "Not business related" });
-    }
-
-    // Remove "mis bot" prefix if present
+    // ✅ Remove "mis bot" prefix if present
     const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
     console.log("[WHATSAPP QUERY]", actualQuery);
 
@@ -658,6 +655,12 @@ app.post("/whatsapp", async (req, res) => {
     let plan;
     try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
+
+    // ✅ AI ne decide kiya — not relevant, ignore karo
+    if (plan.query_type === "not_relevant") {
+      console.log("[WHATSAPP IGNORED] AI decided not relevant:", actualQuery);
+      return res.json({ success: true, ignored: true });
+    }
 
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
