@@ -594,7 +594,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
     // ✅ FIX 1: @lid aur special chars hata ke sirf numbers rakho
-    const phone = String(to || "918750285420").split("@")[0].replace(/[^0-9]/g, "");
+    const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
     console.log("[WHATSAPP SENDING TO]", phone);
 
     const resp = await fetch(WA_API_URL, {
