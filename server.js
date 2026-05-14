@@ -603,10 +603,9 @@ async function sendWhatsAppReply(to, message) {
         "Content-Type": "application/json",
         "x-api-key": WA_API_KEY
       },
-      // ✅ FIX 2: message plain string — array nahi
       body: JSON.stringify({
         receiverMobileNo: phone,
-        message: message
+        message: [message]   // app.mis.work array expect karta hai
       })
     });
 
