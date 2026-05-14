@@ -774,7 +774,7 @@ app.post("/whatsapp", async (req, res) => {
     ]);
 
     // ✅ FIXED: finalReply bhej rahe hain, "hello testing" nahi
-    await sendWhatsAppReply(actualPhone, finalReply);
+    sendWhatsAppReply(actualPhone, finalReply); // await hata do
 
     return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
