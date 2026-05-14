@@ -767,6 +767,8 @@ app.post("/whatsapp", async (req, res) => {
 
     const finalReply = replyText + `\n\n_Total: ${rows.length} records_`;
 
+
+    sendWhatsAppReply(actualPhone, finalReply);
     const wpSession = "wp_" + actualPhone;
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: actualQuery },
@@ -774,7 +776,7 @@ app.post("/whatsapp", async (req, res) => {
     ]);
 
     // ✅ FIXED: finalReply bhej rahe hain, "hello testing" nahi
-    sendWhatsAppReply(actualPhone, finalReply); // await hata do
+
 
     return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
