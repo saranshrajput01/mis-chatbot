@@ -598,7 +598,7 @@ async function sendWhatsAppReply(to, message) {
         "x-api-key": WA_API_KEY
       },
       body: JSON.stringify({
-        receiverMobileNo: String(phone).trim(),
+        receiverNumber: String(phone).trim(),
         message: [String(message)]
       })
     });
