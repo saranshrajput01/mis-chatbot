@@ -647,10 +647,12 @@ async function sendWhatsAppReply(to, message) {
       },
       body: JSON.stringify({
         receiverMobileNo: phone,
-        message: [String(message)]
-       .replace(/\*/g, "")
-       .replace(/\n/g, " ")
-      .slice(0, 900)  // app.mis.work array expect karta hai
+        message: [
+          String(message)
+         .replace(/\*/g, "")
+         .replace(/\n/g, " ")
+        .slice(0, 900) 
+      ] // app.mis.work array expect karta hai
       })
     });
 
