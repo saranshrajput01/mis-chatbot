@@ -598,7 +598,7 @@ async function sendWhatsAppReply(to, message) {
         "x-api-key": WA_API_KEY
       },
       body: JSON.stringify({
-        receiverNumber: String(phone).trim(),
+        receiverMobileNo: String(phone).trim(),
         message: [String(message)]
       })
     });
@@ -688,9 +688,12 @@ app.post("/whatsapp", async (req, res) => {
     }
 
     const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
-    const replyText = rows.slice(0,5).map((r,i) => {
-      return (i+1) + ". " + Object.entries(r).map(([k,v]) => k+": "+v).join(" | ");
-    }).join("\n");
+    const replyText = rows
+    .slice(0, 10)
+    .map((r, i) => {
+      return `${i + 1}. ${r.company_name || r.name || "Client"} - Rs. ${r.total_sales || r.sales || 0}`;
+    })
+    .join("\n");
 
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: message },
