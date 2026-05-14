@@ -583,7 +583,9 @@ app.listen(PORT, async () => {
 
 // ── SEND WHATSAPP REPLY ──────────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
+  
   try {
+    
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
@@ -596,8 +598,8 @@ async function sendWhatsAppReply(to, message) {
         "x-api-key": WA_API_KEY
       },
       body: JSON.stringify({
-        receiverMobileNo: phone,
-        message: [message]
+        receiverMobileNo: String(phone).trim(),
+        message: [String(message)]
       })
     });
     const result = await resp.json();
@@ -632,7 +634,15 @@ app.post("/whatsapp", async (req, res) => {
       body.data?.from || body.data?.sender || body.mobile || "user";
 
     // senderNumber chatId format mein use karo reply ke liye
-    const actualPhone = body.senderNumber?.split("@")[0] || "918750285420";
+    const actualPhone =
+    body.senderNumber ||
+    body.from ||
+    body.sender ||
+    sender;
+    console.log("FULL BODY =>", JSON.stringify(body, null, 2));
+    console.log("MESSAGE =>", message);
+    console.log("SENDER =>", sender);
+    console.log("ACTUAL PHONE =>", actualPhone);
     console.log("[WHATSAPP PHONE]", actualPhone);
 
     // ✅ BAAD MEIN check karo
