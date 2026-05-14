@@ -632,12 +632,11 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
-    // ✅ FIX 1: @lid aur special chars hata ke sirf numbers rakho
     const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
     console.log("[WHATSAPP SENDING TO]", phone);
+    
+    message = String(message).slice(0, 900);
     console.log("[WHATSAPP Message ]", message);
-    message = String(message).slice(0, 1000);
-  
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -647,14 +646,19 @@ async function sendWhatsAppReply(to, message) {
       },
       body: JSON.stringify({
         receiverMobileNo: phone,
-        message: [
-          String(message)
-         .replace(/\*/g, "")
-         .replace(/\n/g, " ")
-        .slice(0, 900) 
-      ] // app.mis.work array expect karta hai
+        message: [message]
       })
     });
+
+    // ← YE NAYA HAI
+    const text = await resp.text();
+    console.log("[WA STATUS]", resp.status);
+    console.log("[WA RESPONSE TEXT]", text);
+
+  } catch(e) {
+    console.error("[WHATSAPP REPLY ERROR]", e.message);
+  }
+}
 
     const result = await resp.json();
     console.log("[WHATSAPP REPLY]", JSON.stringify(result));
