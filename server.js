@@ -636,6 +636,7 @@ async function sendWhatsAppReply(to, message) {
     const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
     console.log("[WHATSAPP SENDING TO]", phone);
     console.log("[WHATSAPP Message ]", message);
+    message = String(message).slice(0, 1000);
   
 
     const resp = await fetch(WA_API_URL, {
@@ -646,7 +647,7 @@ async function sendWhatsAppReply(to, message) {
       },
       body: JSON.stringify({
         receiverMobileNo: phone,
-        message: [message]   // app.mis.work array expect karta hai
+        message: message   // app.mis.work array expect karta hai
       })
     });
 
@@ -774,7 +775,7 @@ app.post("/whatsapp", async (req, res) => {
       { session_id: wpSession, role: "assistant", content: finalReply }
     ]);
 
-    await sendWhatsAppReply(actualPhone, finalReply);
+    await sendWhatsAppReply(actualPhone, "hello testing");
 
     return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
