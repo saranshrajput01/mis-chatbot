@@ -593,7 +593,9 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
-    const phone = to || "918750285420";
+    // ✅ FIX 1: @lid aur special chars hata ke sirf numbers rakho
+    const phone = String(to || "918750285420").split("@")[0].replace(/[^0-9]/g, "");
+    console.log("[WHATSAPP SENDING TO]", phone);
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -601,13 +603,16 @@ async function sendWhatsAppReply(to, message) {
         "Content-Type": "application/json",
         "x-api-key": WA_API_KEY
       },
+      // ✅ FIX 2: message plain string — array nahi
       body: JSON.stringify({
         receiverMobileNo: phone,
-        message: [message]
+        message: message
       })
     });
+
     const result = await resp.json();
     console.log("[WHATSAPP REPLY]", JSON.stringify(result));
+    return result;
   } catch(e) {
     console.error("[WHATSAPP REPLY ERROR]", e.message);
   }
@@ -617,7 +622,6 @@ async function sendWhatsAppReply(to, message) {
 app.post("/whatsapp", async (req, res) => {
   try {
     const body = req.body;
-
     console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
 
     // ✅ Outgoing messages ignore karo — loop rokne ke liye
@@ -625,23 +629,20 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: true, ignored: true });
     }
 
-    // Extract message from all possible fields
-    // app.mis.work sends message in body.value
+    // Extract message — app.mis.work sends in body.value
     const message = body.value || body.message || body.query || body.text || body.Body || body.body ||
       body.data?.message || body.data?.text ||
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
       (Array.isArray(body.messages) ? body.messages[0]?.body : null) ||
       (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
 
-    // app.mis.work sends sender number in body.senderNumber
-    const sender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
-      body.data?.from || body.data?.sender || body.mobile || "user";
+    // ✅ FIX 3: senderNumber se @lid hata ke clean number nikalo
+    const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
+      body.data?.from || body.data?.sender || body.mobile || "918750285420";
+    const actualPhone = String(rawSender).split("@")[0].replace(/[^0-9]/g, "") || "918750285420";
 
-    // senderNumber chatId format mein use karo reply ke liye
-    const actualPhone = body.senderNumber?.split("@")[0] || "918750285420";
     console.log("[WHATSAPP PHONE]", actualPhone);
 
-    // ✅ Message check
     if (!message) {
       return res.json({ success: false, error: "No message found", received: body });
     }
@@ -656,7 +657,7 @@ app.post("/whatsapp", async (req, res) => {
     try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
 
-    // ✅ AI ne decide kiya — not relevant, ignore karo
+    // ✅ AI decided not relevant — ignore
     if (plan.query_type === "not_relevant") {
       console.log("[WHATSAPP IGNORED] AI decided not relevant:", actualQuery);
       return res.json({ success: true, ignored: true });
@@ -664,30 +665,33 @@ app.post("/whatsapp", async (req, res) => {
 
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
-      if (!search) return res.json({ success: true, reply: "Please tell me the company name.", sender });
+      if (!search) {
+        await sendWhatsAppReply(actualPhone, "Please tell me the company name.");
+        return res.json({ success: true, reply: "Please tell me the company name." });
+      }
       const { data } = await supabase.from("ledger")
         .select("name,closing_balance,voucher_date,voucher_particular,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(500);
       if (!data || !data.length) {
         await sendWhatsAppReply(actualPhone, `❌ No ledger found for "${search}"`);
-        return res.json({ success: true, reply: "No ledger found", sender });
+        return res.json({ success: true, reply: "No ledger found" });
       }
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) {
         const replyText = "🏢 Multiple companies found:\n" + uniqueNames.slice(0,5).map((n,i) => `${i+1}. ${n}`).join("\n") + "\n\nPlease specify exact name.";
         await sendWhatsAppReply(actualPhone, replyText);
-        return res.json({ success: true, reply: replyText, sender });
+        return res.json({ success: true, reply: replyText });
       }
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
       const bal = parseFloat(data[0].closing_balance) || 0;
       const replyText = `📒 *Ledger: ${data[0].name}*\n\n💰 Balance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}\n📝 Transactions: ${txns.length}`;
       await sendWhatsAppReply(actualPhone, replyText);
-      return res.json({ success: true, reply: replyText, sender });
+      return res.json({ success: true, reply: replyText });
     }
 
     if (plan.query_type === "clarify") {
       await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
-      return res.json({ success: true, reply: plan.clarify_message, sender });
+      return res.json({ success: true, reply: plan.clarify_message });
     }
 
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
@@ -698,7 +702,7 @@ app.post("/whatsapp", async (req, res) => {
 
     if (!rows || !rows.length) {
       await sendWhatsAppReply(actualPhone, `❌ No data found for: "${actualQuery}"`);
-      return res.json({ success: true, reply: "No data found", data: [], sender });
+      return res.json({ success: true, reply: "No data found", data: [] });
     }
 
     // ✅ Smart reply format with emojis
@@ -719,7 +723,7 @@ app.post("/whatsapp", async (req, res) => {
 
     const finalReply = replyText + `\n\n_Total: ${rows.length} records_`;
 
-    const wpSession = "wp_" + sender.replace(/[^a-z0-9]/gi, "_");
+    const wpSession = "wp_" + actualPhone;
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: actualQuery },
       { session_id: wpSession, role: "assistant", content: finalReply }
@@ -727,7 +731,7 @@ app.post("/whatsapp", async (req, res) => {
 
     await sendWhatsAppReply(actualPhone, finalReply);
 
-    return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows, sender });
+    return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
   } catch(err) {
     console.error("[WHATSAPP ERROR]", err);
