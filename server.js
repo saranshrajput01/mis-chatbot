@@ -7,6 +7,15 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.static(require("path").join(__dirname, "public")));
+app.use((req, res, next) => {
+  console.log("\n========== NEW REQUEST ==========");
+  console.log("[TIME]", new Date().toISOString());
+  console.log("[METHOD]", req.method);
+  console.log("[URL]", req.originalUrl);
+  console.log("[BODY]", JSON.stringify(req.body, null, 2));
+
+  next();
+});
 
 // Service role client — allows AI to run any SQL
 const supabase = createClient(
@@ -46,6 +55,8 @@ async function fetchLiveSchema() {
 
 // ── OPENAI ────────────────────────────────────────────────────────────────────
 async function openai(systemPrompt, messages, maxTokens = 3000) {
+  console.log("\n========== OPENAI REQUEST ==========");
+  console.log("[MESSAGES]", JSON.stringify(messages, null, 2));
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -60,6 +71,8 @@ async function openai(systemPrompt, messages, maxTokens = 3000) {
     })
   });
   const d = await response.json();
+  console.log("\n========== OPENAI RESPONSE ==========");
+  console.log(JSON.stringify(d, null, 2));
   if (!response.ok) throw new Error(d.error?.message || JSON.stringify(d));
   return d.choices?.[0]?.message?.content || "";
 }
@@ -155,8 +168,29 @@ function buildLedgerHTML(info, txns) {
 
 // ── RUN SQL ───────────────────────────────────────────────────────────────────
 async function runSQL(sql) {
-  const { data, error } = await supabase.rpc("execute_sql", { query: sql });
-  if (error) throw new Error(error.message);
+
+  console.log("\n========== SQL EXECUTION ==========");
+  console.log("[SQL]", sql);
+
+  const start = Date.now();
+
+  const { data, error } = await supabase.rpc("execute_sql", {
+    query: sql
+  });
+
+  console.log("[TIME]", Date.now() - start, "ms");
+
+  if (error) {
+    console.error("[SQL ERROR]", JSON.stringify(error, null, 2));
+    throw new Error(error.message);
+  }
+
+  console.log("[ROWS]", data?.length || 0);
+
+  if (data?.length) {
+    console.log("[FIRST ROW]", JSON.stringify(data[0], null, 2));
+  }
+
   return data || [];
 }
 
@@ -573,6 +607,11 @@ app.post("/chat", async (req, res) => {
       { session_id, role: "assistant", content: reply }
     ]);
 
+    console.log("\n========== FINAL RESPONSE ==========");
+    console.log({
+      type: "html",
+      rows: rows?.length || 0
+    });
     return res.json({ reply, type: "html" });
 
   } catch(err) {
@@ -619,6 +658,8 @@ async function sendWhatsAppReply(to, message) {
 
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
 app.post("/whatsapp", async (req, res) => {
+  console.log("\n========== WHATSAPP WEBHOOK ==========");
+  console.log("[RAW BODY]", JSON.stringify(req.body, null, 2));
   try {
     const body = req.body;
     console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
@@ -649,6 +690,9 @@ app.post("/whatsapp", async (req, res) => {
     // ✅ Remove "mis bot" prefix if present
     const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
     console.log("[WHATSAPP QUERY]", actualQuery);
+    console.log("[PHONE]", actualPhone);
+    console.log("[MESSAGE]", message);
+    console.log("[FINAL QUERY]", actualQuery);
 
     if (!liveSchema) await fetchLiveSchema();
 
@@ -745,4 +789,13 @@ app.get("/whatsapp", (req, res) => {
   const challenge = req.query["hub.challenge"];
   if (mode === "subscribe" && token === VERIFY_TOKEN) return res.status(200).send(challenge);
   res.status(403).send("Forbidden");
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("\n========== UNHANDLED REJECTION ==========");
+  console.error(reason);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("\n========== UNCAUGHT EXCEPTION ==========");
+  console.error(err);
 });
