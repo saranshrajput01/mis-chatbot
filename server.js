@@ -1,4 +1,3 @@
-process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
@@ -633,7 +632,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "b53f573d12b6f76a4480d9e512cd711525e488308528207478";
     const WA_API_URL = "https://app.mis.work/api/v1/message/create";
 
-    const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
+    const phone = String(to || "8750285420").split("@")[0].replace(/[^0-9]/g, "");
     console.log("[WHATSAPP SENDING TO]", phone);
 
     message = String(message).slice(0, 900);
@@ -768,18 +767,15 @@ app.post("/whatsapp", async (req, res) => {
 
     const finalReply = replyText + `\n\n_Total: ${rows.length} records_`;
 
-
-    sendWhatsAppReply(actualPhone, finalReply);
     const wpSession = "wp_" + actualPhone;
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: actualQuery },
       { session_id: wpSession, role: "assistant", content: finalReply }
     ]);
 
-    // ✅ FIXED: finalReply bhej rahe hain, "hello testing" nahi
+    res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
 
-
-    return res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
+    await sendWhatsAppReply(actualPhone, finalReply);
 
   } catch(err) {
     console.error("[WHATSAPP ERROR]", err);
