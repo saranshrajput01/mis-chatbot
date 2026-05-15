@@ -786,5 +786,275 @@ app.get("/whatsapp", (req, res) => {
   res.status(403).send("Forbidden");
 });
 
+// ============================================================
+// STEP 2 ADDITIONS — Google Sheet Sync + Document Intelligence
+// ============================================================
+
+// ── GOOGLE SHEET SYNC ────────────────────────────────────────
+const SHEET_ID = "1iNVOUtLk7sRGx-JkttGRd8jkWaIzAwkMoyBzA70OmDc";
+
+async function fetchSheetCSV(gid) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${gid}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Sheet fetch failed: ${res.status}`);
+  const text = await res.text();
+  return text;
+}
+
+function parseCSV(text) {
+  const lines = text.trim().split("\n");
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map(h => h.replace(/"/g, "").trim());
+  return lines.slice(1).map(line => {
+    const cols = [];
+    let cur = "", inQ = false;
+    for (let c of line) {
+      if (c === '"') { inQ = !inQ; }
+      else if (c === "," && !inQ) { cols.push(cur.trim()); cur = ""; }
+      else { cur += c; }
+    }
+    cols.push(cur.trim());
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = cols[i] || ""; });
+    return obj;
+  });
+}
+
+async function syncProducts() {
+  try {
+    const csv = await fetchSheetCSV("1581260341");
+    const rows = parseCSV(csv);
+    if (!rows.length) return 0;
+
+    await supabase.from("products").delete().neq("id", 0);
+
+    const toInsert = rows
+      .filter(r => r["ITEM NAME"] || r["item name"] || r["Item Name"])
+      .map(r => ({
+        item_name: r["ITEM NAME"] || r["Item Name"] || r["item name"] || "",
+        image_link: r["image link"] || r["Image Link"] || r["IMAGE LINK"] || "",
+        description: r["Description"] || r["description"] || ""
+      }));
+
+    if (toInsert.length) {
+      await supabase.from("products").insert(toInsert);
+    }
+
+    await supabase.from("sync_log").insert({ sheet_name: "products", rows_synced: toInsert.length, status: "success" });
+    console.log("[SYNC] Products:", toInsert.length, "rows");
+    return toInsert.length;
+  } catch(e) {
+    console.error("[SYNC ERROR] Products:", e.message);
+    await supabase.from("sync_log").insert({ sheet_name: "products", rows_synced: 0, status: "error: " + e.message });
+    return 0;
+  }
+}
+
+async function syncDelegationTasks() {
+  try {
+    const csv = await fetchSheetCSV("1443032328");
+    const rows = parseCSV(csv);
+    if (!rows.length) return 0;
+
+    await supabase.from("delegation_tasks").delete().neq("id", 0);
+
+    const toInsert = rows
+      .filter(r => r["taskName"] || r["task_name"])
+      .map(r => ({
+        del_task_id: r["delTaskId"] || r["del_task_id"] || "",
+        plan_date: r["planDate"] ? convertExcelDate(r["planDate"]) : null,
+        final_date: r["finalDate"] ? convertExcelDate(r["finalDate"]) : null,
+        delegate_from: r["delegateFrom"] || r["delegate_from"] || "",
+        delegated_to: r["delegatedTo"] || r["delegated_to"] || "",
+        project_name: r["projectNm"] || r["project_name"] || "",
+        task_name: r["taskName"] || r["task_name"] || "",
+        del_remarks: r["delRemarks"] || r["del_remarks"] || "",
+        priority: r["priority"] || "",
+        department_id: r["departmentId"] || r["department_id"] || "",
+        del_url: r["delUrl"] || r["del_url"] || ""
+      }));
+
+    if (toInsert.length) {
+      await supabase.from("delegation_tasks").insert(toInsert);
+    }
+
+    await supabase.from("sync_log").insert({ sheet_name: "delegation_tasks", rows_synced: toInsert.length, status: "success" });
+    console.log("[SYNC] Delegation Tasks:", toInsert.length, "rows");
+    return toInsert.length;
+  } catch(e) {
+    console.error("[SYNC ERROR] Delegation Tasks:", e.message);
+    await supabase.from("sync_log").insert({ sheet_name: "delegation_tasks", rows_synced: 0, status: "error: " + e.message });
+    return 0;
+  }
+}
+
+function convertExcelDate(val) {
+  if (!val) return null;
+  if (String(val).includes("-") || String(val).includes("/")) return String(val).split("T")[0];
+  const num = parseFloat(val);
+  if (isNaN(num)) return null;
+  const date = new Date((num - 25569) * 86400 * 1000);
+  return date.toISOString().split("T")[0];
+}
+
+async function syncAllSheets() {
+  console.log("[SYNC] Starting full sync...");
+  const results = {};
+  results.products = await syncProducts();
+  results.delegation_tasks = await syncDelegationTasks();
+  console.log("[SYNC] Complete:", results);
+  return results;
+}
+
+// ── MANUAL SYNC ROUTE ────────────────────────────────────────
+app.post("/sync", async (req, res) => {
+  try {
+    const results = await syncAllSheets();
+    res.json({ ok: true, synced: results, timestamp: new Date().toISOString() });
+  } catch(e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get("/sync/status", async (req, res) => {
+  try {
+    const { data } = await supabase.from("sync_log")
+      .select("*").order("synced_at", { ascending: false }).limit(20);
+    res.json(data || []);
+  } catch(e) {
+    res.json([]);
+  }
+});
+
+// ── AUTO SYNC — every 15 minutes ─────────────────────────────
+setInterval(async () => {
+  console.log("[AUTO-SYNC] Running scheduled sync...");
+  await syncAllSheets();
+}, 15 * 60 * 1000);
+
+setTimeout(syncAllSheets, 5000);
+
+// ── DOCUMENT INTELLIGENCE ROUTES ─────────────────────────────
+app.post("/doc-intelligence", async (req, res) => {
+  const { doc_url, doc_type, question, uploaded_by } = req.body;
+  if (!doc_url) return res.status(400).json({ error: "doc_url required" });
+
+  try {
+    let extractedText = "";
+    let docTitle = doc_url.substring(0, 80);
+
+    if (doc_type === "google_sheet" || doc_url.includes("docs.google.com/spreadsheets")) {
+      const match = doc_url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      const gidMatch = doc_url.match(/gid=(\d+)/);
+      if (!match) throw new Error("Invalid Google Sheet URL");
+      const sheetId = match[1];
+      const gid = gidMatch ? gidMatch[1] : "0";
+      const csvUrl = `https://docs.google.com/spreadsheets/d/${sheetId}/export?format=csv&gid=${gid}`;
+      const csvRes = await fetch(csvUrl);
+      if (!csvRes.ok) throw new Error("Could not fetch Google Sheet. Make sure it's publicly shared.");
+      extractedText = await csvRes.text();
+      extractedText = extractedText.substring(0, 8000);
+      docTitle = "Google Sheet";
+
+    } else if (doc_type === "pdf" || doc_url.includes(".pdf") || doc_url.includes("drive.google.com")) {
+      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 2000,
+          messages: [{
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: `Please fetch and read this document URL and provide a detailed summary. URL: ${doc_url}\n\nUser question: ${question || "Please summarize this document."}`
+              }
+            ]
+          }]
+        })
+      });
+      const aiData = await aiRes.json();
+      const summary = aiData.content?.[0]?.text || "Could not read document.";
+
+      await supabase.from("doc_intelligence").insert({
+        doc_type: "pdf",
+        doc_url,
+        doc_title: docTitle,
+        ai_summary: summary,
+        uploaded_by: uploaded_by || "web"
+      });
+
+      return res.json({ ok: true, summary, doc_type: "pdf" });
+
+    } else {
+      try {
+        const urlRes = await fetch(doc_url, { headers: { "User-Agent": "Mozilla/5.0" } });
+        extractedText = await urlRes.text();
+        extractedText = extractedText.replace(/<[^>]*>/g, " ").substring(0, 6000);
+      } catch(e) {
+        extractedText = `URL: ${doc_url}`;
+      }
+    }
+
+    const userQuestion = question || "Please provide a detailed summary of this document/data.";
+
+    const SYSTEM_DOC = `You are a smart document analysis assistant for "Mis Work India Private Limited".
+Analyze the provided document content and answer questions accurately.
+If it's a spreadsheet/CSV, explain the data clearly.
+If it's a product catalog, list products and details.
+If it's tasks/delegation data, summarize pending work.
+Always respond in the same language the user asks (Hindi/Hinglish/English).
+Keep answers concise but complete.`;
+
+    const aiRes2 = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        system: SYSTEM_DOC,
+        messages: [{
+          role: "user",
+          content: `Document Content:\n${extractedText}\n\n---\nQuestion: ${userQuestion}`
+        }]
+      })
+    });
+
+    const aiData2 = await aiRes2.json();
+    const summary = aiData2.content?.[0]?.text || "Could not analyze document.";
+
+    await supabase.from("doc_intelligence").insert({
+      doc_type: doc_type || "url",
+      doc_url,
+      doc_title: docTitle,
+      ai_summary: summary,
+      raw_content: extractedText.substring(0, 2000),
+      uploaded_by: uploaded_by || "web"
+    });
+
+    res.json({ ok: true, summary, doc_type: doc_type || "url", content_preview: extractedText.substring(0, 200) });
+
+  } catch(err) {
+    console.error("[DOC INTELLIGENCE ERROR]", err.message);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+app.get("/doc-intelligence/history", async (req, res) => {
+  try {
+    const { data } = await supabase.from("doc_intelligence")
+      .select("id,doc_type,doc_title,doc_url,ai_summary,created_at")
+      .order("created_at", { ascending: false }).limit(20);
+    res.json(data || []);
+  } catch(e) {
+    res.json([]);
+  }
+});
+
+// ============================================================
+// END OF STEP 2 ADDITIONS
+// ============================================================
+
 process.on("unhandledRejection", (reason) => { console.error("[UNHANDLED REJECTION]", reason); });
 process.on("uncaughtException", (err) => { console.error("[UNCAUGHT EXCEPTION]", err); });

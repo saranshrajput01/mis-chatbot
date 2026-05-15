@@ -62,9 +62,174 @@
     #sendBtn { width: 40px; height: 40px; border-radius: 50%; background: #1a73e8; border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.2s; }
     #sendBtn:hover { background: #1558b0; }
     #sendBtn svg { width: 18px; height: 18px; fill: white; }
+
+    /* ── STEP 3: NEW CSS — TABS ── */
+    #tabBar {
+      display: flex;
+      background: #1a1a2e;
+      border-bottom: 2px solid #4a90d9;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 8px 18px;
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.6);
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+    .tab-btn.active {
+      color: #fff;
+      border-bottom: 3px solid #4a90d9;
+      background: rgba(74,144,217,0.15);
+    }
+    .tab-btn:hover { color: #fff; }
+
+    /* TAB PAGES */
+    .tab-page { display: none; flex: 1; overflow: hidden; flex-direction: column; }
+    .tab-page.active { display: flex; }
+
+    /* SYNC BAR */
+    #syncBar {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 7px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: #555;
+      flex-shrink: 0;
+    }
+    #syncBtn {
+      background: #1a73e8;
+      color: #fff;
+      border: none;
+      padding: 4px 14px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    #syncBtn:hover { background: #1558b0; }
+    #syncStatus { color: #4caf50; font-weight: 600; }
+
+    /* DOC INTELLIGENCE PAGE */
+    #docPage {
+      padding: 16px;
+      overflow-y: auto;
+      background: #f0f2f5;
+    }
+    .doc-card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 14px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+    }
+    .doc-card h3 { font-size: 14px; color: #1a1a2e; margin-bottom: 10px; }
+    .doc-input-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+    .doc-input-row input, .doc-input-row select, .doc-input-row textarea {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1.5px solid #ddd;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+      min-width: 200px;
+    }
+    .doc-input-row input:focus, .doc-input-row textarea:focus { border-color: #1a73e8; }
+    .doc-input-row textarea { resize: vertical; min-height: 60px; }
+    .doc-submit-btn {
+      background: #1a1a2e;
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .doc-submit-btn:hover { background: #333; }
+    .doc-submit-btn.loading { background: #999; cursor: not-allowed; }
+
+    /* TYPE PILLS */
+    .type-pills { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+    .type-pill {
+      padding: 5px 14px;
+      border-radius: 20px;
+      border: 1.5px solid #ddd;
+      background: #fff;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: #555;
+      transition: all 0.15s;
+    }
+    .type-pill.selected { background: #1a1a2e; color: #fff; border-color: #1a1a2e; }
+
+    /* RESULT BOX */
+    .doc-result {
+      background: #f8f9ff;
+      border: 1px solid #e0e7ff;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      line-height: 1.6;
+      color: #333;
+      white-space: pre-wrap;
+      word-break: break-word;
+      margin-top: 10px;
+      display: none;
+    }
+    .doc-result.show { display: block; }
+
+    /* HISTORY ITEMS */
+    .history-item {
+      background: #fff;
+      border: 1px solid #eee;
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .history-item:hover { border-color: #1a73e8; background: #f0f7ff; }
+    .history-item .hi-title { font-size: 13px; font-weight: 600; color: #1a1a2e; }
+    .history-item .hi-meta { font-size: 11px; color: #888; margin-top: 3px; }
+    .history-item .hi-summary { font-size: 12px; color: #555; margin-top: 6px; }
+
+    /* DRAG DROP ZONE */
+    .drop-zone {
+      border: 2px dashed #ccc;
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-bottom: 10px;
+    }
+    .drop-zone:hover, .drop-zone.dragover { border-color: #1a73e8; color: #1a73e8; background: #f0f7ff; }
+    .drop-zone .dz-icon { font-size: 28px; margin-bottom: 6px; }
+
+    .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    /* ── END STEP 3 CSS ── */
   </style>
 </head>
 <body>
+
 <div id="header">
   <div class="brand">
     <div class="logo">M</div>
@@ -78,13 +243,114 @@
     <span class="online">Online</span>
   </div>
 </div>
-<div id="chat"></div>
-<div id="inputBar">
-  <input id="msgInput" type="text" placeholder="Ask about invoices, ledger, payments, expenses..." />
-  <button id="sendBtn" onclick="sendMessage()">
-    <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
-  </button>
+
+<!-- ── STEP 3 PART B: TAB BAR — header ke baad ── -->
+<div id="tabBar">
+  <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
+  <button class="tab-btn" onclick="switchTab('doc')">📄 Documents</button>
+  <button class="tab-btn" onclick="switchTab('sync')">🔄 Sync</button>
 </div>
+
+<!-- SYNC BAR — only on chat tab -->
+<div id="syncBar">
+  <span>Last sync: <span id="lastSyncTime">Never</span></span>
+  <button id="syncBtn" onclick="doManualSync()">🔄 Sync Now</button>
+  <span id="syncStatus"></span>
+</div>
+
+<!-- ── STEP 3 PART C: CHAT PAGE WRAPPER ── -->
+<div id="chatPage" class="tab-page active">
+  <div id="chat"></div>
+  <div id="inputBar">
+    <input id="msgInput" type="text" placeholder="Ask about invoices, ledger, payments, expenses..." />
+    <button id="sendBtn" onclick="sendMessage()">
+      <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ── STEP 3 PART D: DOCUMENT INTELLIGENCE PAGE ── -->
+<div id="docPage" class="tab-page">
+  <div style="padding:16px;overflow-y:auto;background:#f0f2f5;flex:1">
+
+    <!-- URL / Link Input Card -->
+    <div class="doc-card">
+      <h3>📎 Paste any Link — AI will read it</h3>
+
+      <div class="type-pills">
+        <div class="type-pill selected" onclick="selectDocType(this,'auto')">🤖 Auto Detect</div>
+        <div class="type-pill" onclick="selectDocType(this,'google_sheet')">📊 Google Sheet</div>
+        <div class="type-pill" onclick="selectDocType(this,'pdf')">📄 PDF</div>
+        <div class="type-pill" onclick="selectDocType(this,'url')">🌐 Any URL</div>
+      </div>
+
+      <div class="doc-input-row">
+        <input type="text" id="docUrlInput" placeholder="Paste Google Sheet / PDF / Drive link here..."/>
+      </div>
+      <div class="doc-input-row">
+        <textarea id="docQuestionInput" placeholder="Optional: Ask a specific question about this document...
+Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2"></textarea>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="doc-submit-btn" id="analyzeBtn" onclick="analyzeDocument()">
+          🔍 Analyze Document
+        </button>
+        <span style="font-size:11px;color:#888">AI will read and answer in seconds</span>
+      </div>
+      <div class="doc-result" id="docResult"></div>
+    </div>
+
+    <!-- File Upload Card -->
+    <div class="doc-card">
+      <h3>⬆️ Upload File — AI reads it</h3>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()"
+        ondragover="event.preventDefault();this.classList.add('dragover')"
+        ondragleave="this.classList.remove('dragover')"
+        ondrop="handleFileDrop(event)">
+        <div class="dz-icon">📁</div>
+        <div>Click to upload or drag &amp; drop</div>
+        <div style="font-size:11px;margin-top:4px;color:#aaa">PDF, Excel, Image, Word, CSV</div>
+      </div>
+      <input type="file" id="fileInput" style="display:none"
+        accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.docx,.txt"
+        onchange="handleFileUpload(event)"/>
+      <div class="doc-result" id="fileResult"></div>
+    </div>
+
+    <!-- History Card -->
+    <div class="doc-card">
+      <h3>🕐 Previously Analyzed Documents</h3>
+      <div id="docHistory">
+        <div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Loading history...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── SYNC PAGE ── -->
+<div id="syncPage" class="tab-page">
+  <div style="padding:16px;overflow-y:auto;background:#f0f2f5;flex:1">
+    <div class="doc-card">
+      <h3>🔄 Google Sheet → Supabase Sync</h3>
+      <p style="font-size:13px;color:#555;margin-bottom:14px">
+        Yeh button daba ke manually sync karo. Auto-sync har 15 minute mein hoti hai.
+      </p>
+      <button class="doc-submit-btn" id="syncPageBtn" onclick="doManualSync(true)">
+        🔄 Sync All Sheets Now
+      </button>
+      <div class="doc-result" id="syncResult" style="margin-top:12px"></div>
+    </div>
+
+    <div class="doc-card">
+      <h3>📋 Sync History (Last 20)</h3>
+      <div id="syncHistory">
+        <div style="color:#aaa;font-size:13px;text-align:center;padding:20px">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
   let SESSION_ID = sessionStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
@@ -113,7 +379,6 @@
     });
   }
 
-  // ── CHART BUILDER — uses server hint (chartMeta) ──────────────────────────
   function tryBuildChart(container, chartMeta) {
     const tables = container.querySelectorAll("table");
     if (!tables.length) return;
@@ -152,11 +417,9 @@
     const labels = rows.map(r => r.cells[labelCol]?.textContent?.trim() || "");
     const parseNum = t => parseFloat((t || "").replace(/[Rs.,\s₹]/g, "")) || 0;
 
-    // Use server hint if available
     const serverType = chartMeta?.chartType;
     const serverTitle = chartMeta?.title;
 
-    // Detect time series only if ALL labels are months
     const isTimeSeries = labels.every(l => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}-\d{2}/i.test(l));
     const isSingle = valCols.length === 1;
     const isAging = headers.some(h => /\d+.*day|day.*\d+/i.test(h));
@@ -170,7 +433,6 @@
     let chartType, datasets, chartTitle;
 
     if (serverType === "pie" || serverType === "doughnut") {
-      // Server says pie/doughnut
       chartType = serverType;
       chartTitle = "🥧 " + (serverTitle || "Category Breakdown");
       datasets = [{
@@ -179,7 +441,6 @@
         borderWidth: 2
       }];
     } else if (serverType === "line" || (!serverType && isTimeSeries && isSingle)) {
-      // Server says line OR auto-detected time series
       chartType = "line";
       chartTitle = "📈 " + (serverTitle || "Trend Chart");
       datasets = valCols.map((ci, idx) => ({
@@ -190,7 +451,6 @@
         tension: 0.3, fill: true, pointRadius: 4, borderWidth: 2
       }));
     } else if (isTimeSeries && !isSingle) {
-      // Multiple columns + time series = grouped bar
       chartType = "bar";
       chartTitle = "📊 " + (serverTitle || "Monthly Comparison");
       datasets = valCols.map((ci, idx) => ({
@@ -212,7 +472,6 @@
         stack: "stack"
       }));
     } else {
-      // Default: bar chart
       chartType = "bar";
       chartTitle = "📊 " + (serverTitle || "Bar Chart");
       datasets = isSingle ? [{
@@ -462,6 +721,246 @@
       });
     } catch(e) {}
   })();
+
+  // ── STEP 3 PART E: NEW SCRIPTS ────────────────────────────────
+  let selectedDocType = "auto";
+
+  function switchTab(tab) {
+    document.querySelectorAll(".tab-btn").forEach((b,i) => {
+      b.classList.toggle("active", ["chat","doc","sync"][i] === tab);
+    });
+    document.getElementById("chatPage").classList.toggle("active", tab === "chat");
+    document.getElementById("docPage").classList.toggle("active", tab === "doc");
+    document.getElementById("syncPage").classList.toggle("active", tab === "sync");
+    document.getElementById("syncBar").style.display = tab === "chat" ? "flex" : "none";
+
+    if (tab === "doc") loadDocHistory();
+    if (tab === "sync") loadSyncHistory();
+  }
+
+  function selectDocType(el, type) {
+    selectedDocType = type;
+    document.querySelectorAll(".type-pill").forEach(p => p.classList.remove("selected"));
+    el.classList.add("selected");
+  }
+
+  async function analyzeDocument() {
+    const url = document.getElementById("docUrlInput").value.trim();
+    const question = document.getElementById("docQuestionInput").value.trim();
+    if (!url) { alert("Please paste a URL first!"); return; }
+
+    const btn = document.getElementById("analyzeBtn");
+    const resultDiv = document.getElementById("docResult");
+
+    btn.innerHTML = '<span class="loader"></span>Analyzing...';
+    btn.classList.add("loading");
+    btn.disabled = true;
+    resultDiv.className = "doc-result show";
+    resultDiv.textContent = "⏳ AI is reading the document...";
+
+    try {
+      const res = await fetch("/doc-intelligence", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doc_url: url,
+          doc_type: selectedDocType === "auto" ? null : selectedDocType,
+          question: question || null
+        })
+      });
+      const data = await res.json();
+
+      if (data.ok) {
+        resultDiv.innerHTML = `<b>✅ Analysis Complete</b>\n\n${data.summary}`;
+        resultDiv.innerHTML += `\n\n<button onclick="sendToChat(this.previousSibling.textContent)"
+          style="margin-top:10px;padding:5px 12px;background:#1a73e8;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px">
+          💬 Ask more in Chat
+        </button>`;
+      } else {
+        resultDiv.textContent = "❌ Error: " + (data.error || "Could not analyze");
+      }
+    } catch(e) {
+      resultDiv.textContent = "❌ Server error: " + e.message;
+    }
+
+    btn.innerHTML = "🔍 Analyze Document";
+    btn.classList.remove("loading");
+    btn.disabled = false;
+  }
+
+  function handleFileDrop(event) {
+    event.preventDefault();
+    document.getElementById("dropZone").classList.remove("dragover");
+    const file = event.dataTransfer.files[0];
+    if (file) processFile(file);
+  }
+
+  function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (file) processFile(file);
+  }
+
+  async function processFile(file) {
+    const resultDiv = document.getElementById("fileResult");
+    resultDiv.className = "doc-result show";
+    resultDiv.textContent = `⏳ Reading ${file.name}...`;
+
+    if (file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(",")[1];
+        try {
+          const res = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 1000,
+              messages: [{
+                role: "user",
+                content: [
+                  { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
+                  { type: "text", text: "Describe this image in detail. If it contains text, extract it. If it's a product, describe it." }
+                ]
+              }]
+            })
+          });
+          const data = await res.json();
+          const summary = data.content?.[0]?.text || "Could not analyze image";
+          resultDiv.innerHTML = `<b>🖼️ Image Analysis: ${file.name}</b>\n\n${summary}`;
+        } catch(e) {
+          resultDiv.textContent = "Error: " + e.message;
+        }
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    try {
+      if (file.type === "text/csv" || file.name.endsWith(".csv") || file.name.endsWith(".txt")) {
+        const text = await file.text();
+        const res = await fetch("/doc-intelligence", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            doc_url: `file://${file.name}`,
+            doc_type: "text",
+            question: text.substring(0, 5000),
+            uploaded_by: "web"
+          })
+        });
+        const data = await res.json();
+        resultDiv.innerHTML = `<b>📄 File Analysis: ${file.name}</b>\n\n${data.summary || data.error}`;
+      } else {
+        resultDiv.textContent = `⚠️ ${file.name} — For Excel/PDF files, upload to Google Drive and paste the link above. CSV and image files are directly supported.`;
+      }
+    } catch(e) {
+      resultDiv.textContent = "Error: " + e.message;
+    }
+  }
+
+  function sendToChat(context) {
+    switchTab("chat");
+    document.getElementById("msgInput").value = "Based on the document I just analyzed, please answer: " + context.substring(0, 200);
+    document.getElementById("msgInput").focus();
+  }
+
+  async function loadDocHistory() {
+    const div = document.getElementById("docHistory");
+    try {
+      const res = await fetch("/doc-intelligence/history");
+      const data = await res.json();
+      if (!data.length) { div.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:20px">No documents analyzed yet</div>'; return; }
+
+      div.innerHTML = data.map(d => `
+        <div class="history-item" onclick="loadHistoryItem('${(d.doc_url||"").replace(/'/g,"\\'")}')">
+          <div class="hi-title">${getDocIcon(d.doc_type)} ${d.doc_title || d.doc_url || "Document"}</div>
+          <div class="hi-meta">${d.doc_type?.toUpperCase() || "DOC"} • ${new Date(d.created_at).toLocaleString("en-IN")}</div>
+          <div class="hi-summary">${(d.ai_summary || "").substring(0, 120)}...</div>
+        </div>
+      `).join("");
+    } catch(e) {
+      div.innerHTML = '<div style="color:#e53935;font-size:12px">Error loading history</div>';
+    }
+  }
+
+  function getDocIcon(type) {
+    const icons = { pdf: "📄", google_sheet: "📊", image: "🖼️", url: "🌐", text: "📝", whatsapp: "📱" };
+    return icons[type] || "📎";
+  }
+
+  function loadHistoryItem(url) {
+    document.getElementById("docUrlInput").value = url;
+    switchTab("doc");
+    window.scrollTo(0, 0);
+  }
+
+  async function doManualSync(fromPage = false) {
+    const btn = fromPage ? document.getElementById("syncPageBtn") : document.getElementById("syncBtn");
+    const statusSpan = fromPage ? document.getElementById("syncResult") : document.getElementById("syncStatus");
+
+    btn.textContent = "⏳ Syncing...";
+    btn.disabled = true;
+    if (fromPage) { statusSpan.className = "doc-result show"; statusSpan.textContent = "Syncing..."; }
+
+    try {
+      const res = await fetch("/sync", { method: "POST" });
+      const data = await res.json();
+
+      const msg = data.ok
+        ? `✅ Synced! Products: ${data.synced?.products || 0}, Tasks: ${data.synced?.delegation_tasks || 0}`
+        : "❌ Sync failed: " + data.error;
+
+      document.getElementById("lastSyncTime").textContent = new Date().toLocaleTimeString("en-IN");
+      document.getElementById("syncStatus").textContent = "✅ Done";
+      setTimeout(() => { document.getElementById("syncStatus").textContent = ""; }, 3000);
+
+      if (fromPage) {
+        statusSpan.textContent = msg;
+        loadSyncHistory();
+      }
+    } catch(e) {
+      if (fromPage) { statusSpan.textContent = "❌ Error: " + e.message; }
+    }
+
+    btn.textContent = fromPage ? "🔄 Sync All Sheets Now" : "🔄 Sync Now";
+    btn.disabled = false;
+  }
+
+  async function loadSyncHistory() {
+    const div = document.getElementById("syncHistory");
+    try {
+      const res = await fetch("/sync/status");
+      const data = await res.json();
+      if (!data.length) { div.innerHTML = '<div style="color:#aaa;font-size:13px;text-align:center;padding:16px">No sync history yet. Click Sync Now!</div>'; return; }
+
+      const TH = "padding:7px 10px;background:#1a1a2e;color:#fff;font-size:11px;text-align:left;border:1px solid #333";
+      const TD = "padding:6px 10px;font-size:12px;border:1px solid #eee";
+      div.innerHTML = `<table style="border-collapse:collapse;width:100%">
+        <tr><th style="${TH}">Sheet</th><th style="${TH}">Rows</th><th style="${TH}">Status</th><th style="${TH}">Time</th></tr>
+        ${data.map(d => `<tr>
+          <td style="${TD}">${d.sheet_name}</td>
+          <td style="${TD};text-align:center">${d.rows_synced}</td>
+          <td style="${TD};color:${d.status==='success'?'#2e7d32':'#e53935'}">${d.status}</td>
+          <td style="${TD}">${new Date(d.synced_at).toLocaleString("en-IN")}</td>
+        </tr>`).join("")}
+      </table>`;
+    } catch(e) {
+      div.innerHTML = "Error loading sync history";
+    }
+  }
+
+  // Load sync status on startup
+  (async () => {
+    try {
+      const res = await fetch("/sync/status");
+      const data = await res.json();
+      if (data.length) {
+        document.getElementById("lastSyncTime").textContent = new Date(data[0].synced_at).toLocaleTimeString("en-IN");
+      }
+    } catch(e) {}
+  })();
+  // ── END STEP 3 SCRIPTS ────────────────────────────────────────
 </script>
 </body>
 </html>
