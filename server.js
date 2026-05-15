@@ -905,12 +905,59 @@ function convertExcelDate(val) {
   const date = new Date((num - 25569) * 86400 * 1000);
   return date.toISOString().split("T")[0];
 }
+async function syncChecklistTasks() {
+  try {
+    const csv = await fetchSheetCSV("426961603");
+    const rows = parseCSV(csv);
+    if (!rows.length) return 0;
+    await supabase.from("checklist_tasks").delete().neq("id", 0);
+    const toInsert = rows.filter(r => Object.values(r).some(v => v)).map(r => ({
+      task_name: r["task_name"] || r["taskName"] || r["Task Name"] || "",
+      assigned_to: r["assigned_to"] || r["assignedTo"] || r["Assigned To"] || "",
+      status: r["status"] || r["Status"] || "",
+      priority: r["priority"] || r["Priority"] || "",
+      remarks: r["remarks"] || r["Remarks"] || "",
+      department: r["department"] || r["Department"] || ""
+    }));
+    if (toInsert.length) await supabase.from("checklist_tasks").insert(toInsert);
+    await supabase.from("sync_log").insert({ sheet_name: "checklist_tasks", rows_synced: toInsert.length, status: "success" });
+    console.log("[SYNC] Checklist:", toInsert.length, "rows");
+    return toInsert.length;
+  } catch(e) {
+    await supabase.from("sync_log").insert({ sheet_name: "checklist_tasks", rows_synced: 0, status: "error: " + e.message });
+    return 0;
+  }
+}
 
+async function syncScores() {
+  try {
+    const csv = await fetchSheetCSV("1226212674");
+    const rows = parseCSV(csv);
+    if (!rows.length) return 0;
+    await supabase.from("scores").delete().neq("id", 0);
+    const toInsert = rows.filter(r => Object.values(r).some(v => v)).map(r => ({
+      employee_name: r["employee_name"] || r["employeeName"] || r["Employee Name"] || r["name"] || r["Name"] || "",
+      score_value: r["score_value"] || r["scoreValue"] || r["Score"] || r["score"] || "",
+      category: r["category"] || r["Category"] || "",
+      period: r["period"] || r["Period"] || "",
+      remarks: r["remarks"] || r["Remarks"] || ""
+    }));
+    if (toInsert.length) await supabase.from("scores").insert(toInsert);
+    await supabase.from("sync_log").insert({ sheet_name: "scores", rows_synced: toInsert.length, status: "success" });
+    console.log("[SYNC] Scores:", toInsert.length, "rows");
+    return toInsert.length;
+  } catch(e) {
+    await supabase.from("sync_log").insert({ sheet_name: "scores", rows_synced: 0, status: "error: " + e.message });
+    return 0;
+  }
+}
 async function syncAllSheets() {
   console.log("[SYNC] Starting full sync...");
   const results = {};
   results.products = await syncProducts();
   results.delegation_tasks = await syncDelegationTasks();
+  results.checklist_tasks = await syncChecklistTasks();
+  results.scores = await syncScores();
   console.log("[SYNC] Complete:", results);
   return results;
 }
