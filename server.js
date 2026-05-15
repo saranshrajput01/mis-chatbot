@@ -679,11 +679,10 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
     let respData = {};
     try { respData = JSON.parse(respText); } catch(e) {}
 
-    if (resp.status !== 200 || respData?.status === "error") {
-      console.warn("[WA MEDIA] mediaUrl not supported — sending as text link");
-      const linkMsg = caption + `\n\n📎 *Download Link:*\n${publicUrl}`;
-      await sendWhatsAppReply(phone, linkMsg);
-    }
+    // Always send download link — app.mis.work mediaUrl doesn't attach file directly
+    const linkMsg = caption + `\n\n📎 *PDF Download karein:*\n${publicUrl}`;
+    await sendWhatsAppReply(phone, linkMsg);
+    console.log("[WA MEDIA] Download link sent to", phone);
 
   } catch (e) {
     console.error("[WA MEDIA ERROR]", e.message);
