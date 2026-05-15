@@ -10,8 +10,6 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: Arial, sans-serif; background: #f0f2f5; height: 100vh; display: flex; flex-direction: column; }
-
-    /* HEADER */
     #header { background: #1a1a2e; color: #fff; padding: 10px 18px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
     #header .brand { display: flex; align-items: center; gap: 10px; }
     #header .logo { width: 36px; height: 36px; border-radius: 50%; background: #4a90d9; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px; }
@@ -22,11 +20,7 @@
     #header .online::before { content: "● "; }
     #clearBtn { background: none; border: 1px solid rgba(255,255,255,0.3); color: #fff; padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; }
     #clearBtn:hover { background: rgba(255,255,255,0.1); }
-
-    /* CHAT */
     #chat { flex: 1; overflow-y: auto; padding: 16px 12px; display: flex; flex-direction: column; gap: 12px; }
-
-    /* BUBBLES */
     .bubble-wrap { display: flex; align-items: flex-start; gap: 8px; }
     .bubble-wrap.user { flex-direction: row-reverse; }
     .avatar { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold; flex-shrink: 0; margin-top: 2px; }
@@ -36,20 +30,14 @@
     .bubble.bot { background: #fff; color: #222; border-top-left-radius: 2px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
     .bubble.user { background: #1a73e8; color: #fff; border-top-right-radius: 2px; }
     .bubble.html-content { max-width: 100%; padding: 10px; background: #fff; overflow-x: auto; box-shadow: 0 1px 6px rgba(0,0,0,0.12); border-radius: 10px; }
-
-    /* TABLE STYLES */
     .bubble table, .bubble.html-content table { border-collapse: collapse !important; font-size: 12px !important; font-family: Arial !important; }
     .bubble table th, .bubble.html-content table th { padding: 6px 10px !important; border: 1px solid #444 !important; background: #1a1a2e !important; color: #fff !important; font-size: 12px !important; white-space: nowrap !important; text-align: left !important; }
     .bubble table td, .bubble.html-content table td { padding: 5px 8px !important; border: 1px solid #ddd !important; font-size: 12px !important; white-space: nowrap !important; }
-    .bubble table tbody tr:nth-child(even) td, .bubble.html-content table tbody tr:nth-child(even) td { background: #f9f9f9 !important; }
-    .bubble table tbody tr:nth-child(odd) td, .bubble.html-content table tbody tr:nth-child(odd) td { background: #fff !important; }
-    .bubble table tbody tr:hover td, .bubble.html-content table tbody tr:hover td { background: #eef4ff !important; }
-
-    /* Make links in tables look nice */
-    .bubble table td a, .bubble.html-content table td a { color: #1a73e8; text-decoration: none; font-size: 11px; }
-    .bubble table td a:hover, .bubble.html-content table td a:hover { text-decoration: underline; }
-
-    /* DOWNLOAD BUTTON */
+    .bubble table tbody tr:nth-child(even) td { background: #f9f9f9 !important; }
+    .bubble table tbody tr:nth-child(odd) td { background: #fff !important; }
+    .bubble table tbody tr:hover td { background: #eef4ff !important; }
+    .bubble table td a { color: #1a73e8; text-decoration: none; font-size: 11px; }
+    .bubble table td a:hover { text-decoration: underline; }
     .download-bar { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
     .dl-btn { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.15s; }
     .dl-btn.pdf { background: #e53935; color: #fff; }
@@ -58,24 +46,16 @@
     .dl-btn.img:hover { background: #1558b0; }
     .dl-btn.csv { background: #2e7d32; color: #fff; }
     .dl-btn.csv:hover { background: #1b5e20; }
-
-    /* CHART */
     .chart-wrap { margin-top: 12px; background: #fff; border-radius: 8px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); }
-    .chart-title { font-size: 12px; font-weight: bold; color: #1a1a2e; margin-bottom: 8px; }
-
-    /* SUGGESTIONS */
+    .chart-title { font-size: 13px; font-weight: bold; color: #1a1a2e; margin-bottom: 8px; }
     .suggestions-wrap { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; }
     .suggestion-btn { padding: 5px 12px; border: 1.5px solid #1a73e8; background: #fff; color: #1a73e8; border-radius: 20px; cursor: pointer; font-size: 12px; transition: all 0.15s; }
     .suggestion-btn:hover { background: #1a73e8; color: #fff; }
-
-    /* TYPING */
     .typing { display: flex; align-items: center; gap: 4px; padding: 10px 13px; }
     .typing span { width: 7px; height: 7px; border-radius: 50%; background: #999; display: inline-block; animation: bounce 1.2s infinite; }
     .typing span:nth-child(2) { animation-delay: 0.2s; }
     .typing span:nth-child(3) { animation-delay: 0.4s; }
     @keyframes bounce { 0%, 80%, 100% { transform: translateY(0); } 40% { transform: translateY(-6px); } }
-
-    /* INPUT */
     #inputBar { background: #fff; border-top: 1px solid #ddd; padding: 10px 14px; display: flex; gap: 8px; flex-shrink: 0; }
     #msgInput { flex: 1; padding: 9px 14px; border: 1.5px solid #ddd; border-radius: 24px; font-size: 13px; outline: none; transition: border-color 0.2s; }
     #msgInput:focus { border-color: #1a73e8; }
@@ -85,7 +65,6 @@
   </style>
 </head>
 <body>
-
 <div id="header">
   <div class="brand">
     <div class="logo">M</div>
@@ -99,16 +78,13 @@
     <span class="online">Online</span>
   </div>
 </div>
-
 <div id="chat"></div>
-
 <div id="inputBar">
   <input id="msgInput" type="text" placeholder="Ask about invoices, ledger, payments, expenses..." />
   <button id="sendBtn" onclick="sendMessage()">
     <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
   </button>
 </div>
-
 <script>
   let SESSION_ID = sessionStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
@@ -119,7 +95,6 @@
   let pendingExactName = null;
   let chartCounter = 0;
 
-  // ── FIX HTML ──────────────────────────────────────────────────────────────────
   function fixHTML(html) {
     html = html.replace(/\bundefined\b/gi, "-").replace(/\bnull\b/gi, "-").replace(/\bEMPTY\b/g, "-");
     const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
@@ -129,19 +104,17 @@
     return html;
   }
 
-  // ── MAKE URLs CLICKABLE IN TABLES ─────────────────────────────────────────────
   function makeLinksClickable(container) {
     container.querySelectorAll("td").forEach(td => {
       const text = td.textContent.trim();
-      // If cell contains a URL (http/https) and no existing link
       if ((text.startsWith("http://") || text.startsWith("https://")) && !td.querySelector("a")) {
         td.innerHTML = `<a href="${text}" target="_blank" style="color:#1a73e8;text-decoration:none;font-size:11px">📄 View PDF</a>`;
       }
     });
   }
 
-  // ── AUTO CHART DETECTION ──────────────────────────────────────────────────────
-  function tryBuildChart(container) {
+  // ── CHART BUILDER — uses server hint (chartMeta) ──────────────────────────
+  function tryBuildChart(container, chartMeta) {
     const tables = container.querySelectorAll("table");
     if (!tables.length) return;
 
@@ -157,7 +130,7 @@
     const labelCol = 0;
     const valCols = [];
     headers.forEach((h, i) => {
-      if (i > 0 && /total|amount|sales|revenue|expense|price|ratio|pending|balance|salary|cost|days|profit|loss/i.test(h)) {
+      if (i > 0 && /total|amount|sales|revenue|expense|price|ratio|pending|balance|salary|cost|profit|loss/i.test(h)) {
         valCols.push(i);
       }
     });
@@ -179,8 +152,12 @@
     const labels = rows.map(r => r.cells[labelCol]?.textContent?.trim() || "");
     const parseNum = t => parseFloat((t || "").replace(/[Rs.,\s₹]/g, "")) || 0;
 
-    const isTimeSeries = labels.some(l => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec/i.test(l));
-    const isCategory = headers[labelCol] && /category|product|type/i.test(headers[labelCol]);
+    // Use server hint if available
+    const serverType = chartMeta?.chartType;
+    const serverTitle = chartMeta?.title;
+
+    // Detect time series only if ALL labels are months
+    const isTimeSeries = labels.every(l => /jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d{4}-\d{2}/i.test(l));
     const isSingle = valCols.length === 1;
     const isAging = headers.some(h => /\d+.*day|day.*\d+/i.test(h));
     const isBucket = valCols.length >= 2 && !isTimeSeries;
@@ -192,40 +169,40 @@
 
     let chartType, datasets, chartTitle;
 
-    if (isTimeSeries && valCols.length <= 4) {
+    if (serverType === "pie" || serverType === "doughnut") {
+      // Server says pie/doughnut
+      chartType = serverType;
+      chartTitle = "🥧 " + (serverTitle || "Category Breakdown");
+      datasets = [{
+        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
+        backgroundColor: COLORS.slice(0, rows.length),
+        borderWidth: 2
+      }];
+    } else if (serverType === "line" || (!serverType && isTimeSeries && isSingle)) {
+      // Server says line OR auto-detected time series
       chartType = "line";
-      chartTitle = "📈 Trend Chart";
+      chartTitle = "📈 " + (serverTitle || "Trend Chart");
       datasets = valCols.map((ci, idx) => ({
         label: headers[ci],
         data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
         borderColor: COLORS[idx],
         backgroundColor: COLORS[idx] + "22",
-        tension: 0.3,
-        fill: true,
-        pointRadius: 4,
-        borderWidth: 2
+        tension: 0.3, fill: true, pointRadius: 4, borderWidth: 2
       }));
-    } else if (isCategory && isSingle && rows.length <= 15) {
-      chartType = "pie";
-      chartTitle = "🥧 Category Breakdown";
-      datasets = [{
-        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
-        backgroundColor: COLORS.slice(0, rows.length),
-        borderWidth: 1
-      }];
-    } else if (isSingle) {
+    } else if (isTimeSeries && !isSingle) {
+      // Multiple columns + time series = grouped bar
       chartType = "bar";
-      chartTitle = "📊 Bar Chart";
-      datasets = [{
-        label: headers[valCols[0]] || "Amount",
-        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
-        backgroundColor: rows.map((_, i) => COLORS[i % COLORS.length] + "cc"),
-        borderColor: rows.map((_, i) => COLORS[i % COLORS.length]),
+      chartTitle = "📊 " + (serverTitle || "Monthly Comparison");
+      datasets = valCols.map((ci, idx) => ({
+        label: headers[ci],
+        data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
+        backgroundColor: COLORS[idx] + "cc",
+        borderColor: COLORS[idx],
         borderWidth: 1
-      }];
-    } else if (isBucket || isAging) {
+      }));
+    } else if (isAging || isBucket) {
       chartType = "bar";
-      chartTitle = "📊 Aging / Bucket Chart";
+      chartTitle = "📊 " + (serverTitle || "Comparison Chart");
       datasets = valCols.slice(0, 6).map((ci, idx) => ({
         label: headers[ci],
         data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
@@ -235,9 +212,16 @@
         stack: "stack"
       }));
     } else {
+      // Default: bar chart
       chartType = "bar";
-      chartTitle = "📊 Comparison Chart";
-      datasets = valCols.slice(0, 4).map((ci, idx) => ({
+      chartTitle = "📊 " + (serverTitle || "Bar Chart");
+      datasets = isSingle ? [{
+        label: headers[valCols[0]] || "Amount",
+        data: rows.map(r => parseNum(r.cells[valCols[0]]?.textContent)),
+        backgroundColor: rows.map((_, i) => COLORS[i % COLORS.length] + "cc"),
+        borderColor: rows.map((_, i) => COLORS[i % COLORS.length]),
+        borderWidth: 1
+      }] : valCols.slice(0, 4).map((ci, idx) => ({
         label: headers[ci],
         data: rows.map(r => parseNum(r.cells[ci]?.textContent)),
         backgroundColor: COLORS[idx] + "cc",
@@ -246,7 +230,7 @@
       }));
     }
 
-    wrap.innerHTML = `<div class="chart-title">${chartTitle}</div><canvas id="${chartId}" style="max-height:300px"></canvas>`;
+    wrap.innerHTML = `<div class="chart-title">${chartTitle}</div><canvas id="${chartId}" style="max-height:320px"></canvas>`;
     container.appendChild(wrap);
 
     setTimeout(() => {
@@ -258,7 +242,7 @@
         options: {
           responsive: true,
           plugins: {
-            legend: { position: chartType === "pie" ? "right" : "top", labels: { font: { size: 11 } } },
+            legend: { position: chartType === "pie" || chartType === "doughnut" ? "right" : "top", labels: { font: { size: 11 } } },
             tooltip: {
               callbacks: {
                 label: ctx => {
@@ -268,16 +252,15 @@
               }
             }
           },
-          scales: chartType !== "pie" ? {
-            y: { ticks: { callback: v => "Rs." + (v/1000).toFixed(0) + "K", font: { size: 10 } } },
-            x: { ticks: { font: { size: 10 } } }
+          scales: chartType !== "pie" && chartType !== "doughnut" ? {
+            y: { ticks: { callback: v => "Rs." + (v >= 100000 ? (v/100000).toFixed(1)+"L" : v >= 1000 ? (v/1000).toFixed(0)+"K" : v), font: { size: 10 } } },
+            x: { ticks: { font: { size: 10 }, maxRotation: 45 } }
           } : {}
         }
       });
     }, 100);
   }
 
-  // ── CSV EXPORT ────────────────────────────────────────────────────────────────
   function tableToCSV(table) {
     const rows = [];
     table.querySelectorAll("tr").forEach(r => {
@@ -287,7 +270,6 @@
     return rows.join("\n");
   }
 
-  // ── DOWNLOAD BUTTONS ──────────────────────────────────────────────────────────
   function addDownloadButtons(bubble) {
     const bar = document.createElement("div");
     bar.className = "download-bar";
@@ -341,12 +323,10 @@
       };
       bar.appendChild(csvBtn);
     }
-
     bubble.appendChild(bar);
   }
 
-  // ── RENDER MESSAGE ────────────────────────────────────────────────────────────
-  function addMessage(role, content, type = "text", options = []) {
+  function addMessage(role, content, type = "text", options = [], chartMeta = null) {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
     wrap.className = "bubble-wrap " + (role === "user" ? "user" : "bot");
@@ -361,11 +341,10 @@
       bubble.className = "bubble html-content";
       bubble.innerHTML = fixHTML(content);
       setTimeout(() => {
-        makeLinksClickable(bubble);   // ← Make PDF URLs clickable
-        tryBuildChart(bubble);        // ← Auto chart
-        addDownloadButtons(bubble);   // ← Download buttons
+        makeLinksClickable(bubble);
+        tryBuildChart(bubble, chartMeta);
+        addDownloadButtons(bubble);
       }, 200);
-
     } else if (type === "suggestions") {
       bubble.className = "bubble bot";
       bubble.innerHTML = `<div style="margin-bottom:6px;font-weight:500">${content}</div>`;
@@ -393,7 +372,6 @@
         sw.appendChild(btn);
       });
       bubble.appendChild(sw);
-
     } else {
       bubble.className = "bubble " + (role === "user" ? "user" : "bot");
       const hasHTML = /<table|<div|<tr|<td|<th/i.test(content);
@@ -401,7 +379,7 @@
         bubble.innerHTML = fixHTML(content);
         setTimeout(() => {
           makeLinksClickable(bubble);
-          tryBuildChart(bubble);
+          tryBuildChart(bubble, chartMeta);
           addDownloadButtons(bubble);
         }, 200);
       } else {
@@ -409,13 +387,10 @@
       }
     }
 
-    // Timestamp
     const ts = document.createElement("div");
     const now = new Date();
-    const hh = String(now.getHours()).padStart(2,"0");
-    const mm = String(now.getMinutes()).padStart(2,"0");
     ts.style.cssText = `font-size:10px;color:#aaa;margin-top:3px;text-align:${role==="user"?"right":"left"};padding:0 4px`;
-    ts.textContent = hh + ":" + mm;
+    ts.textContent = String(now.getHours()).padStart(2,"0") + ":" + String(now.getMinutes()).padStart(2,"0");
 
     const col = document.createElement("div");
     col.style.cssText = `display:flex;flex-direction:column;max-width:${type==="html"?"100%":"80%"}`;
@@ -428,7 +403,6 @@
     chat.scrollTop = chat.scrollHeight;
   }
 
-  // ── TYPING ────────────────────────────────────────────────────────────────────
   function showTyping() {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
@@ -440,7 +414,6 @@
   }
   function removeTyping() { document.getElementById("typing-indicator")?.remove(); }
 
-  // ── SEND ──────────────────────────────────────────────────────────────────────
   async function sendMessage(overrideText) {
     const input = document.getElementById("msgInput");
     const text = overrideText || input.value.trim();
@@ -459,7 +432,8 @@
       const type = data.type || "text";
       const reply = data.reply || data.message || "";
       const options = data.options || [];
-      addMessage("assistant", reply, type, options);
+      const chartMeta = data.chartMeta || null;
+      addMessage("assistant", reply, type, options, chartMeta);
       if (type !== "suggestions") history.push({ role: "assistant", content: reply });
     } catch(e) {
       removeTyping();
@@ -467,15 +441,16 @@
     }
   }
 
-  // ── CLEAR ─────────────────────────────────────────────────────────────────────
-  function clearChat() { document.getElementById("chat").innerHTML = ""; history = []; }
+  function clearChat() {
+    fetch("/history/" + SESSION_ID, { method: "DELETE" }).catch(() => {});
+    document.getElementById("chat").innerHTML = "";
+    history = [];
+  }
 
-  // ── ENTER ─────────────────────────────────────────────────────────────────────
   document.getElementById("msgInput").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
 
-  // ── LOAD HISTORY ──────────────────────────────────────────────────────────────
   (async () => {
     try {
       const res = await fetch("/history/" + SESSION_ID);

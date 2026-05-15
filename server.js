@@ -20,13 +20,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Service role client — allows AI to run any SQL
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 );
 
-// ── LIVE SCHEMA AUTO-DISCOVERY ────────────────────────────────────────────────
 let liveSchema = "";
 
 async function fetchLiveSchema() {
@@ -39,14 +37,12 @@ async function fetchLiveSchema() {
               ORDER BY table_name, ordinal_position`
     });
     if (error || !data) { console.error("[SCHEMA]", error?.message); return; }
-
     const tables = {};
     data.forEach(r => {
       if (!tables[r.table_name]) tables[r.table_name] = [];
       tables[r.table_name].push(r.column_name + " (" + r.data_type + ")");
     });
-
-    liveSchema = "=== ACTUAL DATABASE COLUMNS (auto-detected, always use these) ===\n";
+    liveSchema = "=== ACTUAL DATABASE COLUMNS ===\n";
     Object.entries(tables).forEach(([tbl, cols]) => {
       liveSchema += "TABLE public." + tbl + ":\n  " + cols.join(", ") + "\n\n";
     });
@@ -56,10 +52,7 @@ async function fetchLiveSchema() {
   }
 }
 
-// ── OPENAI ────────────────────────────────────────────────────────────────────
 async function openai(systemPrompt, messages, maxTokens = 3000) {
-  console.log("\n========== OPENAI REQUEST ==========");
-  console.log("[MESSAGES]", JSON.stringify(messages, null, 2));
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -74,13 +67,10 @@ async function openai(systemPrompt, messages, maxTokens = 3000) {
     })
   });
   const d = await response.json();
-  console.log("\n========== OPENAI RESPONSE ==========");
-  console.log(JSON.stringify(d, null, 2));
   if (!response.ok) throw new Error(d.error?.message || JSON.stringify(d));
   return d.choices?.[0]?.message?.content || "";
 }
 
-// ── HELPERS ───────────────────────────────────────────────────────────────────
 function fmtAmt(n) {
   const num = parseFloat(String(n || "").replace(/[₹,]/g, "")) || 0;
   return "Rs. " + num.toLocaleString("en-IN", { maximumFractionDigits: 0 });
@@ -101,7 +91,6 @@ function fmtMonth(ym) {
   return M[parseInt(m) - 1] + "-" + String(y).slice(2);
 }
 
-// ── LEDGER HTML ───────────────────────────────────────────────────────────────
 function buildLedgerHTML(info, txns) {
   const openBal  = parseFloat(info.opening_balance) || 0;
   const closeBal = parseFloat(info.closing_balance) || 0;
@@ -169,23 +158,13 @@ function buildLedgerHTML(info, txns) {
   </div>`;
 }
 
-// ── RUN SQL ───────────────────────────────────────────────────────────────────
 async function runSQL(sql) {
-  console.log("\n========== SQL EXECUTION ==========");
-  console.log("[SQL]", sql);
-  const start = Date.now();
+  console.log("\n[SQL]", sql);
   const { data, error } = await supabase.rpc("execute_sql", { query: sql });
-  console.log("[TIME]", Date.now() - start, "ms");
-  if (error) {
-    console.error("[SQL ERROR]", JSON.stringify(error, null, 2));
-    throw new Error(error.message);
-  }
-  console.log("[ROWS]", data?.length || 0);
-  if (data?.length) console.log("[FIRST ROW]", JSON.stringify(data[0], null, 2));
+  if (error) throw new Error(error.message);
   return data || [];
 }
 
-// ── CHAT HISTORY ──────────────────────────────────────────────────────────────
 app.get("/history/:sid", async (req, res) => {
   try {
     const { data } = await supabase.from("chat_history")
@@ -200,180 +179,80 @@ app.delete("/history/:sid", async (req, res) => {
   res.json({ ok: true });
 });
 
-// ── THE BRAIN: AI generates SQL + formats answer ──────────────────────────────
 async function processQuery(userMessage, chatHistory) {
   if (!liveSchema) await fetchLiveSchema();
 
   const SYSTEM = `You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
 Today: ${new Date().toISOString().split("T")[0]}. Financial year: Apr 2025 – Mar 2026.
 
-You have access to a PostgreSQL database. You will:
-1. Write a SQL query to get the data
-2. Format the result as HTML
-
 ${liveSchema}
 
 === ADDITIONAL SCHEMA NOTES ===
-
 TABLE: public.sales
-  id SERIAL, invoice_no TEXT, company_name TEXT, address TEXT, state TEXT,
-  gst_no TEXT, contact_person TEXT, phone TEXT, description TEXT,
-  total_price NUMERIC, category TEXT, invoice_pdf TEXT, login TEXT,
-  created_at TIMESTAMP
-
   category values: 'GOOGLE SHEET - RETAINERSHIP','GOOGLE SHEET - CUSTOM','GOOGLE SHEET - READY',
   'GOOGLE SHEET - AMC','PHP - PANSARI','PHP - OTHERS','WHATSAPP CREDIT','WA Wallet',
-  'ERP - CALL SYSTEM','ERP - READY PRODUCTS','MOBILE APP - PANSARI','MOBILE APP - OTHERS',
-  'WEB FORM','TALLY'
+  'ERP - CALL SYSTEM','ERP - READY PRODUCTS','MOBILE APP - PANSARI','MOBILE APP - OTHERS','WEB FORM','TALLY'
 
 TABLE: public.expenses
-  id SERIAL, date DATE, voucher_number TEXT, party_name TEXT, group TEXT,
-  sub_group TEXT, design_number TEXT, amount NUMERIC, type TEXT
-
-  *** IMPORTANT: For salary entries, employee name is in design_number column ***
-  *** party_name is often 'NA' for salary rows ***
+  *** For salary: employee name is in design_number column ***
   sub_group values: 'Salary','OFFICE RENT','Phone and Internet','Technical Exp','Travel Exp',
   'Utility Direc','INSURANCE','Repair & Maintenance','BRANDING EXP','COMMISSION EXP',
   'Stationery','Legal & Prof Exp','Employees Welfare','Financial Exp','Computer Maintenance',
   'Bad Debts','OFFICE EXP','Telephone Exp','Indirect Expenses','Other Expense'
 
-TABLE: public.pending
-  id SERIAL, bill_date DATE, bill_ref_no TEXT, party_name TEXT, party_group TEXT,
-  sub_group TEXT, sales_person TEXT, pending_amount TEXT, due_date DATE, overdue_days INT
-
-TABLE: public.ledger
-  id SERIAL, name TEXT, subgroup TEXT, "group" TEXT, email TEXT,
-  contact_person TEXT, mobile TEXT, opening_balance NUMERIC, closing_balance NUMERIC,
-  voucher_date DATE, voucher_particular TEXT, voucher_type TEXT, voucher_no TEXT,
-  voucher_debit NUMERIC, voucher_credit NUMERIC
-
-TABLE: public.chat_history
-  id SERIAL, session_id TEXT, role TEXT, content TEXT, created_at TIMESTAMP
-
-=== LANGUAGE UNDERSTANDING ===
-Understand Hindi, Hinglish, typos perfectly:
-- client/customer/party/company = company_name in sales, name in ledger, party_name in pending
-- salary/salari/tankhwa = sub_group = 'Salary' in expenses (employee name in design_number)
-- lgdr/ldgr/khata = ONLY use query_type:"ledger" for explicit ledger/statement/khata requests
-- dikhao/batao/show/de/dedo = show/display
-- is saal = this year = Apr 2025 - Mar 2026
-- pichle saal/last year = Apr 2024 - Mar 2025
-- rent/kiraya = sub_group = 'OFFICE RENT'
-
 === CHART DETECTION ===
-If user asks for: chart/graph/visual/trend/bar/pie/line/doughnut/comparison visual
-→ Return query_type:"chart" with chart_config.
+If user asks for chart/graph/visual/trend/bar/pie/line/doughnut/comparison visual → Return query_type:"chart"
 
-CHART TYPE RULES (pick smartly):
+CHART TYPE RULES:
 - Monthly trend over time → "line"
-- Category comparison (expense types, top clients) → "bar"
-- Category breakdown/share (expense split, sales by category) → "pie" or "doughnut"
-- Single metric over months → "bar"
-- Two things compared → "bar"
+- Category comparison / top clients → "bar"  
+- Category breakdown/share/split → "doughnut"
+- Two things compared monthly → "bar"
 
 chart_config format:
 {
   "type": "bar" | "line" | "pie" | "doughnut",
   "title": "Short descriptive title",
   "sql": "SELECT label_col, value_col FROM ... GROUP BY ... ORDER BY ...",
-  "label_col": "exact column name used for labels/x-axis",
-  "value_col": "exact column name used for values/y-axis"
+  "label_col": "exact column name for labels",
+  "value_col": "exact column name for values"
 }
 
 CHART SQL RULES:
-- Always 2 columns only: one label, one value
-- label_col: month/category/name etc
-- value_col: numeric amount/total/count
-- ORDER BY value DESC for bar/pie (show biggest first)
-- ORDER BY month ASC for line (chronological)
+- Always 2 columns: one label, one value
+- ORDER BY value DESC for bar/pie/doughnut
+- ORDER BY month ASC for line
 - LIMIT 12 for monthly, LIMIT 10 for categories
+- For month: TO_CHAR(date_col,'YYYY-MM') as month
 
-CHART EXAMPLES:
-"monthly sales chart/graph":
-{ "type":"bar", "title":"Monthly Sales (2025-26)",
-  "sql":"SELECT TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total FROM sales WHERE created_at >= '2025-04-01' GROUP BY month ORDER BY month ASC",
-  "label_col":"month", "value_col":"total" }
+=== LANGUAGE ===
+Understand Hindi, Hinglish perfectly:
+- salary/salari = sub_group ILIKE '%salary%'
+- rent/kiraya = sub_group ILIKE '%rent%'
+- ledger/khata = query_type:"ledger"
+- is saal = Apr 2025 - Mar 2026
 
-"expense category pie chart":
-{ "type":"doughnut", "title":"Expense by Category",
-  "sql":"SELECT sub_group as category, ROUND(SUM(amount)::numeric,0) as total FROM expenses GROUP BY sub_group ORDER BY total DESC LIMIT 10",
-  "label_col":"category", "value_col":"total" }
+=== NOT BUSINESS RELATED ===
+If casual (hello, hi, etc.) → {"query_type": "not_relevant"}
 
-"top clients bar chart":
-{ "type":"bar", "title":"Top 10 Clients by Sales",
-  "sql":"SELECT MAX(company_name) as name, ROUND(SUM(total_price)::numeric,0) as total FROM sales GROUP BY UPPER(company_name) ORDER BY total DESC LIMIT 10",
-  "label_col":"name", "value_col":"total" }
-
-"monthly expense trend":
-{ "type":"line", "title":"Monthly Expenses Trend",
-  "sql":"SELECT TO_CHAR(date,'YYYY-MM') as month, ROUND(SUM(amount)::numeric,0) as total FROM expenses WHERE date >= '2025-04-01' GROUP BY month ORDER BY month ASC",
-  "label_col":"month", "value_col":"total" }
-
-=== PERSON NAME SEARCH (CRITICAL) ===
-When user mentions a PERSON NAME (like "Deepankar ji", "Shammi ji", "Ankur"):
-- Search sales table using contact_person or login column
-- NEVER use query_type:"ledger" for person searches
-- Always use DISTINCT ON (gst_no) to avoid duplicate company entries
-
-=== GST / BILLING DETAILS ===
-For GST details, address, billing info → always use sales table.
-ALWAYS use DISTINCT ON (gst_no) to get one record per unique company.
-
-=== WHEN TO USE LEDGER (query_type:"ledger") ===
-ONLY when user explicitly says: ledger / lgdr / khata / statement / account statement
-
-=== WHEN MESSAGE IS NOT BUSINESS RELATED ===
-If the message is casual conversation (hello, hi, how are you, good morning, etc.)
-OR completely unrelated to business/finance/sales/expenses, return:
-{"query_type": "not_relevant"}
-
-=== YOUR RESPONSE FORMAT ===
-Return ONLY this JSON (no markdown):
+=== RESPONSE FORMAT (JSON only, no markdown) ===
 {
   "query_type": "ledger | data | chart | clarify | not_relevant",
-  "ledger_search": "company name if ledger query",
-  "sql": "SELECT ... (only for data queries, read-only SELECT)",
+  "ledger_search": "company name if ledger",
+  "sql": "SELECT ... (only for data queries)",
   "chart_config": { ... },
   "clarify_message": "question if unclear",
   "clarify_options": []
 }
 
 === SQL RULES ===
-- Only SELECT statements (never INSERT/UPDATE/DELETE)
+- Only SELECT statements
 - Always LIMIT 5000 unless aggregating
-- For pivot/monthly: use TO_CHAR(date_col,'YYYY-MM') for grouping
-- For salary pivot: GROUP BY design_number, TO_CHAR(date,'YYYY-MM')
-- For amounts: ROUND(SUM(amount)::numeric, 0)
-- Escape single quotes properly
-- Use ILIKE for text searches (case insensitive)
-- For "top N": use ORDER BY total DESC LIMIT N
-
-CRITICAL SQL RULES (follow strictly):
-1. SUBQUERY GROUPING: If using subquery, ALL non-aggregated columns in outer SELECT must be in outer GROUP BY
-2. CTE preferred over subquery: Use WITH cte AS (...) SELECT ... FROM cte WHERE ...
-3. For ratio/comparison queries use CTE
-4. NULLIF(x, 0) to avoid division by zero
-5. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
-6. COMPANY NAME DEDUPLICATION: ALWAYS use UPPER(company_name) for grouping to merge duplicates
-
-=== SQL EXAMPLES ===
-"top 5 clients by sales":
-SELECT MAX(company_name) as company_name, ROUND(SUM(total_price)::numeric,0) as total_sales
-FROM sales WHERE total_price > 0 GROUP BY UPPER(company_name)
-ORDER BY total_sales DESC LIMIT 5
-
-"monthly sales chart":
-{
-  "query_type": "chart",
-  "chart_config": {
-    "type": "bar",
-    "title": "Monthly Sales",
-    "sql": "SELECT TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total FROM sales GROUP BY month ORDER BY month",
-    "label_col": "month",
-    "value_col": "total"
-  }
-}
-`;
+- Use ILIKE for text searches
+- ROUND(SUM(amount)::numeric, 0) for amounts
+- UPPER(company_name) for grouping to merge duplicates
+- All date columns are TIMESTAMP - use TO_CHAR() for grouping
+- NON_AMOUNT columns: month, date, period, year, name, category, type, group, sub_group`;
 
   const messages = [
     ...chatHistory.slice(-10).map(h => ({ role: h.role, content: h.content })),
@@ -386,10 +265,8 @@ ORDER BY total_sales DESC LIMIT 5
   return JSON.parse(match[0]);
 }
 
-// ── BUILD PIVOT FROM RAW DATA ─────────────────────────────────────────────────
 function buildPivotFromSQL(rows) {
   if (!rows.length || !rows[0].hasOwnProperty("month")) return null;
-
   const nameCol = rows[0].hasOwnProperty("name") ? "name" :
                   rows[0].hasOwnProperty("category") ? "category" :
                   rows[0].hasOwnProperty("design_number") ? "design_number" : null;
@@ -452,7 +329,6 @@ function buildPivotFromSQL(rows) {
   </div>`;
 }
 
-// ── BUILD REGULAR TABLE FROM SQL DATA ────────────────────────────────────────
 function buildTableHTML(rows) {
   if (!rows.length) return "<p style='padding:12px;color:#666'>No data found.</p>";
 
@@ -467,7 +343,7 @@ function buildTableHTML(rows) {
     return isNaN(n) ? null : n;
   }
 
-  const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design|month|date|period|year/i
+  const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design|month|date|period|year/i;
 
   const allAmtCols = cols.filter(col => {
     if (NON_AMOUNT_COLS.test(col)) return false;
@@ -534,11 +410,6 @@ function buildTableHTML(rows) {
   </div>`;
 }
 
-
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ── GENERATE LEDGER PDF USING PDFKIT (fast, no browser needed) ───────────────
-// ══════════════════════════════════════════════════════════════════════════════
 async function generateLedgerPDF(info, txns) {
   return new Promise((resolve, reject) => {
     try {
@@ -546,14 +417,11 @@ async function generateLedgerPDF(info, txns) {
       const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
       const stream = fs.createWriteStream(tmpPath);
       doc.pipe(stream);
-
       const openBal  = parseFloat(info.opening_balance) || 0;
       const closeBal = parseFloat(info.closing_balance) || 0;
       const dates    = txns.map(r => r.voucher_date).filter(Boolean).sort();
       const firstDate = dates[0] ? fmtDate(dates[0]) : "01-Apr-25";
       const lastDate  = dates[dates.length-1] ? fmtDate(dates[dates.length-1]) : firstDate;
-
-      // ── Header ──────────────────────────────────────────────────────────────
       doc.rect(0, 0, doc.page.width, 60).fill("#1a1a2e");
       doc.fillColor("#ffffff").fontSize(14).font("Helvetica-Bold")
          .text("Mis Work India Private Limited", 30, 14, { align: "center" });
@@ -561,12 +429,9 @@ async function generateLedgerPDF(info, txns) {
          .text("7th Floor, Unit No-775, Aggarwal Millenium Tower 2, Netaji Subhash Place, New Delhi - 110034", 30, 32, { align: "center" });
       doc.fontSize(11).font("Helvetica-Bold").fillColor("#ffffff")
          .text(`Ledger: ${info.name}   |   ${firstDate} to ${lastDate}`, 30, 46, { align: "center" });
-
-      // ── Table header ────────────────────────────────────────────────────────
       const cols = { date: 30, type: 95, particular: 130, vchType: 310, vchNo: 390, debit: 470, credit: 560 };
       const colW = { date: 60, type: 30, particular: 175, vchType: 75, vchNo: 75, debit: 85, credit: 85 };
       let y = 72;
-
       doc.rect(30, y, doc.page.width - 60, 16).fill("#333355");
       doc.fillColor("#ffffff").fontSize(7.5).font("Helvetica-Bold");
       doc.text("Date",        cols.date,      y+4, { width: colW.date });
@@ -577,20 +442,16 @@ async function generateLedgerPDF(info, txns) {
       doc.text("Debit (Rs.)", cols.debit,     y+4, { width: colW.debit, align: "right" });
       doc.text("Credit (Rs.)",cols.credit,    y+4, { width: colW.credit, align: "right" });
       y += 16;
-
-      // ── Opening balance row ──────────────────────────────────────────────────
       doc.rect(30, y, doc.page.width-60, 14).fill("#f0f0f0");
       doc.fillColor("#000").fontSize(7).font("Helvetica-Bold");
-      doc.text("01-Apr-25",        cols.date,      y+3, { width: colW.date });
-      doc.text("To",               cols.type,      y+3, { width: colW.type });
-      doc.text("Opening Balance",  cols.particular, y+3, { width: colW.particular });
-      doc.text("",                 cols.vchType,   y+3, { width: colW.vchType });
-      doc.text("",                 cols.vchNo,     y+3, { width: colW.vchNo });
+      doc.text("01-Apr-25",       cols.date,      y+3, { width: colW.date });
+      doc.text("To",              cols.type,      y+3, { width: colW.type });
+      doc.text("Opening Balance", cols.particular, y+3, { width: colW.particular });
+      doc.text("",                cols.vchType,   y+3, { width: colW.vchType });
+      doc.text("",                cols.vchNo,     y+3, { width: colW.vchNo });
       doc.text(openBal > 0 ? fmtAmt(openBal) : "", cols.debit,  y+3, { width: colW.debit, align: "right" });
       doc.text(openBal < 0 ? fmtAmt(Math.abs(openBal)) : "", cols.credit, y+3, { width: colW.credit, align: "right" });
       y += 14;
-
-      // ── Transaction rows ─────────────────────────────────────────────────────
       doc.fontSize(7).font("Helvetica");
       txns.forEach((r, i) => {
         if (y > doc.page.height - 60) { doc.addPage({ layout: "landscape" }); y = 30; }
@@ -607,202 +468,52 @@ async function generateLedgerPDF(info, txns) {
         doc.text(!isDr ? fmtAmt(r.voucher_credit) : "",      cols.credit,    y+3, { width: colW.credit, align: "right" });
         y += 13;
       });
-
-      // ── Closing balance + Grand Total ─────────────────────────────────────
       doc.rect(30, y, doc.page.width-60, 14).fill("#e8e8e8");
       doc.fillColor("#000").font("Helvetica-Bold").fontSize(7.5);
       doc.text("Closing Balance", cols.date, y+3, { width: 270 });
       doc.text(closeBal > 0 ? fmtAmt(closeBal) : "",          cols.debit,  y+3, { width: colW.debit, align: "right" });
       doc.text(closeBal < 0 ? fmtAmt(Math.abs(closeBal)) : "", cols.credit, y+3, { width: colW.credit, align: "right" });
       y += 14;
-
       const totalDr = txns.reduce((s,r) => s+(parseFloat(r.voucher_debit)||0), 0);
       const totalCr = txns.reduce((s,r) => s+(parseFloat(r.voucher_credit)||0), 0);
       const grandDr = totalDr + (openBal > 0 ? openBal : 0);
       const grandCr = totalCr + (openBal < 0 ? Math.abs(openBal) : 0) + Math.abs(closeBal);
-
       doc.rect(30, y, doc.page.width-60, 14).fill("#cccccc");
       doc.text("Grand Total", cols.date, y+3, { width: 270 });
       doc.text(fmtAmt(grandDr), cols.debit,  y+3, { width: colW.debit, align: "right" });
       doc.text(fmtAmt(grandCr), cols.credit, y+3, { width: colW.credit, align: "right" });
       y += 20;
-
-      // ── Footer ───────────────────────────────────────────────────────────────
       doc.fontSize(7).font("Helvetica").fillColor("#555")
          .text(`Total Transactions: ${txns.length}   |   Net Balance: ${fmtAmt(Math.abs(closeBal))} ${closeBal >= 0 ? "(Dr)" : "(Cr)"}`, 30, y);
-
       doc.end();
-      stream.on("finish", () => { console.log("[PDF] Generated at:", tmpPath); resolve(tmpPath); });
+      stream.on("finish", () => { resolve(tmpPath); });
       stream.on("error", reject);
     } catch(e) { reject(e); }
   });
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── BUILD QUICKCHART URL — DARK THEME, ANY CHART TYPE ────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
-function buildChartURL(chartConfig, rows) {
-  const labels = rows.map(r => {
-    const val = r[chartConfig.label_col] || "";
-    // Format YYYY-MM as "Apr-25" style
-    if (/^\d{4}-\d{2}$/.test(String(val))) return fmtMonth(String(val));
-    return String(val).length > 18 ? String(val).substring(0, 18) + "…" : String(val);
-  });
-  const values = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
-
-  const DARK_COLORS = [
-    "#4cc9f0","#f72585","#7209b7","#4361ee","#06d6a0",
-    "#ffd166","#ef476f","#3a0ca3","#118ab2","#06d6a0"
-  ];
-
-  const type = chartConfig.type || "bar";
-
-  // Dataset config per chart type
-  const dataset = {
-    label: chartConfig.title || "Data",
-    data: values,
-    backgroundColor: type === "pie" || type === "doughnut"
-      ? DARK_COLORS.slice(0, values.length)
-      : type === "line"
-        ? "rgba(76,201,240,0.15)"
-        : DARK_COLORS.slice(0, values.length), // bar: each bar different color
-    borderColor: type === "line" ? "#4cc9f0"
-      : type === "pie" || type === "doughnut" ? "#1a1a2e"
-      : DARK_COLORS.slice(0, values.length),
-    borderWidth: type === "pie" || type === "doughnut" ? 2 : type === "line" ? 3 : 1,
-    fill: type === "line" ? true : undefined,
-    tension: type === "line" ? 0.4 : undefined,
-    pointBackgroundColor: type === "line" ? "#4cc9f0" : undefined,
-    pointRadius: type === "line" ? 4 : undefined,
-    borderRadius: type === "bar" ? 6 : undefined,
-  };
-
-  // Remove undefined keys
-  Object.keys(dataset).forEach(k => dataset[k] === undefined && delete dataset[k]);
-
-  const chartDef = {
-    type,
-    data: { labels, datasets: [dataset] },
-    options: {
-      plugins: {
-        title: {
-          display: true,
-          text: chartConfig.title || "Chart",
-          color: "#ffffff",
-          font: { size: 18, weight: "bold" },
-          padding: { bottom: 16 }
-        },
-        legend: {
-          display: type === "pie" || type === "doughnut",
-          labels: { color: "#cccccc", font: { size: 12 }, padding: 16 }
-        }
-      },
-      scales: (type === "pie" || type === "doughnut") ? {} : {
-        x: {
-          ticks: { color: "#aaaaaa", font: { size: 11 }, maxRotation: 45 },
-          grid: { color: "rgba(255,255,255,0.08)" }
-        },
-        y: {
-          ticks: {
-            color: "#aaaaaa",
-            font: { size: 11 },
-            callback: "function(v){ return v >= 100000 ? 'Rs.'+(v/100000).toFixed(1)+'L' : v >= 1000 ? 'Rs.'+(v/1000).toFixed(0)+'K' : 'Rs.'+v; }"
-          },
-          grid: { color: "rgba(255,255,255,0.08)" }
-        }
-      },
-      layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } }
-    }
-  };
-
-  const encoded = encodeURIComponent(JSON.stringify(chartDef));
-  // Dark background via backgroundColor param
-  return `https://quickchart.io/chart?w=900&h=500&bkg=%231a1a2e&c=${encoded}`;
-}
-
-async function downloadChartImage(chartURL) {
-  const resp = await fetch(chartURL);
-  if (!resp.ok) throw new Error("QuickChart failed: " + resp.status);
-  const buffer = Buffer.from(await resp.arrayBuffer());
-  const tmpPath = path.join(os.tmpdir(), `chart_${Date.now()}.png`);
-  fs.writeFileSync(tmpPath, buffer);
-  console.log("[CHART IMAGE] Saved at:", tmpPath);
-  return tmpPath;
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// ── NEW: UPLOAD TO SUPABASE STORAGE → GET PUBLIC URL ─────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
 async function uploadToSupabase(filePath, mediaType) {
   const fileBuffer = fs.readFileSync(filePath);
   const fileName   = path.basename(filePath);
-  const bucket     = "mis-media"; // Supabase bucket name (create this in Supabase dashboard)
+  const bucket     = "mis-media";
   const mimeType   = mediaType === "image" ? "image/png" : "application/pdf";
-
-  console.log("[SUPABASE UPLOAD] Uploading:", fileName, "to bucket:", bucket);
-
-  const { data, error } = await supabase.storage
-    .from(bucket)
-    .upload(fileName, fileBuffer, {
-      contentType: mimeType,
-      upsert: true   // overwrite if same name exists
-    });
-
-  if (error) {
-    console.error("[SUPABASE UPLOAD ERROR]", error.message);
-    throw new Error("Supabase upload failed: " + error.message);
-  }
-
-  // Get public URL
+  const { data, error } = await supabase.storage.from(bucket).upload(fileName, fileBuffer, { contentType: mimeType, upsert: true });
+  if (error) throw new Error("Supabase upload failed: " + error.message);
   const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
-  const publicUrl = urlData?.publicUrl;
-  console.log("[SUPABASE PUBLIC URL]", publicUrl);
-  return publicUrl;
+  return urlData?.publicUrl;
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── NEW: SEND WHATSAPP MEDIA VIA PUBLIC URL ────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
   const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
-
-  console.log("[WA MEDIA] phone:", phone, "| file:", filePath, "| type:", mediaType);
-
   try {
-    // Step 1 — Upload to Supabase Storage, get public URL
     const publicUrl = await uploadToSupabase(filePath, mediaType);
-
-    // Step 2 — Send via app.mis.work using filePathUrl (direct PDF attachment per API docs!)
-    const msgBody = {
-      receiverMobileNo: phone,
-      filePathUrl: [publicUrl]
-    };
-
-    console.log("[WA MEDIA SEND BODY]", JSON.stringify(msgBody));
-
-    const resp = await fetch(WA_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": WA_API_KEY
-      },
-      body: JSON.stringify(msgBody)
-    });
-
-    const respText = await resp.text();
-    console.log("[WA MEDIA SEND STATUS]", resp.status);
-    console.log("[WA MEDIA SEND RESPONSE]", respText);
-
-    // Step 3 — Cleanup temp file
+    const msgBody = { receiverMobileNo: phone, filePathUrl: [publicUrl] };
+    const resp = await fetch(WA_API_URL, { method: "POST", headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY }, body: JSON.stringify(msgBody) });
     try { fs.unlinkSync(filePath); } catch(e) {}
-
-    // Always also send download link as text backup
     const linkMsg = caption + `\n\n📎 *PDF Download:*\n${publicUrl}`;
     await sendWhatsAppReply(phone, linkMsg);
-    console.log("[WA MEDIA] Sent to", phone);
-
   } catch (e) {
     console.error("[WA MEDIA ERROR]", e.message);
     try { fs.unlinkSync(filePath); } catch(ex) {}
@@ -841,6 +552,10 @@ app.post("/chat", async (req, res) => {
       return res.json({ reply: "Could not understand. Please try rephrasing.", type: "text" });
     }
 
+    if (plan.query_type === "not_relevant") {
+      return res.json({ reply: "I can only help with MIS Work India sales & finance data.", type: "text" });
+    }
+
     if (plan.query_type === "clarify") {
       if (session_id) await supabase.from("chat_history").insert([
         { session_id, role: "user", content: message },
@@ -856,13 +571,10 @@ app.post("/chat", async (req, res) => {
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
       if (!search) return res.json({ reply: "Please tell me the company name.", type: "text" });
-
       const { data } = await supabase.from("ledger")
         .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(2000);
-
       if (!data || !data.length) return res.json({ reply: `No ledger found for "${search}".`, type: "text" });
-
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) {
         if (session_id) await supabase.from("chat_history").insert([
@@ -871,7 +583,6 @@ app.post("/chat", async (req, res) => {
         ]);
         return res.json({ reply: "Multiple companies found. Which one?", type: "suggestions", options: uniqueNames.slice(0, 8) });
       }
-
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
       const html = buildLedgerHTML(data[0], txns);
       if (session_id) await supabase.from("chat_history").insert([
@@ -880,24 +591,34 @@ app.post("/chat", async (req, res) => {
       ]);
       return res.json({ reply: html, type: "html" });
     }
-// ── CHART QUERY (web) ─────────────────────────────────────────────────────
-if (plan.query_type === "chart" && plan.chart_config) {
-  const cfg = plan.chart_config;
-  let rows;
-  try { rows = await runSQL(cfg.sql); } catch(e) {
-    return res.json({ reply: "Chart data error: " + e.message, type: "text" });
-  }
-  if (!rows || !rows.length) {
-    return res.json({ reply: "No data found for this chart.", type: "text" });
-  }
-  // Return as table — index.html auto-detects and builds Chart.js chart
-  const reply = buildTableHTML(rows);
-  if (session_id) await supabase.from("chat_history").insert([
-    { session_id, role: "user", content: message },
-    { session_id, role: "assistant", content: reply }
-  ]);
-  return res.json({ reply, type: "html" });
-}
+
+    // ── CHART QUERY (web) ─────────────────────────────────────────────────────
+    if (plan.query_type === "chart" && plan.chart_config) {
+      const cfg = plan.chart_config;
+      let rows;
+      try { rows = await runSQL(cfg.sql); } catch(e) {
+        return res.json({ reply: "Chart data error: " + e.message, type: "text" });
+      }
+      if (!rows || !rows.length) {
+        return res.json({ reply: "No data found for this chart.", type: "text" });
+      }
+      const reply = buildTableHTML(rows);
+      if (session_id) await supabase.from("chat_history").insert([
+        { session_id, role: "user", content: message },
+        { session_id, role: "assistant", content: reply }
+      ]);
+      return res.json({
+        reply,
+        type: "html",
+        chartMeta: {
+          chartType: cfg.type,
+          title: cfg.title,
+          labelCol: cfg.label_col,
+          valueCol: cfg.value_col
+        }
+      });
+    }
+
     if (!plan.sql) {
       return res.json({ reply: "Could not generate a query. Please rephrase.", type: "text" });
     }
@@ -938,224 +659,118 @@ if (plan.query_type === "chart" && plan.chart_config) {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
-  console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
+  console.log(`MIS Chatbot running at http://localhost:${PORT}`);
   await fetchLiveSchema();
-  // Pre-warm browser so first PDF request is fast
-  setTimeout(async () => {
-    try { await getBrowser(); console.log("[BROWSER] Pre-warmed on startup!"); } catch(e) {}
-  }, 2000);
 });
 
-// ── SEND WHATSAPP TEXT REPLY ──────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
   try {
     const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
-
     const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
-    console.log("[WHATSAPP SENDING TO]", phone);
-
     message = String(message).slice(0, 900);
-
-    const resp = await fetch(WA_API_URL, {
+    await fetch(WA_API_URL, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": WA_API_KEY
-      },
-      body: JSON.stringify({
-        receiverMobileNo: phone,
-        message: [message]
-      })
+      headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY },
+      body: JSON.stringify({ receiverMobileNo: phone, message: [message] })
     });
-
-    const text = await resp.text();
-    console.log("[WA STATUS]", resp.status);
-    console.log("[WA RESPONSE TEXT]", text);
-
   } catch(e) {
     console.error("[WHATSAPP REPLY ERROR]", e.message);
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
-// ══════════════════════════════════════════════════════════════════════════════
 app.post("/whatsapp", async (req, res) => {
   console.log("\n========== WHATSAPP WEBHOOK ==========");
-  console.log("[RAW BODY]", JSON.stringify(req.body, null, 2));
-
   try {
     const body = req.body;
-
-    // Outgoing messages ignore karo
     if (body.boundType === "out") return res.json({ success: true, ignored: true });
-
-    // Extract message + sender
     const message = body.value || body.message || body.query || body.text || body.Body || body.body ||
       body.data?.message || body.data?.text ||
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
       (Array.isArray(body.messages) ? body.messages[0]?.body : null) ||
       (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
-
     const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone ||
       body.data?.from || body.data?.sender || body.mobile || "918750285420";
     const actualPhone = String(rawSender).split("@")[0].replace(/[^0-9]/g, "") || "918750285420";
-
     if (!message) return res.json({ success: false, error: "No message found", received: body });
-
     const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
     console.log("[WHATSAPP QUERY]", actualQuery, "| FROM:", actualPhone);
-
     if (!liveSchema) await fetchLiveSchema();
-
     let plan;
     try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
-
-    // Not relevant — ignore silently
     if (plan.query_type === "not_relevant") {
       console.log("[WHATSAPP IGNORED]", actualQuery);
       return res.json({ success: true, ignored: true });
     }
-
-    // ── LEDGER → PDF on WhatsApp ─────────────────────────────────────────────
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
       if (!search) {
         await sendWhatsAppReply(actualPhone, "Please tell me the company name.");
         return res.json({ success: true });
       }
-
       const { data } = await supabase.from("ledger")
         .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(500);
-
       if (!data || !data.length) {
         await sendWhatsAppReply(actualPhone, `❌ No ledger found for "${search}"`);
         return res.json({ success: true });
       }
-
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) {
         const replyText = "🏢 Multiple companies found:\n" + uniqueNames.slice(0,5).map((n,i) => `${i+1}. ${n}`).join("\n") + "\n\nPlease specify exact name.";
         await sendWhatsAppReply(actualPhone, replyText);
         return res.json({ success: true });
       }
-
-      // Build ledger HTML → convert to PDF → send on WA
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
       const bal = parseFloat(data[0].closing_balance) || 0;
       const companyName = data[0].name;
-
-      // 1. First send a text summary immediately
       const summaryText = `📒 *Ledger: ${companyName}*\n\n💰 Balance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}\n📝 Transactions: ${txns.length}\n\n⏳ Generating PDF...`;
       await sendWhatsAppReply(actualPhone, summaryText);
-
-      // 2. Respond to webhook fast (WA timeout ~5s)
       res.json({ success: true, reply: summaryText });
-
-      // 3. Generate PDF and send async (after response)
       try {
         const pdfPath = await generateLedgerPDF(data[0], txns);
         const pdfCaption = `📄 *${companyName} — Ledger Statement*\nBalance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}`;
         await sendWhatsAppMedia(actualPhone, pdfPath, pdfCaption, "document");
-        console.log("[LEDGER PDF] Sent to", actualPhone);
       } catch(e) {
         console.error("[LEDGER PDF FAILED]", e.message);
         await sendWhatsAppReply(actualPhone, "⚠️ PDF generate karne mein error aaya.");
       }
       return;
     }
-
-    // ── CLARIFY ──────────────────────────────────────────────────────────────
     if (plan.query_type === "clarify") {
       await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
       return res.json({ success: true });
     }
-
-    // ── CHART → Image on WhatsApp ────────────────────────────────────────────
-    if (plan.query_type === "chart" && plan.chart_config) {
-      const cfg = plan.chart_config;
-
-      let rows;
-      try { rows = await runSQL(cfg.sql); } catch(e) {
-        await sendWhatsAppReply(actualPhone, "❌ Chart data error: " + e.message);
-        return res.json({ success: false });
-      }
-
-      if (!rows || !rows.length) {
-        await sendWhatsAppReply(actualPhone, "❌ Chart ke liye koi data nahi mila.");
-        return res.json({ success: true });
-      }
-
-      // Send ack first
-      await sendWhatsAppReply(actualPhone, `📊 *${cfg.title || "Chart"}* — generating image...`);
-      res.json({ success: true });
-
-      // Build & send chart image async
-      try {
-        const chartURL = buildChartURL(cfg, rows);
-        console.log("[CHART URL]", chartURL);
-        const imgPath = await downloadChartImage(chartURL);
-        const caption = `📊 *${cfg.title || "Chart"}*\n_${rows.length} data points_`;
-        await sendWhatsAppMedia(actualPhone, imgPath, caption, "image");
-        console.log("[CHART IMAGE] Sent to", actualPhone);
-      } catch(e) {
-        console.error("[CHART FAILED]", e.message);
-        await sendWhatsAppReply(actualPhone, "⚠️ Chart image nahi ban paya. Query dobara try karein.");
-      }
-      return;
-    }
-
-    // ── REGULAR DATA QUERY ────────────────────────────────────────────────────
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
-
     let rows;
     try { rows = await runSQL(plan.sql); }
     catch(e) { return res.json({ success: false, error: "DB error: " + e.message }); }
-
     if (!rows || !rows.length) {
       await sendWhatsAppReply(actualPhone, `❌ No data found for: "${actualQuery}"`);
       return res.json({ success: true });
     }
-
-    // Smart emoji reply format (existing logic — improved)
     const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
     const cols = Object.keys(rows[0]);
-
     const replyLines = rows.slice(0, 10).map((r, i) => {
-      const name =
-        r.company_name || r.name || r.design_number ||
-        r.party_name   || r.invoice_no || r.sub_group || "Item";
-
+      const name = r.company_name || r.name || r.design_number || r.party_name || r.invoice_no || r.sub_group || "Item";
       const amountKeys = ["total_sales","total","amount","pending_amount","total_price","salary"];
       const amount = amountKeys.map(k => r[k]).find(v => v != null && v !== "");
-
-      const usedCols = new Set(["company_name","name","design_number","party_name","invoice_no",
-        "total_sales","total","amount","pending_amount","total_price"]);
-      const extras = cols
-        .filter(c => !usedCols.has(c) && r[c] !== null && r[c] !== "" && r[c] !== "NA")
-        .slice(0, 2)
-        .map(c => `${c.replace(/_/g," ")}: ${r[c]}`);
-
+      const usedCols = new Set(["company_name","name","design_number","party_name","invoice_no","total_sales","total","amount","pending_amount","total_price"]);
+      const extras = cols.filter(c => !usedCols.has(c) && r[c] !== null && r[c] !== "" && r[c] !== "NA").slice(0, 2).map(c => `${c.replace(/_/g," ")}: ${r[c]}`);
       let line = `${emojis[i] || `${i+1}.`} *${name}*`;
       if (amount != null) line += `\n   💰 Rs. ${Number(amount).toLocaleString("en-IN")}`;
       if (extras.length) line += `\n   📌 ${extras.join(" | ")}`;
       return line;
     });
-
     const replyText = `📊 *Results:*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
-
     const wpSession = "wp_" + actualPhone;
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: actualQuery },
       { session_id: wpSession, role: "assistant", content: replyText }
     ]);
-
     res.json({ success: true, reply: replyText, count: rows.length });
     await sendWhatsAppReply(actualPhone, replyText);
-
   } catch(err) {
     console.error("[WHATSAPP ERROR]", err);
     res.status(500).json({ success: false, error: err.message });
@@ -1171,12 +786,5 @@ app.get("/whatsapp", (req, res) => {
   res.status(403).send("Forbidden");
 });
 
-process.on("unhandledRejection", (reason) => {
-  console.error("\n========== UNHANDLED REJECTION ==========");
-  console.error(reason);
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("\n========== UNCAUGHT EXCEPTION ==========");
-  console.error(err);
-});
+process.on("unhandledRejection", (reason) => { console.error("[UNHANDLED REJECTION]", reason); });
+process.on("uncaughtException", (err) => { console.error("[UNCAUGHT EXCEPTION]", err); });
