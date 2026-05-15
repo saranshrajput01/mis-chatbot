@@ -880,7 +880,31 @@ app.post("/chat", async (req, res) => {
       ]);
       return res.json({ reply: html, type: "html" });
     }
-
+// ── CHART QUERY (web) ─────────────────────────────────────────────────────
+if (plan.query_type === "chart" && plan.chart_config) {
+  const cfg = plan.chart_config;
+  let rows;
+  try { rows = await runSQL(cfg.sql); } catch(e) {
+    return res.json({ reply: "Chart data error: " + e.message, type: "text" });
+  }
+  if (!rows || !rows.length) {
+    return res.json({ reply: "No data found for this chart.", type: "text" });
+  }
+  const chartURL = buildChartURL(cfg, rows);
+  const total = rows.reduce((s,r) => s + parseFloat(r[cfg.value_col] || 0), 0);
+  const reply = `<div>
+    <div style="font-weight:600;font-size:14px;margin-bottom:8px">${cfg.title}</div>
+    <img src="${chartURL}" style="width:100%;border-radius:12px;max-width:860px" />
+    <div style="font-size:12px;color:#666;margin-top:6px">
+      ${rows.length} data points &nbsp;|&nbsp; Total: <b>Rs. ${Math.round(total).toLocaleString("en-IN")}</b>
+    </div>
+  </div>`;
+  if (session_id) await supabase.from("chat_history").insert([
+    { session_id, role: "user", content: message },
+    { session_id, role: "assistant", content: reply }
+  ]);
+  return res.json({ reply, type: "html" });
+}
     if (!plan.sql) {
       return res.json({ reply: "Could not generate a query. Please rephrase.", type: "text" });
     }
