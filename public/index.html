@@ -962,7 +962,7 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
       const res = await fetch("/sync/status");
       const data = await res.json();
       if (data.length) {
-        document.getElementById("lastSyncTime").textContent = new Date(data[0].synced_at).toLocaleTimeString("en-IN");
+        new Date(data[0].synced_at).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata" })
       }
     } catch(e) {}
   })();
