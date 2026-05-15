@@ -769,6 +769,25 @@ app.post("/whatsapp", async (req, res) => {
       await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
       return res.json({ success: true });
     }
+    if (plan.query_type === "chart" && plan.chart_config) {
+      let rows;
+      try { rows = await runSQL(plan.chart_config.sql); }
+      catch(e) { await sendWhatsAppReply(actualPhone, "❌ Error: " + e.message); return res.json({ success: true }); }
+      if (!rows || !rows.length) {
+        await sendWhatsAppReply(actualPhone, "❌ No data found.");
+        return res.json({ success: true });
+      }
+      const cols = Object.keys(rows[0]);
+      const replyLines = rows.slice(0, 10).map((r, i) => {
+        const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
+        const label = r[cols[0]] || "Item";
+        const value = r[cols[1]] || 0;
+        return `${emojis[i]} *${label}*\n   💰 Rs. ${Number(value).toLocaleString("en-IN")}`;
+      });
+      const replyText = `📊 *${plan.chart_config.title}*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
+      await sendWhatsAppReply(actualPhone, replyText);
+      return res.json({ success: true, reply: replyText });
+    }
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
     let rows;
     try { rows = await runSQL(plan.sql); }
