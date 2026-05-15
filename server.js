@@ -519,6 +519,44 @@ async function generateLedgerPDF(info, txns) {
   });
 }
 
+function buildChartURL(chartConfig, rows) {
+  const labels = rows.map(r => String(r[chartConfig.label_col] || ""));
+  const values = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
+  const COLORS = ["#4361ee","#3a0ca3","#7209b7","#f72585","#4cc9f0","#06d6a0","#ffd166","#ef476f","#118ab2","#073b4c"];
+  const chartDef = {
+    type: chartConfig.type || "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: chartConfig.title || "Data",
+        data: values,
+        backgroundColor: chartConfig.type === "pie" ? COLORS.slice(0, values.length) : "#4361ee",
+        borderColor: chartConfig.type === "line" ? "#4361ee" : undefined,
+        borderWidth: chartConfig.type === "line" ? 2 : undefined,
+        fill: chartConfig.type === "line" ? false : undefined,
+        tension: chartConfig.type === "line" ? 0.4 : undefined
+      }]
+    },
+    options: {
+      plugins: {
+        title: { display: true, text: chartConfig.title || "Chart", font: { size: 16 } },
+        legend: { display: chartConfig.type === "pie" }
+      }
+    }
+  };
+  const encoded = encodeURIComponent(JSON.stringify(chartDef));
+  return `https://quickchart.io/chart?w=800&h=450&c=${encoded}`;
+}
+
+async function downloadChartImage(chartURL) {
+  const resp = await fetch(chartURL);
+  if (!resp.ok) throw new Error("QuickChart failed: " + resp.status);
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  const tmpPath = path.join(os.tmpdir(), `chart_${Date.now()}.png`);
+  fs.writeFileSync(tmpPath, buffer);
+  return tmpPath;
+}
+
 async function uploadToSupabase(filePath, mediaType) {
   const fileBuffer = fs.readFileSync(filePath);
   const fileName   = path.basename(filePath);
@@ -770,37 +808,53 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: true });
     }
     if (plan.query_type === "chart" && plan.chart_config) {
+      const cfg = plan.chart_config;
       let rows;
-      try { rows = await runSQL(plan.chart_config.sql); }
-      catch(e) { await sendWhatsAppReply(actualPhone, "❌ Error: " + e.message); return res.json({ success: true }); }
+      try { rows = await runSQL(cfg.sql); } catch(e) {
+        await sendWhatsAppReply(actualPhone, "❌ Chart data error: " + e.message);
+        return res.json({ success: false });
+      }
       if (!rows || !rows.length) {
-        await sendWhatsAppReply(actualPhone, "❌ No data found.");
+        await sendWhatsAppReply(actualPhone, "❌ Chart ke liye koi data nahi mila.");
         return res.json({ success: true });
       }
-    
-      // Pehle chart image try karo (purana code)
-      const cfg = plan.chart_config;
-      const replyHTML = buildTableHTML(rows);
+      await sendWhatsAppReply(actualPhone, `📊 *${cfg.title || "Chart"}* — generating image...`);
       res.json({ success: true });
-    
       try {
-        const { createCanvas } = require("canvas");
-        // Chart image banana skip karo — seedha text bhejo
-        throw new Error("use text");
+        const chartURL = buildChartURL(cfg, rows);
+        const imgPath = await downloadChartImage(chartURL);
+        const caption = `📊 *${cfg.title || "Chart"}*\n_${rows.length} data points_`;
+        await sendWhatsAppMedia(actualPhone, imgPath, caption, "image");
       } catch(e) {
-        // Text format mein bhejo
-        const cols = Object.keys(rows[0]);
-        const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
-        const replyLines = rows.slice(0, 10).map((r, i) => {
-          const label = r[cols[0]] || "Item";
-          const value = r[cols[1]] || 0;
-          return `${emojis[i]} *${label}*\n   💰 Rs. ${Number(value).toLocaleString("en-IN")}`;
-        });
-        const replyText = `📊 *${cfg.title}*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
-        await sendWhatsAppReply(actualPhone, replyText);
+        console.error("[CHART FAILED]", e.message);
+        await sendWhatsAppReply(actualPhone, "⚠️ Chart image nahi ban paya.");
       }
       return;
     }
+
+  // Pehle chart image try karo (purana code)
+  const cfg = plan.chart_config;
+  const replyHTML = buildTableHTML(rows);
+  res.json({ success: true });
+
+  try {
+    const { createCanvas } = require("canvas");
+    // Chart image banana skip karo — seedha text bhejo
+    throw new Error("use text");
+  } catch(e) {
+    // Text format mein bhejo
+    const cols = Object.keys(rows[0]);
+    const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
+    const replyLines = rows.slice(0, 10).map((r, i) => {
+      const label = r[cols[0]] || "Item";
+      const value = r[cols[1]] || 0;
+      return `${emojis[i]} *${label}*\n   💰 Rs. ${Number(value).toLocaleString("en-IN")}`;
+    });
+    const replyText = `📊 *${cfg.title}*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
+    await sendWhatsAppReply(actualPhone, replyText);
+  }
+  return;
+}
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
     let rows;
     try { rows = await runSQL(plan.sql); }
