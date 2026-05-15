@@ -260,17 +260,54 @@ Understand Hindi, Hinglish, typos perfectly:
 - pichle saal/last year = Apr 2024 - Mar 2025
 - rent/kiraya = sub_group = 'OFFICE RENT'
 
-=== CHART DETECTION (NEW) ===
-If user asks for: chart/graph/visual/trend/monthly sales chart/expense chart/bar chart/pie chart
-→ Return query_type:"chart" with chart_config JSON describing what to plot.
+=== CHART DETECTION ===
+If user asks for: chart/graph/visual/trend/bar/pie/line/doughnut/comparison visual
+→ Return query_type:"chart" with chart_config.
+
+CHART TYPE RULES (pick smartly):
+- Monthly trend over time → "line"
+- Category comparison (expense types, top clients) → "bar"
+- Category breakdown/share (expense split, sales by category) → "pie" or "doughnut"
+- Single metric over months → "bar"
+- Two things compared → "bar"
+
 chart_config format:
 {
-  "type": "bar" | "line" | "pie",
-  "title": "Chart Title",
-  "sql": "SELECT label_col, value_col FROM ... GROUP BY ...",
-  "label_col": "column name for x-axis/labels",
-  "value_col": "column name for values"
+  "type": "bar" | "line" | "pie" | "doughnut",
+  "title": "Short descriptive title",
+  "sql": "SELECT label_col, value_col FROM ... GROUP BY ... ORDER BY ...",
+  "label_col": "exact column name used for labels/x-axis",
+  "value_col": "exact column name used for values/y-axis"
 }
+
+CHART SQL RULES:
+- Always 2 columns only: one label, one value
+- label_col: month/category/name etc
+- value_col: numeric amount/total/count
+- ORDER BY value DESC for bar/pie (show biggest first)
+- ORDER BY month ASC for line (chronological)
+- LIMIT 12 for monthly, LIMIT 10 for categories
+
+CHART EXAMPLES:
+"monthly sales chart/graph":
+{ "type":"bar", "title":"Monthly Sales (2025-26)",
+  "sql":"SELECT TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total FROM sales WHERE created_at >= '2025-04-01' GROUP BY month ORDER BY month ASC",
+  "label_col":"month", "value_col":"total" }
+
+"expense category pie chart":
+{ "type":"doughnut", "title":"Expense by Category",
+  "sql":"SELECT sub_group as category, ROUND(SUM(amount)::numeric,0) as total FROM expenses GROUP BY sub_group ORDER BY total DESC LIMIT 10",
+  "label_col":"category", "value_col":"total" }
+
+"top clients bar chart":
+{ "type":"bar", "title":"Top 10 Clients by Sales",
+  "sql":"SELECT MAX(company_name) as name, ROUND(SUM(total_price)::numeric,0) as total FROM sales GROUP BY UPPER(company_name) ORDER BY total DESC LIMIT 10",
+  "label_col":"name", "value_col":"total" }
+
+"monthly expense trend":
+{ "type":"line", "title":"Monthly Expenses Trend",
+  "sql":"SELECT TO_CHAR(date,'YYYY-MM') as month, ROUND(SUM(amount)::numeric,0) as total FROM expenses WHERE date >= '2025-04-01' GROUP BY month ORDER BY month ASC",
+  "label_col":"month", "value_col":"total" }
 
 === PERSON NAME SEARCH (CRITICAL) ===
 When user mentions a PERSON NAME (like "Deepankar ji", "Shammi ji", "Ankur"):
@@ -602,47 +639,85 @@ async function generateLedgerPDF(info, txns) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── NEW: BUILD QUICKCHART URL + DOWNLOAD IMAGE ───────────────────────────────
+// ── BUILD QUICKCHART URL — DARK THEME, ANY CHART TYPE ────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 function buildChartURL(chartConfig, rows) {
-  const labels = rows.map(r => String(r[chartConfig.label_col] || ""));
+  const labels = rows.map(r => {
+    const val = r[chartConfig.label_col] || "";
+    // Format YYYY-MM as "Apr-25" style
+    if (/^\d{4}-\d{2}$/.test(String(val))) return fmtMonth(String(val));
+    return String(val).length > 18 ? String(val).substring(0, 18) + "…" : String(val);
+  });
   const values = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
 
-  // Pick colours
-  const COLORS = [
-    "#4361ee","#3a0ca3","#7209b7","#f72585","#4cc9f0",
-    "#06d6a0","#ffd166","#ef476f","#118ab2","#073b4c"
+  const DARK_COLORS = [
+    "#4cc9f0","#f72585","#7209b7","#4361ee","#06d6a0",
+    "#ffd166","#ef476f","#3a0ca3","#118ab2","#06d6a0"
   ];
 
+  const type = chartConfig.type || "bar";
+
+  // Dataset config per chart type
+  const dataset = {
+    label: chartConfig.title || "Data",
+    data: values,
+    backgroundColor: type === "pie" || type === "doughnut"
+      ? DARK_COLORS.slice(0, values.length)
+      : type === "line"
+        ? "rgba(76,201,240,0.15)"
+        : DARK_COLORS.slice(0, values.length), // bar: each bar different color
+    borderColor: type === "line" ? "#4cc9f0"
+      : type === "pie" || type === "doughnut" ? "#1a1a2e"
+      : DARK_COLORS.slice(0, values.length),
+    borderWidth: type === "pie" || type === "doughnut" ? 2 : type === "line" ? 3 : 1,
+    fill: type === "line" ? true : undefined,
+    tension: type === "line" ? 0.4 : undefined,
+    pointBackgroundColor: type === "line" ? "#4cc9f0" : undefined,
+    pointRadius: type === "line" ? 4 : undefined,
+    borderRadius: type === "bar" ? 6 : undefined,
+  };
+
+  // Remove undefined keys
+  Object.keys(dataset).forEach(k => dataset[k] === undefined && delete dataset[k]);
+
   const chartDef = {
-    type: chartConfig.type || "bar",
-    data: {
-      labels,
-      datasets: [{
-        label: chartConfig.title || "Data",
-        data: values,
-        backgroundColor: chartConfig.type === "pie"
-          ? COLORS.slice(0, values.length)
-          : "#4361ee",
-        borderColor: chartConfig.type === "line" ? "#4361ee" : undefined,
-        borderWidth: chartConfig.type === "line" ? 2 : undefined,
-        fill: chartConfig.type === "line" ? false : undefined,
-        tension: chartConfig.type === "line" ? 0.4 : undefined
-      }]
-    },
+    type,
+    data: { labels, datasets: [dataset] },
     options: {
       plugins: {
-        title: { display: true, text: chartConfig.title || "Chart", font: { size: 16 } },
-        legend: { display: chartConfig.type === "pie" }
+        title: {
+          display: true,
+          text: chartConfig.title || "Chart",
+          color: "#ffffff",
+          font: { size: 18, weight: "bold" },
+          padding: { bottom: 16 }
+        },
+        legend: {
+          display: type === "pie" || type === "doughnut",
+          labels: { color: "#cccccc", font: { size: 12 }, padding: 16 }
+        }
       },
-      scales: chartConfig.type !== "pie" ? {
-        y: { ticks: { callback: "function(v){return 'Rs.'+v.toLocaleString('en-IN')}" } }
-      } : undefined
+      scales: (type === "pie" || type === "doughnut") ? {} : {
+        x: {
+          ticks: { color: "#aaaaaa", font: { size: 11 }, maxRotation: 45 },
+          grid: { color: "rgba(255,255,255,0.08)" }
+        },
+        y: {
+          ticks: {
+            color: "#aaaaaa",
+            font: { size: 11 },
+            callback: "function(v){ return v >= 100000 ? 'Rs.'+(v/100000).toFixed(1)+'L' : v >= 1000 ? 'Rs.'+(v/1000).toFixed(0)+'K' : 'Rs.'+v; }"
+          },
+          grid: { color: "rgba(255,255,255,0.08)" }
+        }
+      },
+      layout: { padding: { top: 10, bottom: 10, left: 10, right: 10 } }
     }
   };
 
   const encoded = encodeURIComponent(JSON.stringify(chartDef));
-  return `https://quickchart.io/chart?w=800&h=450&c=${encoded}`;
+  // Dark background via backgroundColor param
+  return `https://quickchart.io/chart?w=900&h=500&bkg=%231a1a2e&c=${encoded}`;
 }
 
 async function downloadChartImage(chartURL) {
