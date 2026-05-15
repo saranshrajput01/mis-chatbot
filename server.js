@@ -2,7 +2,7 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
-const puppeteer = require("puppeteer");
+const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
@@ -497,58 +497,108 @@ function buildTableHTML(rows) {
   </div>`;
 }
 
+
+
 // ══════════════════════════════════════════════════════════════════════════════
-// ── NEW: GENERATE LEDGER PDF USING PUPPETEER ─────────────────────────────────
+// ── GENERATE LEDGER PDF USING PDFKIT (fast, no browser needed) ───────────────
 // ══════════════════════════════════════════════════════════════════════════════
-async function generateLedgerPDF(htmlContent, companyName) {
-  let browser;
-  try {
-    browser = await puppeteer.launch({
-      headless: "new",
-      args: [
-        "--no-sandbox",
-        "--disable-setuid-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu"
-      ]
-    });
+async function generateLedgerPDF(info, txns) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tmpPath = path.join(os.tmpdir(), `ledger_${Date.now()}.pdf`);
+      const doc = new PDFDocument({ margin: 30, size: "A4", layout: "landscape" });
+      const stream = fs.createWriteStream(tmpPath);
+      doc.pipe(stream);
 
-    const page = await browser.newPage();
+      const openBal  = parseFloat(info.opening_balance) || 0;
+      const closeBal = parseFloat(info.closing_balance) || 0;
+      const dates    = txns.map(r => r.voucher_date).filter(Boolean).sort();
+      const firstDate = dates[0] ? fmtDate(dates[0]) : "01-Apr-25";
+      const lastDate  = dates[dates.length-1] ? fmtDate(dates[dates.length-1]) : firstDate;
 
-    // Wrap ledger HTML in a proper full-page HTML document
-    const fullHTML = `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    body { margin: 0; padding: 16px; font-family: Arial, sans-serif; }
-    * { box-sizing: border-box; }
-  </style>
-</head>
-<body>${htmlContent}</body>
-</html>`;
+      // ── Header ──────────────────────────────────────────────────────────────
+      doc.rect(0, 0, doc.page.width, 60).fill("#1a1a2e");
+      doc.fillColor("#ffffff").fontSize(14).font("Helvetica-Bold")
+         .text("Mis Work India Private Limited", 30, 14, { align: "center" });
+      doc.fontSize(8).font("Helvetica")
+         .text("7th Floor, Unit No-775, Aggarwal Millenium Tower 2, Netaji Subhash Place, New Delhi - 110034", 30, 32, { align: "center" });
+      doc.fontSize(11).font("Helvetica-Bold").fillColor("#ffffff")
+         .text(`Ledger: ${info.name}   |   ${firstDate} to ${lastDate}`, 30, 46, { align: "center" });
 
-    await page.setContent(fullHTML, { waitUntil: "networkidle0" });
+      // ── Table header ────────────────────────────────────────────────────────
+      const cols = { date: 30, type: 95, particular: 130, vchType: 310, vchNo: 390, debit: 470, credit: 560 };
+      const colW = { date: 60, type: 30, particular: 175, vchType: 75, vchNo: 75, debit: 85, credit: 85 };
+      let y = 72;
 
-    // Save PDF to a temp file
-    const tmpPath = path.join(os.tmpdir(), `ledger_${Date.now()}.pdf`);
-    await page.pdf({
-      path: tmpPath,
-      format: "A4",
-      landscape: true,
-      printBackground: true,
-      margin: { top: "12px", bottom: "12px", left: "12px", right: "12px" }
-    });
+      doc.rect(30, y, doc.page.width - 60, 16).fill("#333355");
+      doc.fillColor("#ffffff").fontSize(7.5).font("Helvetica-Bold");
+      doc.text("Date",        cols.date,      y+4, { width: colW.date });
+      doc.text("",            cols.type,      y+4, { width: colW.type });
+      doc.text("Particulars", cols.particular, y+4, { width: colW.particular });
+      doc.text("Vch Type",    cols.vchType,   y+4, { width: colW.vchType });
+      doc.text("Vch No.",     cols.vchNo,     y+4, { width: colW.vchNo });
+      doc.text("Debit (Rs.)", cols.debit,     y+4, { width: colW.debit, align: "right" });
+      doc.text("Credit (Rs.)",cols.credit,    y+4, { width: colW.credit, align: "right" });
+      y += 16;
 
-    await browser.close();
-    console.log("[PDF] Generated at:", tmpPath);
-    return tmpPath;
+      // ── Opening balance row ──────────────────────────────────────────────────
+      doc.rect(30, y, doc.page.width-60, 14).fill("#f0f0f0");
+      doc.fillColor("#000").fontSize(7).font("Helvetica-Bold");
+      doc.text("01-Apr-25",        cols.date,      y+3, { width: colW.date });
+      doc.text("To",               cols.type,      y+3, { width: colW.type });
+      doc.text("Opening Balance",  cols.particular, y+3, { width: colW.particular });
+      doc.text("",                 cols.vchType,   y+3, { width: colW.vchType });
+      doc.text("",                 cols.vchNo,     y+3, { width: colW.vchNo });
+      doc.text(openBal > 0 ? fmtAmt(openBal) : "", cols.debit,  y+3, { width: colW.debit, align: "right" });
+      doc.text(openBal < 0 ? fmtAmt(Math.abs(openBal)) : "", cols.credit, y+3, { width: colW.credit, align: "right" });
+      y += 14;
 
-  } catch (e) {
-    if (browser) await browser.close();
-    console.error("[PDF ERROR]", e.message);
-    throw e;
-  }
+      // ── Transaction rows ─────────────────────────────────────────────────────
+      doc.fontSize(7).font("Helvetica");
+      txns.forEach((r, i) => {
+        if (y > doc.page.height - 60) { doc.addPage({ layout: "landscape" }); y = 30; }
+        const isDr = (parseFloat(r.voucher_debit) || 0) > 0;
+        if (i % 2 === 0) doc.rect(30, y, doc.page.width-60, 13).fill("#f9f9f9");
+        else doc.rect(30, y, doc.page.width-60, 13).fill("#ffffff");
+        doc.fillColor("#000");
+        doc.text(fmtDate(r.voucher_date),      cols.date,      y+3, { width: colW.date });
+        doc.text(isDr ? "To" : "By",           cols.type,      y+3, { width: colW.type });
+        doc.text((r.voucher_particular||"").substring(0,40), cols.particular, y+3, { width: colW.particular });
+        doc.text((r.voucher_type||"").substring(0,18),       cols.vchType,   y+3, { width: colW.vchType });
+        doc.text((r.voucher_no||"").substring(0,15),         cols.vchNo,     y+3, { width: colW.vchNo });
+        doc.text(isDr ? fmtAmt(r.voucher_debit) : "",        cols.debit,     y+3, { width: colW.debit, align: "right" });
+        doc.text(!isDr ? fmtAmt(r.voucher_credit) : "",      cols.credit,    y+3, { width: colW.credit, align: "right" });
+        y += 13;
+      });
+
+      // ── Closing balance + Grand Total ─────────────────────────────────────
+      doc.rect(30, y, doc.page.width-60, 14).fill("#e8e8e8");
+      doc.fillColor("#000").font("Helvetica-Bold").fontSize(7.5);
+      doc.text("Closing Balance", cols.date, y+3, { width: 270 });
+      doc.text(closeBal > 0 ? fmtAmt(closeBal) : "",          cols.debit,  y+3, { width: colW.debit, align: "right" });
+      doc.text(closeBal < 0 ? fmtAmt(Math.abs(closeBal)) : "", cols.credit, y+3, { width: colW.credit, align: "right" });
+      y += 14;
+
+      const totalDr = txns.reduce((s,r) => s+(parseFloat(r.voucher_debit)||0), 0);
+      const totalCr = txns.reduce((s,r) => s+(parseFloat(r.voucher_credit)||0), 0);
+      const grandDr = totalDr + (openBal > 0 ? openBal : 0);
+      const grandCr = totalCr + (openBal < 0 ? Math.abs(openBal) : 0) + Math.abs(closeBal);
+
+      doc.rect(30, y, doc.page.width-60, 14).fill("#cccccc");
+      doc.text("Grand Total", cols.date, y+3, { width: 270 });
+      doc.text(fmtAmt(grandDr), cols.debit,  y+3, { width: colW.debit, align: "right" });
+      doc.text(fmtAmt(grandCr), cols.credit, y+3, { width: colW.credit, align: "right" });
+      y += 20;
+
+      // ── Footer ───────────────────────────────────────────────────────────────
+      doc.fontSize(7).font("Helvetica").fillColor("#555")
+         .text(`Total Transactions: ${txns.length}   |   Net Balance: ${fmtAmt(Math.abs(closeBal))} ${closeBal >= 0 ? "(Dr)" : "(Cr)"}`, 30, y);
+
+      doc.end();
+      stream.on("finish", () => { console.log("[PDF] Generated at:", tmpPath); resolve(tmpPath); });
+      stream.on("error", reject);
+    } catch(e) { reject(e); }
+  });
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -649,12 +699,10 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
     // Step 1 — Upload to Supabase Storage, get public URL
     const publicUrl = await uploadToSupabase(filePath, mediaType);
 
-    // Step 2 — Send via app.mis.work with mediaUrl
+    // Step 2 — Send via app.mis.work using filePathUrl (direct PDF attachment per API docs!)
     const msgBody = {
       receiverMobileNo: phone,
-      message: [caption],
-      mediaType,       // "document" or "image"
-      mediaUrl: publicUrl
+      filePathUrl: [publicUrl]
     };
 
     console.log("[WA MEDIA SEND BODY]", JSON.stringify(msgBody));
@@ -675,14 +723,10 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
     // Step 3 — Cleanup temp file
     try { fs.unlinkSync(filePath); } catch(e) {}
 
-    // Step 4 — If app.mis.work mediaUrl not supported, send link as text fallback
-    let respData = {};
-    try { respData = JSON.parse(respText); } catch(e) {}
-
-    // Always send download link — app.mis.work mediaUrl doesn't attach file directly
-    const linkMsg = caption + `\n\n📎 *PDF Download karein:*\n${publicUrl}`;
+    // Always also send download link as text backup
+    const linkMsg = caption + `\n\n📎 *PDF Download:*\n${publicUrl}`;
     await sendWhatsAppReply(phone, linkMsg);
-    console.log("[WA MEDIA] Download link sent to", phone);
+    console.log("[WA MEDIA] Sent to", phone);
 
   } catch (e) {
     console.error("[WA MEDIA ERROR]", e.message);
@@ -804,6 +848,10 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`MIS Chatbot (AI-SQL) running at http://localhost:${PORT}`);
   await fetchLiveSchema();
+  // Pre-warm browser so first PDF request is fast
+  setTimeout(async () => {
+    try { await getBrowser(); console.log("[BROWSER] Pre-warmed on startup!"); } catch(e) {}
+  }, 2000);
 });
 
 // ── SEND WHATSAPP TEXT REPLY ──────────────────────────────────────────────────
@@ -917,14 +965,13 @@ app.post("/whatsapp", async (req, res) => {
 
       // 3. Generate PDF and send async (after response)
       try {
-        const ledgerHTML = buildLedgerHTML(data[0], txns);
-        const pdfPath = await generateLedgerPDF(ledgerHTML, companyName);
+        const pdfPath = await generateLedgerPDF(data[0], txns);
         const pdfCaption = `📄 *${companyName} — Ledger Statement*\nBalance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}`;
         await sendWhatsAppMedia(actualPhone, pdfPath, pdfCaption, "document");
         console.log("[LEDGER PDF] Sent to", actualPhone);
       } catch(e) {
         console.error("[LEDGER PDF FAILED]", e.message);
-        await sendWhatsAppReply(actualPhone, "⚠️ PDF generate karne mein error aaya. Text summary upar bhej di hai.");
+        await sendWhatsAppReply(actualPhone, "⚠️ PDF generate karne mein error aaya.");
       }
       return;
     }
