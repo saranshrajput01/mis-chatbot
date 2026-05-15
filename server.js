@@ -2,6 +2,10 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
+const puppeteer = require("puppeteer");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
 const app = express();
 app.use(cors());
@@ -13,7 +17,6 @@ app.use((req, res, next) => {
   console.log("[METHOD]", req.method);
   console.log("[URL]", req.originalUrl);
   console.log("[BODY]", JSON.stringify(req.body, null, 2));
-
   next();
 });
 
@@ -168,29 +171,17 @@ function buildLedgerHTML(info, txns) {
 
 // ── RUN SQL ───────────────────────────────────────────────────────────────────
 async function runSQL(sql) {
-
   console.log("\n========== SQL EXECUTION ==========");
   console.log("[SQL]", sql);
-
   const start = Date.now();
-
-  const { data, error } = await supabase.rpc("execute_sql", {
-    query: sql
-  });
-
+  const { data, error } = await supabase.rpc("execute_sql", { query: sql });
   console.log("[TIME]", Date.now() - start, "ms");
-
   if (error) {
     console.error("[SQL ERROR]", JSON.stringify(error, null, 2));
     throw new Error(error.message);
   }
-
   console.log("[ROWS]", data?.length || 0);
-
-  if (data?.length) {
-    console.log("[FIRST ROW]", JSON.stringify(data[0], null, 2));
-  }
-
+  if (data?.length) console.log("[FIRST ROW]", JSON.stringify(data[0], null, 2));
   return data || [];
 }
 
@@ -211,7 +202,6 @@ app.delete("/history/:sid", async (req, res) => {
 
 // ── THE BRAIN: AI generates SQL + formats answer ──────────────────────────────
 async function processQuery(userMessage, chatHistory) {
-
   if (!liveSchema) await fetchLiveSchema();
 
   const SYSTEM = `You are a smart Sales & Finance Assistant for "Mis Work India Private Limited".
@@ -270,42 +260,43 @@ Understand Hindi, Hinglish, typos perfectly:
 - pichle saal/last year = Apr 2024 - Mar 2025
 - rent/kiraya = sub_group = 'OFFICE RENT'
 
+=== CHART DETECTION (NEW) ===
+If user asks for: chart/graph/visual/trend/monthly sales chart/expense chart/bar chart/pie chart
+→ Return query_type:"chart" with chart_config JSON describing what to plot.
+chart_config format:
+{
+  "type": "bar" | "line" | "pie",
+  "title": "Chart Title",
+  "sql": "SELECT label_col, value_col FROM ... GROUP BY ...",
+  "label_col": "column name for x-axis/labels",
+  "value_col": "column name for values"
+}
+
 === PERSON NAME SEARCH (CRITICAL) ===
 When user mentions a PERSON NAME (like "Deepankar ji", "Shammi ji", "Ankur"):
 - Search sales table using contact_person or login column
 - NEVER use query_type:"ledger" for person searches
 - Always use DISTINCT ON (gst_no) to avoid duplicate company entries
-- "Deepankar ji ka address/GST/details":
-  SELECT DISTINCT ON (gst_no) company_name, address, state, gst_no, contact_person, phone
-  FROM sales WHERE contact_person ILIKE '%Deepankar%'
-  ORDER BY gst_no, created_at DESC
 
 === GST / BILLING DETAILS ===
-For GST details, address, billing info → always use sales table:
-- Columns: gst_no, company_name, address, state, contact_person, phone
-- ALWAYS use DISTINCT ON (gst_no) to get one record per unique company
-- "GST details of X":
-  SELECT DISTINCT ON (gst_no) company_name, address, state, gst_no, contact_person, phone
-  FROM sales WHERE company_name ILIKE '%X%'
-  ORDER BY gst_no, created_at DESC
-- If no gst_no: use DISTINCT ON (company_name)
+For GST details, address, billing info → always use sales table.
+ALWAYS use DISTINCT ON (gst_no) to get one record per unique company.
 
 === WHEN TO USE LEDGER (query_type:"ledger") ===
 ONLY when user explicitly says: ledger / lgdr / khata / statement / account statement
 
 === WHEN MESSAGE IS NOT BUSINESS RELATED ===
-If the message is casual conversation (hello, hi, how are you, good morning, etc.) 
+If the message is casual conversation (hello, hi, how are you, good morning, etc.)
 OR completely unrelated to business/finance/sales/expenses, return:
 {"query_type": "not_relevant"}
-DO NOT respond to greetings or personal conversations.
-For a COMPANY transaction history. NEVER for contact/GST/address queries.
 
 === YOUR RESPONSE FORMAT ===
 Return ONLY this JSON (no markdown):
 {
-  "query_type": "ledger | data | clarify",
+  "query_type": "ledger | data | chart | clarify | not_relevant",
   "ledger_search": "company name if ledger query",
   "sql": "SELECT ... (only for data queries, read-only SELECT)",
+  "chart_config": { ... },
   "clarify_message": "question if unclear",
   "clarify_options": []
 }
@@ -324,17 +315,9 @@ CRITICAL SQL RULES (follow strictly):
 1. SUBQUERY GROUPING: If using subquery, ALL non-aggregated columns in outer SELECT must be in outer GROUP BY
 2. CTE preferred over subquery: Use WITH cte AS (...) SELECT ... FROM cte WHERE ...
 3. For ratio/comparison queries use CTE
-4. Never use ungrouped columns from outer query inside subquery
-5. For HAVING with ratio: calculate ratio in CTE first, then filter in outer query
-6. NULLIF(x, 0) to avoid division by zero
-7. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
-
-8. COMPANY NAME DEDUPLICATION (CRITICAL):
-   - ALWAYS use UPPER(company_name) for grouping to merge duplicates
-   - For display, use MAX(company_name)
-   - Same rule for pending table: GROUP BY UPPER(party_name)
-   - Same rule for ledger table: GROUP BY UPPER(name)
-   - NEVER group by raw company_name/party_name without UPPER() wrapping
+4. NULLIF(x, 0) to avoid division by zero
+5. All date columns are TIMESTAMP type - use TO_CHAR() not DATE_TRUNC for grouping
+6. COMPANY NAME DEDUPLICATION: ALWAYS use UPPER(company_name) for grouping to merge duplicates
 
 === SQL EXAMPLES ===
 "top 5 clients by sales":
@@ -342,9 +325,17 @@ SELECT MAX(company_name) as company_name, ROUND(SUM(total_price)::numeric,0) as 
 FROM sales WHERE total_price > 0 GROUP BY UPPER(company_name)
 ORDER BY total_sales DESC LIMIT 5
 
-"60-90 days pending":
-SELECT party_name, bill_ref_no, ROUND(REGEXP_REPLACE(pending_amount,'[^0-9.]','','g')::numeric,0) as pending_amount, overdue_days
-FROM pending WHERE overdue_days >= 60 AND overdue_days <= 90 ORDER BY overdue_days DESC
+"monthly sales chart":
+{
+  "query_type": "chart",
+  "chart_config": {
+    "type": "bar",
+    "title": "Monthly Sales",
+    "sql": "SELECT TO_CHAR(created_at,'YYYY-MM') as month, ROUND(SUM(total_price)::numeric,0) as total FROM sales GROUP BY month ORDER BY month",
+    "label_col": "month",
+    "value_col": "total"
+  }
+}
 `;
 
   const messages = [
@@ -506,6 +497,181 @@ function buildTableHTML(rows) {
   </div>`;
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// ── NEW: GENERATE LEDGER PDF USING PUPPETEER ─────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+async function generateLedgerPDF(htmlContent, companyName) {
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu"
+      ]
+    });
+
+    const page = await browser.newPage();
+
+    // Wrap ledger HTML in a proper full-page HTML document
+    const fullHTML = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { margin: 0; padding: 16px; font-family: Arial, sans-serif; }
+    * { box-sizing: border-box; }
+  </style>
+</head>
+<body>${htmlContent}</body>
+</html>`;
+
+    await page.setContent(fullHTML, { waitUntil: "networkidle0" });
+
+    // Save PDF to a temp file
+    const tmpPath = path.join(os.tmpdir(), `ledger_${Date.now()}.pdf`);
+    await page.pdf({
+      path: tmpPath,
+      format: "A4",
+      landscape: true,
+      printBackground: true,
+      margin: { top: "12px", bottom: "12px", left: "12px", right: "12px" }
+    });
+
+    await browser.close();
+    console.log("[PDF] Generated at:", tmpPath);
+    return tmpPath;
+
+  } catch (e) {
+    if (browser) await browser.close();
+    console.error("[PDF ERROR]", e.message);
+    throw e;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── NEW: BUILD QUICKCHART URL + DOWNLOAD IMAGE ───────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+function buildChartURL(chartConfig, rows) {
+  const labels = rows.map(r => String(r[chartConfig.label_col] || ""));
+  const values = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
+
+  // Pick colours
+  const COLORS = [
+    "#4361ee","#3a0ca3","#7209b7","#f72585","#4cc9f0",
+    "#06d6a0","#ffd166","#ef476f","#118ab2","#073b4c"
+  ];
+
+  const chartDef = {
+    type: chartConfig.type || "bar",
+    data: {
+      labels,
+      datasets: [{
+        label: chartConfig.title || "Data",
+        data: values,
+        backgroundColor: chartConfig.type === "pie"
+          ? COLORS.slice(0, values.length)
+          : "#4361ee",
+        borderColor: chartConfig.type === "line" ? "#4361ee" : undefined,
+        borderWidth: chartConfig.type === "line" ? 2 : undefined,
+        fill: chartConfig.type === "line" ? false : undefined,
+        tension: chartConfig.type === "line" ? 0.4 : undefined
+      }]
+    },
+    options: {
+      plugins: {
+        title: { display: true, text: chartConfig.title || "Chart", font: { size: 16 } },
+        legend: { display: chartConfig.type === "pie" }
+      },
+      scales: chartConfig.type !== "pie" ? {
+        y: { ticks: { callback: "function(v){return 'Rs.'+v.toLocaleString('en-IN')}" } }
+      } : undefined
+    }
+  };
+
+  const encoded = encodeURIComponent(JSON.stringify(chartDef));
+  return `https://quickchart.io/chart?w=800&h=450&c=${encoded}`;
+}
+
+async function downloadChartImage(chartURL) {
+  const resp = await fetch(chartURL);
+  if (!resp.ok) throw new Error("QuickChart failed: " + resp.status);
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  const tmpPath = path.join(os.tmpdir(), `chart_${Date.now()}.png`);
+  fs.writeFileSync(tmpPath, buffer);
+  console.log("[CHART IMAGE] Saved at:", tmpPath);
+  return tmpPath;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── NEW: SEND WHATSAPP MEDIA (PDF or IMAGE) ───────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
+  try {
+    const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+    const WA_UPLOAD_URL = "http://app.mis.work/api/v1/message/upload-media";
+    const WA_API_URL = "http://app.mis.work/api/v1/message/create";
+
+    const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
+    console.log("[WA MEDIA] Sending to:", phone, "| File:", filePath, "| Type:", mediaType);
+
+    // Step 1 — Upload file to app.mis.work
+    const { FormData, Blob } = await import("node-fetch"); // node 18+
+    const formData = new FormData();
+    const fileBuffer = fs.readFileSync(filePath);
+    const blob = new Blob([fileBuffer], {
+      type: mediaType === "image" ? "image/png" : "application/pdf"
+    });
+    formData.append("file", blob, path.basename(filePath));
+
+    const uploadResp = await fetch(WA_UPLOAD_URL, {
+      method: "POST",
+      headers: { "x-api-key": WA_API_KEY },
+      body: formData
+    });
+    const uploadData = await uploadResp.json();
+    console.log("[WA UPLOAD RESPONSE]", JSON.stringify(uploadData));
+
+    const mediaId = uploadData?.mediaId || uploadData?.id || uploadData?.data?.mediaId;
+    if (!mediaId) {
+      // Fallback: send caption as text only
+      console.warn("[WA MEDIA] No mediaId returned, sending text fallback");
+      await sendWhatsAppReply(phone, caption);
+      return;
+    }
+
+    // Step 2 — Send media message
+    const msgBody = {
+      receiverMobileNo: phone,
+      message: [caption],
+      mediaType,
+      mediaId
+    };
+
+    const resp = await fetch(WA_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": WA_API_KEY
+      },
+      body: JSON.stringify(msgBody)
+    });
+
+    const text = await resp.text();
+    console.log("[WA MEDIA STATUS]", resp.status, text);
+
+    // Cleanup temp file
+    try { fs.unlinkSync(filePath); } catch(e) {}
+
+  } catch (e) {
+    console.error("[WA MEDIA ERROR]", e.message);
+    // Fallback to text
+    await sendWhatsAppReply(to, caption);
+  }
+}
+
 // ── MAIN CHAT ROUTE ───────────────────────────────────────────────────────────
 app.post("/chat", async (req, res) => {
   const { message, history = [], session_id, exactName } = req.body;
@@ -607,11 +773,6 @@ app.post("/chat", async (req, res) => {
       { session_id, role: "assistant", content: reply }
     ]);
 
-    console.log("\n========== FINAL RESPONSE ==========");
-    console.log({
-      type: "html",
-      rows: rows?.length || 0
-    });
     return res.json({ reply, type: "html" });
 
   } catch(err) {
@@ -626,7 +787,7 @@ app.listen(PORT, async () => {
   await fetchLiveSchema();
 });
 
-// ── SEND WHATSAPP REPLY ──────────────────────────────────────────────────────
+// ── SEND WHATSAPP TEXT REPLY ──────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
   try {
     const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
@@ -636,7 +797,6 @@ async function sendWhatsAppReply(to, message) {
     console.log("[WHATSAPP SENDING TO]", phone);
 
     message = String(message).slice(0, 900);
-    console.log("[WHATSAPP Message ]", message);
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -659,20 +819,20 @@ async function sendWhatsAppReply(to, message) {
   }
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
 // ── WHATSAPP WEBHOOK ──────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
 app.post("/whatsapp", async (req, res) => {
   console.log("\n========== WHATSAPP WEBHOOK ==========");
   console.log("[RAW BODY]", JSON.stringify(req.body, null, 2));
+
   try {
     const body = req.body;
-    console.log("[WHATSAPP RAW BODY]", JSON.stringify(body));
 
-    // Outgoing messages ignore karo — loop rokne ke liye
-    if (body.boundType === "out") {
-      return res.json({ success: true, ignored: true });
-    }
+    // Outgoing messages ignore karo
+    if (body.boundType === "out") return res.json({ success: true, ignored: true });
 
-    // Extract message
+    // Extract message + sender
     const message = body.value || body.message || body.query || body.text || body.Body || body.body ||
       body.data?.message || body.data?.text ||
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
@@ -683,17 +843,10 @@ app.post("/whatsapp", async (req, res) => {
       body.data?.from || body.data?.sender || body.mobile || "918750285420";
     const actualPhone = String(rawSender).split("@")[0].replace(/[^0-9]/g, "") || "918750285420";
 
-    console.log("[WHATSAPP PHONE]", actualPhone);
-
-    if (!message) {
-      return res.json({ success: false, error: "No message found", received: body });
-    }
+    if (!message) return res.json({ success: false, error: "No message found", received: body });
 
     const actualQuery = message.trim().replace(/^mis[\s-]?bot\s*/i, "").trim() || message.trim();
-    console.log("[WHATSAPP QUERY]", actualQuery);
-    console.log("[PHONE]", actualPhone);
-    console.log("[MESSAGE]", message);
-    console.log("[FINAL QUERY]", actualQuery);
+    console.log("[WHATSAPP QUERY]", actualQuery, "| FROM:", actualPhone);
 
     if (!liveSchema) await fetchLiveSchema();
 
@@ -701,43 +854,103 @@ app.post("/whatsapp", async (req, res) => {
     try { plan = await processQuery(actualQuery, []); }
     catch(e) { return res.json({ success: false, error: e.message }); }
 
-    // AI decided not relevant — ignore
+    // Not relevant — ignore silently
     if (plan.query_type === "not_relevant") {
-      console.log("[WHATSAPP IGNORED] AI decided not relevant:", actualQuery);
+      console.log("[WHATSAPP IGNORED]", actualQuery);
       return res.json({ success: true, ignored: true });
     }
 
+    // ── LEDGER → PDF on WhatsApp ─────────────────────────────────────────────
     if (plan.query_type === "ledger") {
       const search = (plan.ledger_search || "").trim();
       if (!search) {
         await sendWhatsAppReply(actualPhone, "Please tell me the company name.");
-        return res.json({ success: true, reply: "Please tell me the company name." });
+        return res.json({ success: true });
       }
+
       const { data } = await supabase.from("ledger")
-        .select("name,closing_balance,voucher_date,voucher_particular,voucher_debit,voucher_credit")
+        .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
         .ilike("name", `%${search}%`).order("voucher_date", { ascending: true }).limit(500);
+
       if (!data || !data.length) {
         await sendWhatsAppReply(actualPhone, `❌ No ledger found for "${search}"`);
-        return res.json({ success: true, reply: "No ledger found" });
+        return res.json({ success: true });
       }
+
       const uniqueNames = [...new Set(data.map(r => r.name))];
       if (uniqueNames.length > 1) {
         const replyText = "🏢 Multiple companies found:\n" + uniqueNames.slice(0,5).map((n,i) => `${i+1}. ${n}`).join("\n") + "\n\nPlease specify exact name.";
         await sendWhatsAppReply(actualPhone, replyText);
-        return res.json({ success: true, reply: replyText });
+        return res.json({ success: true });
       }
+
+      // Build ledger HTML → convert to PDF → send on WA
       const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
       const bal = parseFloat(data[0].closing_balance) || 0;
-      const replyText = `📒 *Ledger: ${data[0].name}*\n\n💰 Balance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}\n📝 Transactions: ${txns.length}`;
-      await sendWhatsAppReply(actualPhone, replyText);
-      return res.json({ success: true, reply: replyText });
+      const companyName = data[0].name;
+
+      // 1. First send a text summary immediately
+      const summaryText = `📒 *Ledger: ${companyName}*\n\n💰 Balance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}\n📝 Transactions: ${txns.length}\n\n⏳ Generating PDF...`;
+      await sendWhatsAppReply(actualPhone, summaryText);
+
+      // 2. Respond to webhook fast (WA timeout ~5s)
+      res.json({ success: true, reply: summaryText });
+
+      // 3. Generate PDF and send async (after response)
+      try {
+        const ledgerHTML = buildLedgerHTML(data[0], txns);
+        const pdfPath = await generateLedgerPDF(ledgerHTML, companyName);
+        const pdfCaption = `📄 *${companyName} — Ledger Statement*\nBalance: Rs. ${Math.abs(bal).toLocaleString("en-IN")} ${bal >= 0 ? "(Dr)" : "(Cr)"}`;
+        await sendWhatsAppMedia(actualPhone, pdfPath, pdfCaption, "document");
+        console.log("[LEDGER PDF] Sent to", actualPhone);
+      } catch(e) {
+        console.error("[LEDGER PDF FAILED]", e.message);
+        await sendWhatsAppReply(actualPhone, "⚠️ PDF generate karne mein error aaya. Text summary upar bhej di hai.");
+      }
+      return;
     }
 
+    // ── CLARIFY ──────────────────────────────────────────────────────────────
     if (plan.query_type === "clarify") {
       await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
-      return res.json({ success: true, reply: plan.clarify_message });
+      return res.json({ success: true });
     }
 
+    // ── CHART → Image on WhatsApp ────────────────────────────────────────────
+    if (plan.query_type === "chart" && plan.chart_config) {
+      const cfg = plan.chart_config;
+
+      let rows;
+      try { rows = await runSQL(cfg.sql); } catch(e) {
+        await sendWhatsAppReply(actualPhone, "❌ Chart data error: " + e.message);
+        return res.json({ success: false });
+      }
+
+      if (!rows || !rows.length) {
+        await sendWhatsAppReply(actualPhone, "❌ Chart ke liye koi data nahi mila.");
+        return res.json({ success: true });
+      }
+
+      // Send ack first
+      await sendWhatsAppReply(actualPhone, `📊 *${cfg.title || "Chart"}* — generating image...`);
+      res.json({ success: true });
+
+      // Build & send chart image async
+      try {
+        const chartURL = buildChartURL(cfg, rows);
+        console.log("[CHART URL]", chartURL);
+        const imgPath = await downloadChartImage(chartURL);
+        const caption = `📊 *${cfg.title || "Chart"}*\n_${rows.length} data points_`;
+        await sendWhatsAppMedia(actualPhone, imgPath, caption, "image");
+        console.log("[CHART IMAGE] Sent to", actualPhone);
+      } catch(e) {
+        console.error("[CHART FAILED]", e.message);
+        await sendWhatsAppReply(actualPhone, "⚠️ Chart image nahi ban paya. Query dobara try karein.");
+      }
+      return;
+    }
+
+    // ── REGULAR DATA QUERY ────────────────────────────────────────────────────
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
 
     let rows;
@@ -746,36 +959,44 @@ app.post("/whatsapp", async (req, res) => {
 
     if (!rows || !rows.length) {
       await sendWhatsAppReply(actualPhone, `❌ No data found for: "${actualQuery}"`);
-      return res.json({ success: true, reply: "No data found", data: [] });
+      return res.json({ success: true });
     }
 
-    // Smart reply format with emojis
+    // Smart emoji reply format (existing logic — improved)
     const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
     const cols = Object.keys(rows[0]);
 
-    const replyText = "📊 *Results:*\n\n" + rows.slice(0, 10).map((r, i) => {
-      const name = r.company_name || r.name || r.design_number || r.party_name || r.invoice_no || "Item";
-      const amount = r.total_sales || r.total || r.amount || r.pending_amount || r.total_price || null;
-      const extra = cols.filter(c => !["company_name","name","design_number","party_name","invoice_no","total_sales","total","amount","pending_amount","total_price"].includes(c))
-        .slice(0,2).map(c => `${c}: ${r[c]}`).join(" | ");
+    const replyLines = rows.slice(0, 10).map((r, i) => {
+      const name =
+        r.company_name || r.name || r.design_number ||
+        r.party_name   || r.invoice_no || r.sub_group || "Item";
+
+      const amountKeys = ["total_sales","total","amount","pending_amount","total_price","salary"];
+      const amount = amountKeys.map(k => r[k]).find(v => v != null && v !== "");
+
+      const usedCols = new Set(["company_name","name","design_number","party_name","invoice_no",
+        "total_sales","total","amount","pending_amount","total_price"]);
+      const extras = cols
+        .filter(c => !usedCols.has(c) && r[c] !== null && r[c] !== "" && r[c] !== "NA")
+        .slice(0, 2)
+        .map(c => `${c.replace(/_/g," ")}: ${r[c]}`);
 
       let line = `${emojis[i] || `${i+1}.`} *${name}*`;
-      if (amount !== null) line += `\n   💰 Rs. ${Number(amount).toLocaleString("en-IN")}`;
-      if (extra) line += `\n   📌 ${extra}`;
+      if (amount != null) line += `\n   💰 Rs. ${Number(amount).toLocaleString("en-IN")}`;
+      if (extras.length) line += `\n   📌 ${extras.join(" | ")}`;
       return line;
-    }).join("\n\n");
+    });
 
-    const finalReply = replyText + `\n\n_Total: ${rows.length} records_`;
+    const replyText = `📊 *Results:*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
 
     const wpSession = "wp_" + actualPhone;
     await supabase.from("chat_history").insert([
       { session_id: wpSession, role: "user", content: actualQuery },
-      { session_id: wpSession, role: "assistant", content: finalReply }
+      { session_id: wpSession, role: "assistant", content: replyText }
     ]);
 
-    res.json({ success: true, reply: finalReply, type: "data", count: rows.length, data: rows });
-
-    await sendWhatsAppReply(actualPhone, finalReply);
+    res.json({ success: true, reply: replyText, count: rows.length });
+    await sendWhatsAppReply(actualPhone, replyText);
 
   } catch(err) {
     console.error("[WHATSAPP ERROR]", err);
