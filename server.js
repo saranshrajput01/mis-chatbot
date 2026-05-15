@@ -9,7 +9,8 @@ const os = require("os");
 
 const app = express();
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(express.static(require("path").join(__dirname, "public")));
 app.use((req, res, next) => {
   console.log("\n========== NEW REQUEST ==========");
@@ -273,7 +274,7 @@ If casual (hello, hi, etc.) → {"query_type": "not_relevant"}
 
 === SQL RULES ===
 - Only SELECT statements
-- Always LIMIT 5000 unless aggregating
+- Always LIMIT 100 unless aggregating. For products table always LIMIT 10.
 - Use ILIKE for text searches
 - ROUND(SUM(amount)::numeric, 0) for amounts
 - UPPER(company_name) for grouping to merge duplicates
@@ -694,7 +695,7 @@ async function sendWhatsAppReply(to, message) {
     const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
     const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
-    message = String(message).slice(0, 900);
+    message = String(message).slice(0, 1500);
     await fetch(WA_API_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY },
