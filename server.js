@@ -606,76 +606,55 @@ async function downloadChartImage(chartURL) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// ── NEW: SEND WHATSAPP MEDIA (PDF or IMAGE) ───────────────────────────────────
+// ── NEW: UPLOAD TO SUPABASE STORAGE → GET PUBLIC URL ─────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+async function uploadToSupabase(filePath, mediaType) {
+  const fileBuffer = fs.readFileSync(filePath);
+  const fileName   = path.basename(filePath);
+  const bucket     = "mis-media"; // Supabase bucket name (create this in Supabase dashboard)
+  const mimeType   = mediaType === "image" ? "image/png" : "application/pdf";
+
+  console.log("[SUPABASE UPLOAD] Uploading:", fileName, "to bucket:", bucket);
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .upload(fileName, fileBuffer, {
+      contentType: mimeType,
+      upsert: true   // overwrite if same name exists
+    });
+
+  if (error) {
+    console.error("[SUPABASE UPLOAD ERROR]", error.message);
+    throw new Error("Supabase upload failed: " + error.message);
+  }
+
+  // Get public URL
+  const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(fileName);
+  const publicUrl = urlData?.publicUrl;
+  console.log("[SUPABASE PUBLIC URL]", publicUrl);
+  return publicUrl;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ── NEW: SEND WHATSAPP MEDIA VIA PUBLIC URL ────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
   const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
-  const WA_UPLOAD_URL = "http://app.mis.work/api/v1/message/upload-media";
-  const WA_API_URL    = "http://app.mis.work/api/v1/message/create";
+  const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
 
   console.log("[WA MEDIA] phone:", phone, "| file:", filePath, "| type:", mediaType);
 
   try {
-    // ── Step 1: Upload file using form-data package ──────────────────────────
-    const FormData = require("form-data");
-    const form = new FormData();
-    form.append("file", fs.createReadStream(filePath), {
-      filename: path.basename(filePath),
-      contentType: mediaType === "image" ? "image/png" : "application/pdf"
-    });
+    // Step 1 — Upload to Supabase Storage, get public URL
+    const publicUrl = await uploadToSupabase(filePath, mediaType);
 
-    // form-data gives us proper multipart headers with boundary
-    const uploadHeaders = {
-      ...form.getHeaders(),
-      "x-api-key": WA_API_KEY
-    };
-
-    console.log("[WA UPLOAD] Uploading to:", WA_UPLOAD_URL);
-    console.log("[WA UPLOAD HEADERS]", JSON.stringify(uploadHeaders));
-
-    const uploadResp = await fetch(WA_UPLOAD_URL, {
-      method: "POST",
-      headers: uploadHeaders,
-      body: form
-    });
-
-    const uploadRaw = await uploadResp.text();
-    console.log("[WA UPLOAD STATUS]", uploadResp.status);
-    console.log("[WA UPLOAD RAW]", uploadRaw);
-
-    let uploadData = {};
-    try { uploadData = JSON.parse(uploadRaw); } catch(e) {}
-
-    // Try all possible mediaId field names from app.mis.work response
-    const mediaId =
-      uploadData?.mediaId      ||
-      uploadData?.id           ||
-      uploadData?.data?.mediaId||
-      uploadData?.data?.id     ||
-      uploadData?.result?.mediaId ||
-      uploadData?.result?.id   ||
-      uploadData?.fileId       ||
-      uploadData?.media_id     ||
-      null;
-
-    console.log("[WA MEDIA ID]", mediaId);
-
-    if (!mediaId) {
-      console.warn("[WA MEDIA] Upload API ne mediaId nahi diya — text fallback");
-      console.warn("[WA MEDIA] Full response tha:", uploadRaw);
-      // Send caption as text + note
-      await sendWhatsAppReply(phone, caption + "\n\n_[PDF/Image attach nahi ho saka — admin se contact karein]_");
-      try { fs.unlinkSync(filePath); } catch(e) {}
-      return;
-    }
-
-    // ── Step 2: Send media message ───────────────────────────────────────────
+    // Step 2 — Send via app.mis.work with mediaUrl
     const msgBody = {
       receiverMobileNo: phone,
       message: [caption],
-      mediaType,
-      mediaId
+      mediaType,       // "document" or "image"
+      mediaUrl: publicUrl
     };
 
     console.log("[WA MEDIA SEND BODY]", JSON.stringify(msgBody));
@@ -693,15 +672,23 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
     console.log("[WA MEDIA SEND STATUS]", resp.status);
     console.log("[WA MEDIA SEND RESPONSE]", respText);
 
-    // Cleanup temp file
+    // Step 3 — Cleanup temp file
     try { fs.unlinkSync(filePath); } catch(e) {}
+
+    // Step 4 — If app.mis.work mediaUrl not supported, send link as text fallback
+    let respData = {};
+    try { respData = JSON.parse(respText); } catch(e) {}
+
+    if (resp.status !== 200 || respData?.status === "error") {
+      console.warn("[WA MEDIA] mediaUrl not supported — sending as text link");
+      const linkMsg = caption + `\n\n📎 *Download Link:*\n${publicUrl}`;
+      await sendWhatsAppReply(phone, linkMsg);
+    }
 
   } catch (e) {
     console.error("[WA MEDIA ERROR]", e.message);
-    console.error("[WA MEDIA STACK]", e.stack);
     try { fs.unlinkSync(filePath); } catch(ex) {}
-    // Fallback to text
-    await sendWhatsAppReply(phone, caption + "\n\n_[File bhejne mein error aaya]_");
+    await sendWhatsAppReply(phone, caption + "\n\n⚠️ File bhejne mein error aaya.");
   }
 }
 
