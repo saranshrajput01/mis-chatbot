@@ -803,10 +803,6 @@ app.post("/whatsapp", async (req, res) => {
       }
       return;
     }
-    if (plan.query_type === "clarify") {
-      await sendWhatsAppReply(actualPhone, "❓ " + plan.clarify_message);
-      return res.json({ success: true });
-    }
     if (plan.query_type === "chart" && plan.chart_config) {
       const cfg = plan.chart_config;
       let rows;
@@ -831,30 +827,6 @@ app.post("/whatsapp", async (req, res) => {
       }
       return;
     }
-
-  // Pehle chart image try karo (purana code)
-  const cfg = plan.chart_config;
-  const replyHTML = buildTableHTML(rows);
-  res.json({ success: true });
-
-  try {
-    const { createCanvas } = require("canvas");
-    // Chart image banana skip karo — seedha text bhejo
-    throw new Error("use text");
-  } catch(e) {
-    // Text format mein bhejo
-    const cols = Object.keys(rows[0]);
-    const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟"];
-    const replyLines = rows.slice(0, 10).map((r, i) => {
-      const label = r[cols[0]] || "Item";
-      const value = r[cols[1]] || 0;
-      return `${emojis[i]} *${label}*\n   💰 Rs. ${Number(value).toLocaleString("en-IN")}`;
-    });
-    const replyText = `📊 *${cfg.title}*\n\n${replyLines.join("\n\n")}\n\n_Total: ${rows.length} records_`;
-    await sendWhatsAppReply(actualPhone, replyText);
-  }
-  return;
-}
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
     let rows;
     try { rows = await runSQL(plan.sql); }
