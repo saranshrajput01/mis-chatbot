@@ -875,7 +875,9 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
       div.innerHTML = data.map(d => `
         <div class="history-item" onclick="loadHistoryItem('${(d.doc_url||"").replace(/'/g,"\\'")}')">
           <div class="hi-title">${getDocIcon(d.doc_type)} ${d.doc_title || d.doc_url || "Document"}</div>
-          <div class="hi-meta">${d.doc_type?.toUpperCase() || "DOC"} • ${new Date(d.created_at).toLocaleString("en-IN")}</div>
+          <div class="hi-meta">${d.doc_type?.toUpperCase() || "DOC"} •${new Date(d.created_at).toLocaleString("en-IN", {
+  timeZone: "Asia/Kolkata"
+})}
           <div class="hi-summary">${(d.ai_summary || "").substring(0, 120)}...</div>
         </div>
       `).join("");
@@ -911,7 +913,9 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
         ? `✅ Synced! Products: ${data.synced?.products || 0}, Tasks: ${data.synced?.delegation_tasks || 0}`
         : "❌ Sync failed: " + data.error;
 
-      document.getElementById("lastSyncTime").textContent = new Date().toLocaleTimeString("en-IN");
+      document.getElementById("lastSyncTime").textContent = new Date().toLocaleTimeString("en-IN", {
+  timeZone: "Asia/Kolkata"
+});
       document.getElementById("syncStatus").textContent = "✅ Done";
       setTimeout(() => { document.getElementById("syncStatus").textContent = ""; }, 3000);
 
@@ -942,7 +946,9 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
           <td style="${TD}">${d.sheet_name}</td>
           <td style="${TD};text-align:center">${d.rows_synced}</td>
           <td style="${TD};color:${d.status==='success'?'#2e7d32':'#e53935'}">${d.status}</td>
-          <td style="${TD}">${new Date(d.synced_at).toLocaleString("en-IN")}</td>
+          <td style="${TD}">${new Date(d.synced_at).toLocaleString("en-IN", {
+  timeZone: "Asia/Kolkata"
+})}</td>
         </tr>`).join("")}
       </table>`;
     } catch(e) {
