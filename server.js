@@ -273,6 +273,14 @@ If casual (hello, hi, etc.) → {"query_type": "not_relevant"}
 }
 
 === SQL RULES ===
+CRITICAL RULES:
+- NEVER filter on columns that might be NULL/empty
+- If no results with filter, retry WITHOUT the filter
+- Always return whatever data exists, even if incomplete
+- For checklist_tasks: always SELECT task_name, assigned_to, remarks, department — never filter on priority or status
+- For delegation_tasks: delegated_to column mein name hota hai, ILIKE use karo
+- For scores: score_value is TEXT, never AVG() or SUM()
+- If data exists but some columns are empty, still show the data with "-" for empty fields
 - Only SELECT statements
 - Always LIMIT 100 unless aggregating. For products table always LIMIT 10.
 - Use ILIKE for text searches
