@@ -609,46 +609,76 @@ async function downloadChartImage(chartURL) {
 // ── NEW: SEND WHATSAPP MEDIA (PDF or IMAGE) ───────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
+  const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+  const WA_UPLOAD_URL = "http://app.mis.work/api/v1/message/upload-media";
+  const WA_API_URL    = "http://app.mis.work/api/v1/message/create";
+  const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
+
+  console.log("[WA MEDIA] phone:", phone, "| file:", filePath, "| type:", mediaType);
+
   try {
-    const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
-    const WA_UPLOAD_URL = "http://app.mis.work/api/v1/message/upload-media";
-    const WA_API_URL = "http://app.mis.work/api/v1/message/create";
-
-    const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
-    console.log("[WA MEDIA] Sending to:", phone, "| File:", filePath, "| Type:", mediaType);
-
-    // Step 1 — Upload file to app.mis.work
-    const { FormData, Blob } = await import("node-fetch"); // node 18+
-    const formData = new FormData();
-    const fileBuffer = fs.readFileSync(filePath);
-    const blob = new Blob([fileBuffer], {
-      type: mediaType === "image" ? "image/png" : "application/pdf"
+    // ── Step 1: Upload file using form-data package ──────────────────────────
+    const FormData = require("form-data");
+    const form = new FormData();
+    form.append("file", fs.createReadStream(filePath), {
+      filename: path.basename(filePath),
+      contentType: mediaType === "image" ? "image/png" : "application/pdf"
     });
-    formData.append("file", blob, path.basename(filePath));
+
+    // form-data gives us proper multipart headers with boundary
+    const uploadHeaders = {
+      ...form.getHeaders(),
+      "x-api-key": WA_API_KEY
+    };
+
+    console.log("[WA UPLOAD] Uploading to:", WA_UPLOAD_URL);
+    console.log("[WA UPLOAD HEADERS]", JSON.stringify(uploadHeaders));
 
     const uploadResp = await fetch(WA_UPLOAD_URL, {
       method: "POST",
-      headers: { "x-api-key": WA_API_KEY },
-      body: formData
+      headers: uploadHeaders,
+      body: form
     });
-    const uploadData = await uploadResp.json();
-    console.log("[WA UPLOAD RESPONSE]", JSON.stringify(uploadData));
 
-    const mediaId = uploadData?.mediaId || uploadData?.id || uploadData?.data?.mediaId;
+    const uploadRaw = await uploadResp.text();
+    console.log("[WA UPLOAD STATUS]", uploadResp.status);
+    console.log("[WA UPLOAD RAW]", uploadRaw);
+
+    let uploadData = {};
+    try { uploadData = JSON.parse(uploadRaw); } catch(e) {}
+
+    // Try all possible mediaId field names from app.mis.work response
+    const mediaId =
+      uploadData?.mediaId      ||
+      uploadData?.id           ||
+      uploadData?.data?.mediaId||
+      uploadData?.data?.id     ||
+      uploadData?.result?.mediaId ||
+      uploadData?.result?.id   ||
+      uploadData?.fileId       ||
+      uploadData?.media_id     ||
+      null;
+
+    console.log("[WA MEDIA ID]", mediaId);
+
     if (!mediaId) {
-      // Fallback: send caption as text only
-      console.warn("[WA MEDIA] No mediaId returned, sending text fallback");
-      await sendWhatsAppReply(phone, caption);
+      console.warn("[WA MEDIA] Upload API ne mediaId nahi diya — text fallback");
+      console.warn("[WA MEDIA] Full response tha:", uploadRaw);
+      // Send caption as text + note
+      await sendWhatsAppReply(phone, caption + "\n\n_[PDF/Image attach nahi ho saka — admin se contact karein]_");
+      try { fs.unlinkSync(filePath); } catch(e) {}
       return;
     }
 
-    // Step 2 — Send media message
+    // ── Step 2: Send media message ───────────────────────────────────────────
     const msgBody = {
       receiverMobileNo: phone,
       message: [caption],
       mediaType,
       mediaId
     };
+
+    console.log("[WA MEDIA SEND BODY]", JSON.stringify(msgBody));
 
     const resp = await fetch(WA_API_URL, {
       method: "POST",
@@ -659,16 +689,19 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
       body: JSON.stringify(msgBody)
     });
 
-    const text = await resp.text();
-    console.log("[WA MEDIA STATUS]", resp.status, text);
+    const respText = await resp.text();
+    console.log("[WA MEDIA SEND STATUS]", resp.status);
+    console.log("[WA MEDIA SEND RESPONSE]", respText);
 
     // Cleanup temp file
     try { fs.unlinkSync(filePath); } catch(e) {}
 
   } catch (e) {
     console.error("[WA MEDIA ERROR]", e.message);
+    console.error("[WA MEDIA STACK]", e.stack);
+    try { fs.unlinkSync(filePath); } catch(ex) {}
     // Fallback to text
-    await sendWhatsAppReply(to, caption);
+    await sendWhatsAppReply(phone, caption + "\n\n_[File bhejne mein error aaya]_");
   }
 }
 
