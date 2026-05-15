@@ -840,9 +840,9 @@ async function syncProducts() {
     const toInsert = rows
       .filter(r => r["ITEM NAME"] || r["item name"] || r["Item Name"])
       .map(r => ({
-        item_name: r["ITEM NAME"] || r["Item Name"] || r["item name"] || "",
-        image_link: r["image link"] || r["Image Link"] || r["IMAGE LINK"] || "",
-        description: r["Description"] || r["description"] || ""
+        item_name: r["ITEM NAME"] || r["Item Name"] || r["item name"] || r["itemName"] || Object.values(r).find((v,i) => Object.keys(r)[i]?.toLowerCase().includes("item")) || "",
+        image_link: r["image link"] || r["Image Link"] || r["IMAGE LINK"] || r["imageLink"] || Object.values(r).find((v,i) => Object.keys(r)[i]?.toLowerCase().includes("image") && String(v).startsWith("http")) || "",
+        description: r["Description"] || r["description"] || r["DESCRIPTION"] || ""
       }));
 
     if (toInsert.length) {
