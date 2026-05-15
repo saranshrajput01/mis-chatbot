@@ -827,6 +827,40 @@ app.post("/whatsapp", async (req, res) => {
       }
       return;
     }
+
+    // Products query — image send karo
+if (plan.sql && plan.sql.toLowerCase().includes("products")) {
+  let rows;
+  try { rows = await runSQL(plan.sql); }
+  catch(e) { await sendWhatsAppReply(actualPhone, "❌ Error: " + e.message); return res.json({ success: true }); }
+  if (!rows || !rows.length) {
+    await sendWhatsAppReply(actualPhone, "❌ Koi product nahi mila.");
+    return res.json({ success: true });
+  }
+  const textMsg = `🛍️ *Products Found: ${rows.length}*\n\n` +
+    rows.slice(0, 5).map((p, i) => 
+      `${["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣"][i]} *${p.item_name}*`
+    ).join("\n");
+  await sendWhatsAppReply(actualPhone, textMsg);
+  res.json({ success: true });
+  for (const p of rows.slice(0, 5)) {
+    if (p.image_link && p.image_link.startsWith("http")) {
+      try {
+        await fetch("http://app.mis.work/api/v1/message/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab" },
+          body: JSON.stringify({
+            receiverMobileNo: actualPhone.replace(/^91/, ""),
+            filePathUrl: [p.image_link],
+            caption: [`🧸 *${p.item_name}*\n${(p.description||"").substring(0,100)}`]
+          })
+        });
+        await new Promise(r => setTimeout(r, 800));
+      } catch(e) { console.error("[PRODUCT IMG ERROR]", e.message); }
+    }
+  }
+  return;
+}
     if (!plan.sql) return res.json({ success: false, error: "Could not generate query" });
     let rows;
     try { rows = await runSQL(plan.sql); }
