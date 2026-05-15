@@ -890,15 +890,8 @@ if (plan.query_type === "chart" && plan.chart_config) {
   if (!rows || !rows.length) {
     return res.json({ reply: "No data found for this chart.", type: "text" });
   }
-  const chartURL = buildChartURL(cfg, rows);
-  const total = rows.reduce((s,r) => s + parseFloat(r[cfg.value_col] || 0), 0);
-  const reply = `<div>
-    <div style="font-weight:600;font-size:14px;margin-bottom:8px">${cfg.title}</div>
-    <img src="${chartURL}" style="width:100%;border-radius:12px;max-width:860px" />
-    <div style="font-size:12px;color:#666;margin-top:6px">
-      ${rows.length} data points &nbsp;|&nbsp; Total: <b>Rs. ${Math.round(total).toLocaleString("en-IN")}</b>
-    </div>
-  </div>`;
+  // Return as table — index.html auto-detects and builds Chart.js chart
+  const reply = buildTableHTML(rows);
   if (session_id) await supabase.from("chat_history").insert([
     { session_id, role: "user", content: message },
     { session_id, role: "assistant", content: reply }
