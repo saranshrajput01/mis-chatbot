@@ -810,24 +810,13 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
       reader.onload = async (e) => {
         const base64 = e.target.result.split(",")[1];
         try {
-          const res = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 1000,
-              messages: [{
-                role: "user",
-                content: [
-                  { type: "image", source: { type: "base64", media_type: file.type, data: base64 } },
-                  { type: "text", text: "Describe this image in detail. If it contains text, extract it. If it's a product, describe it." }
-                ]
-              }]
-            })
-          });
-          const data = await res.json();
-          const summary = data.content?.[0]?.text || "Could not analyze image";
-          resultDiv.innerHTML = `<b>🖼️ Image Analysis: ${file.name}</b>\n\n${summary}`;
+          const res = await fetch("/analyze-image", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ base64, mediaType: file.type })
+});
+const data = await res.json();
+const summary = data.summary || "Could not analyze image";          resultDiv.innerHTML = `<b>🖼️ Image Analysis: ${file.name}</b>\n\n${summary}`;
         } catch(e) {
           resultDiv.textContent = "Error: " + e.message;
         }

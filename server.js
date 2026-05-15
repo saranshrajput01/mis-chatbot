@@ -231,6 +231,23 @@ Understand Hindi, Hinglish perfectly:
 - rent/kiraya = sub_group ILIKE '%rent%'
 - ledger/khata = query_type:"ledger"
 - is saal = Apr 2025 - Mar 2026
+TABLE: public.products
+  columns: id, item_name, image_link, description
+  Use for: product search, catalog, toys, bags, items
+  Example: WHERE item_name ILIKE '%bear%' OR description ILIKE '%red%'
+
+TABLE: public.checklist_tasks
+  columns: id, task_name, assigned_to, status, priority, remarks, department
+  Use for: checklist, pending work, task status queries
+
+TABLE: public.scores
+  columns: id, employee_name, score_value, category, period, remarks
+  Use for: employee scores, performance, ratings
+
+TABLE: public.delegation_tasks
+  columns: id, del_task_id, plan_date, final_date, delegate_from, delegated_to, 
+           project_name, task_name, del_remarks, priority, department_id, del_url
+  Use for: delegated tasks, who assigned what, pending tasks, priority tasks
 TABLE: public.delegation_tasks
   columns: del_task_id, plan_date, final_date, delegate_from, delegated_to, 
            project_name, task_name, del_remarks, priority, department_id, del_url
@@ -1013,26 +1030,24 @@ app.post("/doc-intelligence", async (req, res) => {
       docTitle = "Google Sheet";
 
     } else if (doc_type === "pdf" || doc_url.includes(".pdf") || doc_url.includes("drive.google.com")) {
-      const aiRes = await fetch("https://api.anthropic.com/v1/messages", {
+      const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "gpt-4o",
           max_tokens: 2000,
           messages: [{
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: `Please fetch and read this document URL and provide a detailed summary. URL: ${doc_url}\n\nUser question: ${question || "Please summarize this document."}`
-              }
-            ]
+            content: `Please fetch and read this document URL and provide a detailed summary. URL: ${doc_url}\n\nUser question: ${question || "Please summarize this document."}`
           }]
         })
       });
       const aiData = await aiRes.json();
-      const summary = aiData.content?.[0]?.text || "Could not read document.";
-
+      const summary = aiData.choices?.[0]?.message?.content || "Could not read document.";
+      
       await supabase.from("doc_intelligence").insert({
         doc_type: "pdf",
         doc_url,
@@ -1063,22 +1078,23 @@ If it's tasks/delegation data, summarize pending work.
 Always respond in English only, regardless of what language user asks in.
 Keep answers concise but complete.`;
 
-    const aiRes2 = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 2000,
-        system: SYSTEM_DOC,
-        messages: [{
-          role: "user",
-          content: `Document Content:\n${extractedText}\n\n---\nQuestion: ${userQuestion}`
-        }]
-      })
-    });
-
-    const aiData2 = await aiRes2.json();
-    const summary = aiData2.content?.[0]?.text || "Could not analyze document.";
+const aiRes2 = await fetch("https://api.openai.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    model: "gpt-4o",
+    max_tokens: 2000,
+    messages: [
+      { role: "system", content: SYSTEM_DOC },
+      { role: "user", content: `Document Content:\n${extractedText}\n\n---\nQuestion: ${userQuestion}` }
+    ]
+  })
+});
+const aiData2 = await aiRes2.json();
+const summary = aiData2.choices?.[0]?.message?.content || "Could not analyze document.";
 
     await supabase.from("doc_intelligence").insert({
       doc_type: doc_type || "url",
@@ -1112,5 +1128,32 @@ app.get("/doc-intelligence/history", async (req, res) => {
 // END OF STEP 2 ADDITIONS
 // ============================================================
 
+app.post("/analyze-image", async (req, res) => {
+  const { base64, mediaType } = req.body;
+  try {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "gpt-4o",
+        max_tokens: 1000,
+        messages: [{
+          role: "user",
+          content: [
+            { type: "image_url", image_url: { url: `data:${mediaType};base64,${base64}` } },
+            { type: "text", text: "Describe this image in detail. If it contains text, extract it. If it's a product, describe it." }
+          ]
+        }]
+      })
+    });
+    const data = await response.json();
+    res.json({ summary: data.choices?.[0]?.message?.content || "Could not analyze" });
+  } catch(e) {
+    res.json({ summary: "Error: " + e.message });
+  }
+});
 process.on("unhandledRejection", (reason) => { console.error("[UNHANDLED REJECTION]", reason); });
 process.on("uncaughtException", (err) => { console.error("[UNCAUGHT EXCEPTION]", err); });
