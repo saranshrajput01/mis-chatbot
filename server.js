@@ -231,6 +231,15 @@ Understand Hindi, Hinglish perfectly:
 - rent/kiraya = sub_group ILIKE '%rent%'
 - ledger/khata = query_type:"ledger"
 - is saal = Apr 2025 - Mar 2026
+TABLE: public.delegation_tasks
+  columns: del_task_id, plan_date, final_date, delegate_from, delegated_to, 
+           project_name, task_name, del_remarks, priority, department_id, del_url
+  Use this table for: tasks, kaam, pending work, delegation queries
+  priority values: 'High', 'Medium', 'Low'
+
+TABLE: public.products  
+  columns: item_name, image_link, description
+  Use for: product catalog, items list
 
 === NOT BUSINESS RELATED ===
 If casual (hello, hi, etc.) → {"query_type": "not_relevant"}
@@ -1004,7 +1013,7 @@ Analyze the provided document content and answer questions accurately.
 If it's a spreadsheet/CSV, explain the data clearly.
 If it's a product catalog, list products and details.
 If it's tasks/delegation data, summarize pending work.
-Always respond in the same language the user asks (Hindi/Hinglish/English).
+Always respond in English only, regardless of what language user asks in.
 Keep answers concise but complete.`;
 
     const aiRes2 = await fetch("https://api.anthropic.com/v1/messages", {
