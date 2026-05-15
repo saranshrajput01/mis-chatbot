@@ -467,7 +467,7 @@ function buildTableHTML(rows) {
     return isNaN(n) ? null : n;
   }
 
-  const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design/i;
+  const NON_AMOUNT_COLS = /phone|mobile|contact|gst|gstin|pan|tan|cin|pin|zip|code|id|no\.?$|num|number|invoice_no|voucher|ref|bill_ref|session|email|address|state|city|name|person|login|description|narration|particular|type|group|category|sub_group|design|month|date|period|year/i
 
   const allAmtCols = cols.filter(col => {
     if (NON_AMOUNT_COLS.test(col)) return false;
