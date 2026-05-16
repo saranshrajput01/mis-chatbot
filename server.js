@@ -223,7 +223,8 @@ ALL business queries including vague ones → try to answer
 }`;
 }
 
-async function processQuery(userMessage, chatHistory, isWhatsApp = false) {
+async function processQuery(
+  userMessage, chatHistory, isWhatsApp = false) {
   if (!liveSchema) await fetchLiveSchema();
   const messages = [
     ...chatHistory.slice(-8).map(h => ({ role: h.role, content: h.content })),
@@ -233,6 +234,30 @@ async function processQuery(userMessage, chatHistory, isWhatsApp = false) {
   const match = planText.match(/\{[\s\S]*\}/);
   if (!match) throw new Error("No JSON from AI");
   return JSON.parse(match[0]);
+}
+
+async function executePlan({
+  message,
+  sessionId,
+  platform,
+  phone = null,
+  chatHistory = []
+}) {
+
+  console.log("\n========== EXECUTE PLAN ==========");
+  console.log("[PLATFORM]", platform);
+  console.log("[MESSAGE]", message);
+
+  // STEP 1: AI PLAN
+  const plan = await processQuery(
+    message,
+    chatHistory,
+    platform === "whatsapp"
+  );
+
+  console.log("[PLAN]", JSON.stringify(plan, null, 2));
+
+  return plan;
 }
 
 // ── FUZZY LEDGER SEARCH ───────────────────────────────────────────────────
@@ -705,24 +730,27 @@ app.delete("/history/:sid", async (req, res) => {
 });
 
 app.post("/chat", async (req, res) => {
-  const { message, history = [], session_id, exactName } = req.body;
-  if (!message) return res.status(400).json({ error: "Message required" });
+  const message = req.body.message || "";
+const session_id = req.body.session_id || "web";
+
+const { data: history } = await supabase
+  .from("chat_history")
+  .select("role,content")
+  .eq("session_id", session_id)
+  .order("created_at", { ascending: true })
+  .limit(20);
+  
+  const plan = await executePlan({
+    message,
+    sessionId: session_id,
+    platform: "web",
+    chatHistory: history || []
+  });
+
+ 
 
   try {
-    if (exactName) {
-      const data = await fuzzyLedgerSearch(exactName);
-      if (data && data.length) {
-        const txns = data.filter(r => r.voucher_particular && !["Opening Balance","Closing Balance",""].includes(r.voucher_particular));
-        const html = buildLedgerHTML(data[0], txns);
-        if (session_id) await supabase.from("chat_history").insert([{ session_id, role:"user", content:message },{ session_id, role:"assistant", content:html }]);
-        return res.json({ reply: html, type: "html" });
-      }
-      return res.json({ reply: `No ledger found for ${exactName}.`, type: "text" });
-    }
 
-    let plan;
-    try { plan = await processQuery(message, history, false); console.log("[PLAN]", JSON.stringify(plan)); }
-    catch(e) { return res.json({ reply: "Could not understand. Please try rephrasing.", type: "text" }); }
 
     if (plan.query_type === "not_relevant") return res.json({ reply: "I can only help with MIS Work India sales & finance data.", type: "text" });
 
@@ -858,7 +886,13 @@ app.post("/whatsapp", async (req, res) => {
 
     // ── AI PROCESSING ─────────────────────────────────────────────────────
     let plan;
-    try { plan = await processQuery(query, [], true); }
+    try { plan = await executePlan({
+      message: query,
+      sessionId: actualPhone,
+      platform: "whatsapp",
+      phone: actualPhone,
+      chatHistory: []
+    });}
     catch(e) { await sendWhatsAppReply(actualPhone, "❌ Samajh nahi aaya, dobara try karo."); return res.json({ success: false }); }
 
     if (plan.query_type === "not_relevant") return res.json({ success: true, ignored: true });
