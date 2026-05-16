@@ -1090,7 +1090,7 @@ async function sendProductImages(phone, products, total) {
     }
     if (!p.image_link || !p.image_link.startsWith("http")) continue;
     try {
-      await fetch(WA_API_URL, {
+      const response = await fetch(WA_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY },
         body: JSON.stringify({ receiverMobileNo: cleanPhone, filePathUrl: [p.image_link], caption: [`🧸 *${p.item_name}*${p.description ? "\n" + String(p.description).substring(0,80) : ""}`] })
