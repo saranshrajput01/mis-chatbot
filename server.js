@@ -579,7 +579,7 @@ async function uploadToSupabase(filePath, mediaType) {
 
 // FIX #3: Send media directly — NO extra link message
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
-  const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+  const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
   try {
@@ -602,7 +602,7 @@ async function sendWhatsAppReply(to, message) {
   try {
     console.log("📤 TRYING TO SEND MESSAGE TO:", to);
     console.log("📩 MESSAGE:", message);
-    const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+    const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
     const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
     await fetch(WA_API_URL, {
@@ -1073,7 +1073,7 @@ app.post("/whatsapp", async (req, res) => {
 
 // ── FIX #8: Send product images with stop support ─────────────────────────
 async function sendProductImages(phone, products, total) {
-  const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+  const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const cleanPhone = phone.replace(/^91/,"");
 
