@@ -505,7 +505,7 @@ async function generateLedgerPDF(info, txns) {
 function buildChartURL(chartConfig, rows) {
   const labels   = rows.map(r => String(r[chartConfig.label_col] || ""));
   const values   = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
-  const COLORS   = ["#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#06d6a0","#f72585","#118ab2","#073b4c","#ffd166","#ef476f","#06d6a0"];
+  const COLORS = ["#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#06d6a0","#f72585","#118ab2","#ffd166","#ef476f","#3a86ff","#fb5607","#8338ec","#ff006e","#06d6a0","#118ab2","#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#f72585","#073b4c","#ffd166","#ef476f","#3a86ff","#fb5607","#8338ec","#ff006e","#06d6a0","#4361ee","#e63946"];
 
   function fmtLabel(v) {
     if (v >= 100000) return "Rs." + (v/100000).toFixed(1) + "L";
@@ -600,6 +600,21 @@ async function uploadToSupabase(filePath, mediaType) {
 // FIX #3: Send media directly — NO extra link message
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
   const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
+  const response = await fetch(WA_API_URL, {
+    method: "POST",
+    headers: { 
+      "Content-Type": "application/json", 
+      "x-api-key": WA_API_KEY 
+    },
+    body: JSON.stringify({ 
+      receiverMobileNo: phone, 
+      filePathUrl: [publicUrl], 
+      caption: caption ? [caption] : undefined,
+      type: mediaType === "document" ? "document" : "image"
+    })
+  });
+  const result = await response.json();
+  console.log("[WA MEDIA RESPONSE]", JSON.stringify(result));
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
   try {
