@@ -740,16 +740,14 @@ const { data: history } = await supabase
   .order("created_at", { ascending: true })
   .limit(20);
   
-  const plan = await executePlan({
-    message,
-    sessionId: session_id,
-    platform: "web",
-    chatHistory: history || []
-  });
-
- 
-
   try {
+
+    const plan = await executePlan({
+      message,
+      sessionId: session_id,
+      platform: "web",
+      chatHistory: history || []
+    });
 
 
     if (plan.query_type === "not_relevant") return res.json({ reply: "I can only help with MIS Work India sales & finance data.", type: "text" });
@@ -810,6 +808,8 @@ app.get("/whatsapp", (req, res) => {
 });
 
 app.post("/whatsapp", async (req, res) => {
+  console.log("🔥 WHATSAPP WEBHOOK HIT");
+  console.log(JSON.stringify(req.body, null, 2));
   console.log("\n========== WHATSAPP WEBHOOK ==========");
   try {
     const body = req.body;
@@ -822,7 +822,10 @@ app.post("/whatsapp", async (req, res) => {
 
     const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone || body.data?.from || body.mobile || "918750285420";
     const actualPhone = String(rawSender).replace(/[^0-9]/g,"") || "918750285420";
-    if (!message) return res.json({ success: false, error: "No message" });
+    if (!message) {
+      console.log("⚠️ No message body");
+      return res.json({ success: true, ignored: true });
+    }
 
     const query = message.trim().replace(/^mis[\s-]?bot\s*/i,"").trim();
     console.log("[WP QUERY]", query, "| FROM:", actualPhone);
@@ -886,13 +889,15 @@ app.post("/whatsapp", async (req, res) => {
 
     // ── AI PROCESSING ─────────────────────────────────────────────────────
     let plan;
+    console.log("⚡ BEFORE EXECUTE PLAN");
     try { plan = await executePlan({
       message: query,
       sessionId: actualPhone,
       platform: "whatsapp",
       phone: actualPhone,
       chatHistory: []
-    });}
+    });
+    console.log("✅ PLAN RECEIVED");}
     catch(e) { await sendWhatsAppReply(actualPhone, "❌ Samajh nahi aaya, dobara try karo."); return res.json({ success: false }); }
 
     if (plan.query_type === "not_relevant") return res.json({ success: true, ignored: true });
