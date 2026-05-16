@@ -278,8 +278,28 @@ async function fuzzyLedgerSearch(searchTerm) {
       .limit(2000);
     if (fuzzy && fuzzy.length) return fuzzy;
   }
-  return [];
-}
+  
+  // Step 3: Partial prefix match (first 4 chars)
+  const prefix = searchTerm.replace(/\s+/g,'').substring(0, 4);
+  if (prefix.length >= 3) {
+    const { data: prefix_data } = await supabase.from("ledger")
+      .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
+      .ilike("name", `%${prefix}%`)
+      .order("voucher_date", { ascending: true })
+      .limit(2000);
+    if (prefix_data && prefix_data.length) return prefix_data;
+  }
+  // Step 4: First 3 chars fallback
+  const prefix3 = searchTerm.replace(/\s+/g, '').substring(0, 3);
+  if (prefix3.length >= 3) {
+    const { data: p3 } = await supabase.from("ledger")
+      .select("name,opening_balance,closing_balance,voucher_date,voucher_particular,voucher_type,voucher_no,voucher_debit,voucher_credit")
+      .ilike("name", `%${prefix3}%`)
+      .order("voucher_date", { ascending: true })
+      .limit(2000);
+    if (p3 && p3.length) return p3;
+  }
+  return [];}
 
 // ── LEDGER HTML ───────────────────────────────────────────────────────────
 function buildLedgerHTML(info, txns) {
