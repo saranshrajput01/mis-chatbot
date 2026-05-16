@@ -137,11 +137,20 @@ TABLE: public.products
   *** For list requests: LIMIT 200, no description needed ***
 
 TABLE: public.delegation_tasks
-  columns: id, del_task_id, plan_date, final_date, delegate_from, delegated_to, project_name, task_name, del_remarks, priority, department_id, del_url
-  *** delegated_to stores who the task is assigned TO ***
-  *** delegate_from stores who ASSIGNED the task ***
-  *** Always use ILIKE for name searches ***
-  *** "Gyanendra kumar" → delegated_to ILIKE '%gyanendra%' OR delegate_from ILIKE '%gyanendra%' ***
+  columns: id, del_task_id, plan_date, final_date, delegate_from, delegated_to,
+           project_name, task_name, del_remarks, priority, department_id, del_url
+  *** delegated_to = task kisko diya gaya hai ***
+  *** delegate_from = kisne diya ***
+  *** ALWAYS extract the person's first name from query and search with ILIKE ***
+  *** ALWAYS search BOTH columns: ***
+  *** WHERE delegated_to ILIKE '%firstname%' OR delegate_from ILIKE '%firstname%' ***
+  *** NEVER use exact match, ALWAYS ILIKE ***
+  *** Examples: ***
+  ***   "Tanvi ke tasks" → ILIKE '%tanvi%' ***
+  ***   "Monu kumar tasks" → ILIKE '%monu%' ***
+  ***   "Saloni ki delegation" → ILIKE '%saloni%' ***
+  *** If 0 results, also search checklist_tasks: ***
+  ***   SELECT task_name, assigned_to, status, priority FROM checklist_tasks WHERE assigned_to ILIKE '%firstname%' ***
 
 TABLE: public.checklist_tasks
   columns: id, task_name, assigned_to, status, priority, remarks, department
