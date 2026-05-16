@@ -689,7 +689,7 @@ async function uploadToSupabase(filePath, mediaType) {
 // ── NEW: SEND WHATSAPP MEDIA VIA PUBLIC URL ────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
-  const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+  const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
 
@@ -857,7 +857,7 @@ app.listen(PORT, async () => {
 // ── SEND WHATSAPP TEXT REPLY ──────────────────────────────────────────────────
 async function sendWhatsAppReply(to, message) {
   try {
-    const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
+    const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
 
     const phone = String(to).split("@")[0].replace(/[^0-9]/g, "").replace(/^91/, "");
