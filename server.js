@@ -186,6 +186,19 @@ async function runSQL(sql) {
 }
 
 // ── CHAT HISTORY ──────────────────────────────────────────────────────────────
+app.get("/test-wa", async (req, res) => {
+  try {
+    await sendWhatsAppReply(
+      "918750285420",
+      "WhatsApp API working 🔥"
+    );
+
+    res.send("Message sent");
+  } catch (e) {
+    console.error(e);
+    res.send("Failed");
+  }
+});
 app.get("/history/:sid", async (req, res) => {
   try {
     const { data } = await supabase.from("chat_history")
