@@ -612,13 +612,11 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
       },
       body: JSON.stringify({
         receiverMobileNo: phone,
-        filePathUrl: publicUrl,
-        caption: caption || "",
-        type: mediaType === "document" ? "document" : "image"
-      })    });
+        filePathUrl: [publicUrl]   // ✅ sirf yeh, array mein
+      })
+    });
     const result = await response.json();
     console.log("[WA MEDIA RESPONSE]", JSON.stringify(result));
-    console.log("[WA MEDIA SENT]", mediaType, phone);
   } catch(e) {
     console.error("[WA MEDIA ERROR]", e.message);
     await sendWhatsAppReply(phone, caption + "\n\n⚠️ File send nahi ho paya.");
@@ -626,7 +624,6 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
     try { fs.unlinkSync(filePath); } catch(e) {}
   }
 }
-
 async function sendWhatsAppReply(to, message) {
   try {
     console.log("📤 TRYING TO SEND MESSAGE TO:", to);
