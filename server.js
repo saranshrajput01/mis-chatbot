@@ -220,7 +220,62 @@ ALL business queries including vague ones → try to answer
   "chart_config": { "type":"bar|line|pie|doughnut", "title":"...", "sql":"...", "label_col":"...", "value_col":"..." },
   "clarify_message": "...",
   "clarify_options": []
+  
 }`;
+
+async function generateDataPDF(rows, cols, title) {
+  return new Promise((resolve, reject) => {
+    try {
+      const tmpPath = path.join(os.tmpdir(), `data_${Date.now()}.pdf`);
+      const doc = new PDFDocument({ margin: 20, size: "A4", layout: "landscape" });
+      const stream = fs.createWriteStream(tmpPath);
+      doc.pipe(stream);
+      const pageW = doc.page.width;
+      const margin = 20;
+      const tableW = pageW - margin * 2;
+      const displayCols = cols.slice(0, 8);
+      const colW = Math.floor(tableW / displayCols.length);
+
+      function drawPageHeader() {
+        doc.rect(0, 0, pageW, 40).fill("#1a1a2e");
+        doc.fillColor("#fff").fontSize(11).font("Helvetica-Bold")
+           .text(`Mis Work India — ${title}`, margin, 14, { align: "center", width: tableW });
+      }
+      function drawColHeaders(y) {
+        doc.rect(margin, y, tableW, 16).fill("#333355");
+        doc.fillColor("#fff").fontSize(7).font("Helvetica-Bold");
+        displayCols.forEach((col, i) => {
+          doc.text(col.replace(/_/g," ").substring(0,18), margin + i * colW, y + 4, { width: colW - 2 });
+        });
+        return y + 16;
+      }
+      drawPageHeader();
+      let y = 45;
+      y = drawColHeaders(y);
+      doc.fontSize(6.5).font("Helvetica");
+      rows.forEach((r, i) => {
+        if (y > doc.page.height - 30) {
+          doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+          drawPageHeader();
+          y = 45;
+          y = drawColHeaders(y);
+          doc.fontSize(6.5).font("Helvetica");
+        }
+        doc.rect(margin, y, tableW, 13).fill(i % 2 === 0 ? "#fff" : "#f5f5f5");
+        doc.fillColor("#000");
+        displayCols.forEach((col, ci) => {
+          const val = String(r[col] ?? "").substring(0, 22);
+          doc.text(val, margin + ci * colW, y + 3, { width: colW - 2 });
+        });
+        y += 13;
+      });
+      doc.fontSize(7).fillColor("#666").text(`Total: ${rows.length} records`, margin, y + 5);
+      doc.end();
+      stream.on("finish", () => resolve(tmpPath));
+      stream.on("error", reject);
+    } catch(e) { reject(e); }
+  });
+}
 }
 
 async function processQuery(
@@ -503,79 +558,73 @@ async function generateLedgerPDF(info, txns) {
 // ── CHART ─────────────────────────────────────────────────────────────────
 // FIX #2: Proper grouped bar chart with legends and value labels
 function buildChartURL(chartConfig, rows) {
-  const labels   = rows.map(r => String(r[chartConfig.label_col] || ""));
-  const values   = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
-  const COLORS = ["#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#06d6a0","#f72585","#118ab2","#ffd166","#ef476f","#3a86ff","#fb5607","#8338ec","#ff006e","#06d6a0","#118ab2","#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#f72585","#073b4c","#ffd166","#ef476f","#3a86ff","#fb5607","#8338ec","#ff006e","#06d6a0","#4361ee","#e63946"];
+  const labels = rows.map(r => String(r[chartConfig.label_col] || ""));
+  const values = rows.map(r => parseFloat(r[chartConfig.value_col] || 0));
+  const chartType = chartConfig.type || "bar";
+  const COLORS = ["#4361ee","#e63946","#2ec4b6","#ff9f1c","#7209b7","#06d6a0","#f72585","#118ab2"];
 
   function fmtLabel(v) {
-    if (v >= 100000) return "Rs." + (v/100000).toFixed(1) + "L";
-    if (v >= 1000)   return "Rs." + (v/1000).toFixed(0) + "K";
-    return "Rs." + v;
-  }
-
-  // Detect multi-series: if rows have both label_col and a category col
-  const chartType = chartConfig.type || "bar";
-  const isMultiSeries = chartConfig.series_cols && chartConfig.series_cols.length > 1;
-
-  let datasets;
-  if (isMultiSeries) {
-    // Multi-series bar chart
-    const uniqueLabels = [...new Set(rows.map(r => String(r[chartConfig.label_col] || "")))];
-    datasets = chartConfig.series_cols.map((col, idx) => ({
-      label: col.replace(/_/g," "),
-      data: uniqueLabels.map(lbl => {
-        const row = rows.find(r => String(r[chartConfig.label_col]) === lbl);
-        return parseFloat(row?.[col] || 0);
-      }),
-      backgroundColor: COLORS[idx] + "cc",
-      borderColor: COLORS[idx],
-      borderWidth: 1
-    }));
-  } else {
-    datasets = [{
-      label: chartConfig.title || "Data",
-      data: values,
-      backgroundColor: (chartType === "pie" || chartType === "doughnut")
-        ? COLORS.slice(0, values.length)
-        : COLORS.slice(0, values.length).map(c => c + "cc"),
-      borderColor: chartType === "line" ? "#4361ee" : COLORS.slice(0, values.length),
-      borderWidth: chartType === "line" ? 2 : 1,
-      fill: chartType === "line" ? false : undefined,
-      tension: chartType === "line" ? 0.4 : undefined,
-      pointRadius: chartType === "line" ? 4 : undefined
-    }];
+    if (v >= 10000000) return (v/10000000).toFixed(1) + "Cr";
+    if (v >= 100000)  return (v/100000).toFixed(1) + "L";
+    if (v >= 1000)    return (v/1000).toFixed(0) + "K";
+    return String(v);
   }
 
   const chartDef = {
     type: chartType,
-    data: { labels: isMultiSeries ? [...new Set(rows.map(r => String(r[chartConfig.label_col]||"")))] : labels, datasets },
+    data: {
+      labels,
+      datasets: [{
+        label: chartConfig.title || "Data",
+        data: values,
+        backgroundColor: (chartType === "pie" || chartType === "doughnut")
+          ? COLORS.slice(0, values.length)
+          : "#4361ee99",
+        borderColor: "#4361ee",
+        borderWidth: chartType === "line" ? 2 : 1,
+        fill: false,
+        tension: 0.4,
+        pointRadius: 5,
+        pointBackgroundColor: "#4361ee"
+      }]
+    },
     options: {
       plugins: {
-        title: { display: true, text: chartConfig.title || "Chart", font: { size: 15, weight: "bold" }, padding: { bottom: 12 } },
-        legend: { display: true, position: chartType === "pie" || chartType === "doughnut" ? "right" : "top", labels: { font: { size: 11 }, padding: 16 } },
+        title: {
+          display: true,
+          text: chartConfig.title || "Chart",
+          font: { size: 16, weight: "bold" },
+          padding: { bottom: 10 }
+        },
+        legend: { display: true, position: "top" },
         datalabels: {
           display: true,
-          anchor: chartType === "bar" ? "end" : "center",
-          align: chartType === "bar" ? "top" : "center",
-          color: chartType === "bar" ? "#333" : "#fff",
-          font: { size: 9, weight: "bold" },
+          anchor: "end",
+          align: "top",
+          color: "#000000",
+          font: { size: 10, weight: "bold" },
           formatter: (v) => fmtLabel(v)
         }
       },
       scales: (chartType !== "pie" && chartType !== "doughnut") ? {
         y: {
           beginAtZero: true,
-          ticks: { callback: (v) => { if (v>=100000) return "Rs."+(v/100000).toFixed(1)+"L"; if(v>=1000) return "Rs."+(v/1000).toFixed(0)+"K"; return "Rs."+v; }, font: { size: 10 } },
+          ticks: {
+            font: { size: 10 },
+            callback: (v) => fmtLabel(v)
+          },
           grid: { color: "rgba(0,0,0,0.07)" }
         },
-        x: { ticks: { font: { size: 10 }, maxRotation: 45 }, grid: { display: false } }
+        x: {
+          ticks: { font: { size: 9 }, maxRotation: 45 },
+          grid: { display: false }
+        }
       } : {}
     }
   };
 
-  return `https://quickchart.io/chart?w=900&h=500&bkg=white&c=${encodeURIComponent(JSON.stringify(chartDef))}`;
+  return `https://quickchart.io/chart?w=1000&h=550&bkg=white&c=${encodeURIComponent(JSON.stringify(chartDef))}`;
 }
-
 async function downloadChartImage(chartURL) {
   const resp = await fetch(chartURL);
   if (!resp.ok) throw new Error("QuickChart failed: " + resp.status);
@@ -1090,6 +1139,14 @@ app.post("/whatsapp", async (req, res) => {
     res.json({ success: true, reply: replyText });
     console.log("📤 SENDING FINAL REPLY");
     await sendWhatsAppReply(actualPhone, replyText);
+    // PDF for 20+ records
+    if (rows.length > 20) {
+      try {
+        const pdfCols = Object.keys(rows[0]);
+        const pdfPath = await generateDataPDF(rows, pdfCols, query);
+        await sendWhatsAppMedia(actualPhone, pdfPath, `📄 *Poori list — ${rows.length} records*`, "document");
+      } catch(e) { console.error("[DATA PDF ERROR]", e.message); }
+    }
 
   } catch(err) {
     console.error("[WP ERROR]", err);
