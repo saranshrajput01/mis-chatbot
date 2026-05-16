@@ -600,6 +600,8 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
 
 async function sendWhatsAppReply(to, message) {
   try {
+    console.log("📤 TRYING TO SEND MESSAGE TO:", to);
+    console.log("📩 MESSAGE:", message);
     const WA_API_KEY = "24c23ac43d6ac2835e2cd16b6a1f2916715921fd173bba82ab";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
     const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
@@ -608,6 +610,7 @@ async function sendWhatsAppReply(to, message) {
       headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY },
       body: JSON.stringify({ receiverMobileNo: phone, message: [String(message).slice(0, 1500)] })
     });
+    console.log("✅ WHATSAPP MESSAGE SENT");
   } catch(e) { console.error("[WA REPLY ERROR]", e.message); }
 }
 
@@ -1059,6 +1062,7 @@ app.post("/whatsapp", async (req, res) => {
     }
 
     res.json({ success: true, reply: replyText });
+    console.log("📤 SENDING FINAL REPLY");
     await sendWhatsAppReply(actualPhone, replyText);
 
   } catch(err) {
