@@ -600,30 +600,24 @@ async function uploadToSupabase(filePath, mediaType) {
 // FIX #3: Send media directly — NO extra link message
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
   const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
-  const response = await fetch(WA_API_URL, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json", 
-      "x-api-key": WA_API_KEY 
-    },
-    body: JSON.stringify({ 
-      receiverMobileNo: phone, 
-      filePathUrl: [publicUrl], 
-      caption: caption ? [caption] : undefined,
-      type: mediaType === "document" ? "document" : "image"
-    })
-  });
-  const result = await response.json();
-  console.log("[WA MEDIA RESPONSE]", JSON.stringify(result));
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
   try {
     const publicUrl = await uploadToSupabase(filePath, mediaType);
-    await fetch(WA_API_URL, {
+    const response = await fetch(WA_API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": WA_API_KEY },
-      body: JSON.stringify({ receiverMobileNo: phone, filePathUrl: [publicUrl], caption: caption ? [caption] : undefined })
+      headers: { 
+        "Content-Type": "application/json", 
+        "x-api-key": WA_API_KEY 
+      },
+      body: JSON.stringify({ 
+        receiverMobileNo: phone, 
+        filePathUrl: [publicUrl], 
+        caption: caption ? [caption] : undefined
+      })
     });
+    const result = await response.json();
+    console.log("[WA MEDIA RESPONSE]", JSON.stringify(result));
     console.log("[WA MEDIA SENT]", mediaType, phone);
   } catch(e) {
     console.error("[WA MEDIA ERROR]", e.message);
