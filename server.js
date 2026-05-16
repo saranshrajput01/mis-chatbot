@@ -610,12 +610,12 @@ async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") 
         "Content-Type": "application/json", 
         "x-api-key": WA_API_KEY 
       },
-      body: JSON.stringify({ 
-        receiverMobileNo: phone, 
-        filePathUrl: [publicUrl], 
-        caption: caption ? [caption] : undefined
-      })
-    });
+      body: JSON.stringify({
+        receiverMobileNo: phone,
+        filePathUrl: publicUrl,
+        caption: caption || "",
+        type: mediaType === "document" ? "document" : "image"
+      })    });
     const result = await response.json();
     console.log("[WA MEDIA RESPONSE]", JSON.stringify(result));
     console.log("[WA MEDIA SENT]", mediaType, phone);
