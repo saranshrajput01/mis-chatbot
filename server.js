@@ -1181,20 +1181,20 @@ app.post("/whatsapp", async (req, res) => {
             // CSV header
             let csv = "Party Name," + months.map(m => fmtMonth(m)).join(",") + ",Total\n";
             
-            // Data rows with Indian commas
+            // Data rows with Indian commas (quoted to preserve commas)
             sortedNames.forEach(name => {
               csv += `"${name}",`;
               csv += months.map(m => {
                 const val = pivot[name][m] || 0;
-                return val > 0 ? val.toLocaleString("en-IN") : "-";
+                return val > 0 ? `"${val.toLocaleString("en-IN")}"` : "-";
               }).join(",");
-              csv += "," + (rowTotals[name] || 0).toLocaleString("en-IN") + "\n";
+              csv += `,"${(rowTotals[name] || 0).toLocaleString("en-IN")}"\n`;
             });
             
             // Grand total row
             csv += "Grand Total,";
-            csv += months.map(m => (colTotals[m] || 0).toLocaleString("en-IN")).join(",");
-            csv += "," + grandTotal.toLocaleString("en-IN") + "\n";
+            csv += months.map(m => `"${(colTotals[m] || 0).toLocaleString("en-IN")}"`).join(",");
+            csv += `,"${grandTotal.toLocaleString("en-IN")}"\n`;
             
             fs.writeFileSync(csvPath, csv, "utf8");
           } else {
