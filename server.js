@@ -334,8 +334,54 @@ async function generateDataPDF(rows, cols, title) {
         doc.rect(margin, y, tableW, 13).fill(i % 2 === 0 ? "#fff" : "#f5f5f5");
         doc.fillColor("#000");
         displayCols.forEach((col, ci) => {
-          const val = String(r[col] ?? "").substring(0, 22);
-          doc.text(val, margin + ci * colW, y + 3, { width: colW - 2 });
+          let val = r[col];
+          let displayVal = "";
+          let isLink = false;
+          
+          // Smart formatting per column type
+          const colLower = col.toLowerCase();
+          
+          if (val == null || val === "") {
+            displayVal = "-";
+          } else if (colLower.includes("pdf") || colLower.includes("url") || colLower.includes("link") || colLower.includes("image")) {
+            // URL columns - show "View PDF" or "View Link" as clickable
+            const urlStr = String(val);
+            if (urlStr.startsWith("http")) {
+              displayVal = colLower.includes("pdf") ? "📄 View PDF" : "🔗 View Link";
+              isLink = true;
+            } else {
+              displayVal = urlStr.substring(0, 25);
+            }
+          } else if (colLower.includes("date") || colLower.includes("created_at") || colLower.includes("updated_at") || colLower === "month") {
+            // Date columns - format nicely
+            const dateStr = String(val);
+            if (dateStr.includes("T")) {
+              displayVal = dateStr.split("T")[0]; // Remove time portion
+            } else {
+              displayVal = dateStr.substring(0, 15);
+            }
+          } else {
+            // Try to detect numeric (amount) columns
+            const num = parseFloat(String(val).replace(/[₹,Rs.\s]/g, ""));
+            const isAmtCol = /price|amount|salary|total|pending|debit|credit|rent|gst|tax|balance/i.test(col);
+            if (!isNaN(num) && num > 0 && isAmtCol && String(val).length < 15) {
+              displayVal = num.toLocaleString("en-IN");
+            } else {
+              displayVal = String(val).substring(0, 30);
+            }
+          }
+          
+          if (isLink) {
+            doc.fillColor("#0066cc");
+            doc.text(displayVal, margin + ci * colW, y + 3, { 
+              width: colW - 2,
+              link: String(val),
+              underline: true
+            });
+            doc.fillColor("#000");
+          } else {
+            doc.text(displayVal, margin + ci * colW, y + 3, { width: colW - 2 });
+          }
         });
         y += 13;
       });
