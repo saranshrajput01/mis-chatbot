@@ -1154,7 +1154,15 @@ app.post("/whatsapp", async (req, res) => {
         res.json({ success: true });
         try {
           const csvCols = Object.keys(rows[0]);
-          const csvPath = generateCSV(rows, csvCols);
+          // Generate CSV inline
+          const csvPath = path.join(os.tmpdir(), `data_${Date.now()}.csv`);
+          const header = csvCols.join(",");
+          const body = rows.map(r => csvCols.map(c => {
+            const val = String(r[c] ?? "").replace(/"/g, '""');
+            return val.includes(",") || val.includes("\n") ? `"${val}"` : val;
+          }).join(",")).join("\n");
+          fs.writeFileSync(csvPath, header + "\n" + body, "utf8");
+          
           await sendWhatsAppMedia(actualPhone, csvPath, `📊 ${recordType}\n${rows.length} records\n\n💡 Open in Excel for pivot table`, "document");
         } catch(e) { 
           console.error("[CSV ERROR]", e.message);
