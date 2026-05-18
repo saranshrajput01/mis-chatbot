@@ -6,7 +6,6 @@ const PDFDocument = require("pdfkit");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-const config = require("./config");
 
 const app = express();
 app.use(cors());
@@ -65,7 +64,7 @@ async function fetchLiveSchema() {
   }
 }
 
-async function openai(systemPrompt, messages, maxTokens = config.OPENAI_MAX_TOKENS) {
+async function openai(systemPrompt, messages, maxTokens = 3000) {
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -75,7 +74,7 @@ async function openai(systemPrompt, messages, maxTokens = config.OPENAI_MAX_TOKE
     body: JSON.stringify({
       model: "gpt-4o",
       max_tokens: maxTokens,
-      temperature: config.OPENAI_TEMPERATURE,
+      temperature: 0.1,
       messages: [{ role: "system", content: systemPrompt }, ...messages]
     })
   });
@@ -223,7 +222,6 @@ ALL business queries including vague ones → try to answer
   "clarify_options": []
   
 }`;
-}
 
 async function generateDataPDF(rows, cols, title) {
   return new Promise((resolve, reject) => {
@@ -235,7 +233,7 @@ async function generateDataPDF(rows, cols, title) {
       const pageW = doc.page.width;
       const margin = 20;
       const tableW = pageW - margin * 2;
-      const displayCols = cols.slice(0, config.PDF_MAX_COLUMNS);
+      const displayCols = cols.slice(0, 8);
       const colW = Math.floor(tableW / displayCols.length);
 
       function drawPageHeader() {
@@ -277,6 +275,7 @@ async function generateDataPDF(rows, cols, title) {
       stream.on("error", reject);
     } catch(e) { reject(e); }
   });
+}
 }
 
 async function processQuery(
@@ -356,7 +355,7 @@ async function fuzzyLedgerSearch(searchTerm) {
     if (p3 && p3.length) return p3;
   }
   return [];}
-
+  
 // ── LEDGER HTML ───────────────────────────────────────────────────────────
 function buildLedgerHTML(info, txns) {
   const openBal  = parseFloat(info.opening_balance) || 0;
@@ -428,23 +427,6 @@ function buildLedgerHTML(info, txns) {
 
 async function runSQL(sql) {
   console.log("\n[SQL]", sql);
-  
-  // SQL Safety Layer 1: Code-side validation
-  const cleaned = sql.trim().toLowerCase();
-  
-  // Only SELECT allowed
-  if (!cleaned.startsWith("select")) {
-    throw new Error("❌ Only SELECT queries allowed");
-  }
-  
-  // Block dangerous keywords
-  const forbidden = ["drop ", "delete ", "truncate ", "alter ", "insert ", "update ", "create ", "grant ", "revoke "];
-  for (const word of forbidden) {
-    if (cleaned.includes(word)) {
-      throw new Error(`❌ Forbidden operation: ${word.trim()}`);
-    }
-  }
-  
   const { data, error } = await supabase.rpc("execute_sql", { query: sql });
   if (error) throw new Error(error.message);
   return data || [];
@@ -666,7 +648,7 @@ async function uploadToSupabase(filePath, mediaType) {
 
 // FIX #3: Send media directly — NO extra link message
 async function sendWhatsAppMedia(to, filePath, caption, mediaType = "document") {
-  const WA_API_KEY = process.env.WA_API_KEY;
+  const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
   try {
@@ -695,7 +677,7 @@ async function sendWhatsAppReply(to, message) {
   try {
     console.log("📤 TRYING TO SEND MESSAGE TO:", to);
     console.log("📩 MESSAGE:", message);
-    const WA_API_KEY = process.env.WA_API_KEY;
+    const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
     const WA_API_URL = "http://app.mis.work/api/v1/message/create";
     const phone = String(to).replace(/[^0-9]/g, "").replace(/^91/, "");
     await fetch(WA_API_URL, {
@@ -916,15 +898,8 @@ app.post("/whatsapp", async (req, res) => {
       (Array.isArray(body.messages) ? body.messages[0]?.text?.body : null) ||
       (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.text?.body) || "";
 
-    const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone || body.data?.from || body.mobile || (Array.isArray(body.messages) ? body.messages[0]?.from : null) || (body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from);
-    const actualPhone = String(rawSender || "").replace(/[^0-9]/g,"");
-    
-    if (!actualPhone || actualPhone.length < 10) {
-      console.log("⚠️ Invalid or missing phone number in webhook");
-      console.log("Body received:", JSON.stringify(body, null, 2));
-      return res.json({ success: true, ignored: true, reason: "no_phone" });
-    }
-    
+    const rawSender = body.senderNumber || body.from || body.From || body.sender || body.phone || body.data?.from || body.mobile || "918750285420";
+    const actualPhone = String(rawSender).replace(/[^0-9]/g,"") || "918750285420";
     if (!message) {
       console.log("⚠️ No message body");
       return res.json({ success: true, ignored: true });
@@ -1118,7 +1093,7 @@ app.post("/whatsapp", async (req, res) => {
     const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟","1️⃣1️⃣","1️⃣2️⃣","1️⃣3️⃣","1️⃣4️⃣","1️⃣5️⃣","1️⃣6️⃣","1️⃣7️⃣","1️⃣8️⃣","1️⃣9️⃣","2️⃣0️⃣"];
 
     // Show max 20 records on WP
-    const displayRows = rows.slice(0, config.WP_DISPLAY_LIMIT);
+    const displayRows = rows.slice(0, 20);
     const replyLines  = displayRows.map((r, i) => {
       // Smart name detection
       const namePriority = ["employee_name","design_number","company_name","name","party_name","item_name","task_name","invoice_no","sub_group"];
@@ -1181,7 +1156,7 @@ app.post("/whatsapp", async (req, res) => {
 
 // ── FIX #8: Send product images with stop support ─────────────────────────
 async function sendProductImages(phone, products, total) {
-  const WA_API_KEY = process.env.WA_API_KEY;
+  const WA_API_KEY = "07168d1c665334e9a593c57d935468807294a9f0c3027a3fe0";
   const WA_API_URL = "http://app.mis.work/api/v1/message/create";
   const cleanPhone = phone.replace(/^91/,"");
 
@@ -1252,26 +1227,18 @@ async function syncProducts() {
   try {
     const csv = await fetchSheetCSV("1581260341");
     const rows = parseCSV(csv);
-    if (!rows.length) {
-      console.log("[SYNC] Products: No data in sheet, skipping");
-      return 0;
-    }
+    if (!rows.length) return 0;
+    await supabase.from("products").delete().neq("id", 0);
     const toInsert = rows.filter(r => r["ITEM NAME"] || r["Item Name"] || r["item name"]).map(r => ({
       item_name: r["ITEM NAME"] || r["Item Name"] || r["item name"] || "",
       image_link: r["image link"] || r["Image Link"] || r["IMAGE LINK"] || Object.values(r).find((v,i) => Object.keys(r)[i]?.toLowerCase().includes("image") && String(v).startsWith("http")) || "",
       description: r["Description"] || r["description"] || r["DESCRIPTION"] || ""
     }));
-    if (toInsert.length) {
-      await supabase.from("products").upsert(toInsert, { 
-        onConflict: "item_name",
-        ignoreDuplicates: false
-      });
-    }
+    if (toInsert.length) await supabase.from("products").insert(toInsert);
     await supabase.from("sync_log").insert({ sheet_name: "products", rows_synced: toInsert.length, status: "success" });
     console.log("[SYNC] Products:", toInsert.length);
     return toInsert.length;
   } catch(e) {
-    console.error("[SYNC ERROR] Products:", e.message);
     await supabase.from("sync_log").insert({ sheet_name: "products", rows_synced: 0, status: "error: " + e.message });
     return 0;
   }
@@ -1281,10 +1248,8 @@ async function syncDelegationTasks() {
   try {
     const csv = await fetchSheetCSV("1671023111");
     const rows = parseCSV(csv);
-    if (!rows.length) {
-      console.log("[SYNC] Delegation tasks: No data in sheet, skipping");
-      return 0;
-    }
+    if (!rows.length) return 0;
+    await supabase.from("delegation_tasks").delete().neq("id", 0);
     const toInsert = rows.filter(r => r["taskName"] || r["task_name"]).map(r => ({
       del_task_id: r["delTaskId"] || "",
       plan_date:   r["planDate"] ? convertExcelDate(r["planDate"]) : null,
@@ -1298,17 +1263,10 @@ async function syncDelegationTasks() {
       department_id: r["departmentId"] || "",
       del_url:     r["delUrl"] || ""
     }));
-    if (toInsert.length) {
-      await supabase.from("delegation_tasks").upsert(toInsert, {
-        onConflict: "del_task_id",
-        ignoreDuplicates: false
-      });
-    }
+    if (toInsert.length) await supabase.from("delegation_tasks").insert(toInsert);
     await supabase.from("sync_log").insert({ sheet_name: "delegation_tasks", rows_synced: toInsert.length, status: "success" });
-    console.log("[SYNC] Delegation tasks:", toInsert.length);
     return toInsert.length;
   } catch(e) {
-    console.error("[SYNC ERROR] Delegation tasks:", e.message);
     await supabase.from("sync_log").insert({ sheet_name: "delegation_tasks", rows_synced: 0, status: "error: " + e.message });
     return 0;
   }
@@ -1318,10 +1276,8 @@ async function syncChecklistTasks() {
   try {
     const csv = await fetchSheetCSV("426961603");
     const rows = parseCSV(csv);
-    if (!rows.length) {
-      console.log("[SYNC] Checklist tasks: No data in sheet, skipping");
-      return 0;
-    }
+    if (!rows.length) return 0;
+    await supabase.from("checklist_tasks").delete().neq("id", 0);
     const toInsert = rows.filter(r => Object.values(r).some(v => v)).map(r => ({
       task_name:   r["taskName"] || r["Task Name"] || "",
       assigned_to: r["taskTo"] || r["assignedTo"] || "",
@@ -1330,17 +1286,10 @@ async function syncChecklistTasks() {
       remarks:     r["taskFrom"] || r["remarks"] || "",
       department:  r["departmentId"] || r["department"] || ""
     }));
-    if (toInsert.length) {
-      await supabase.from("checklist_tasks").upsert(toInsert, {
-        onConflict: "id",
-        ignoreDuplicates: false
-      });
-    }
+    if (toInsert.length) await supabase.from("checklist_tasks").insert(toInsert);
     await supabase.from("sync_log").insert({ sheet_name: "checklist_tasks", rows_synced: toInsert.length, status: "success" });
-    console.log("[SYNC] Checklist tasks:", toInsert.length);
     return toInsert.length;
   } catch(e) {
-    console.error("[SYNC ERROR] Checklist tasks:", e.message);
     await supabase.from("sync_log").insert({ sheet_name: "checklist_tasks", rows_synced: 0, status: "error: " + e.message });
     return 0;
   }
@@ -1350,10 +1299,8 @@ async function syncScores() {
   try {
     const csv = await fetchSheetCSV("1226212674");
     const rows = parseCSV(csv);
-    if (!rows.length) {
-      console.log("[SYNC] Scores: No data in sheet, skipping");
-      return 0;
-    }
+    if (!rows.length) return 0;
+    await supabase.from("scores").delete().neq("id", 0);
     const toInsert = rows.filter(r => Object.values(r).some(v => v)).map(r => ({
       employee_name: r["employee_name"] || r["Employee Name"] || r["name"] || "",
       score_value:   r["score_value"] || r["Score"] || r["score"] || "",
@@ -1361,17 +1308,10 @@ async function syncScores() {
       period:        r["period"] || r["Period"] || "",
       remarks:       r["remarks"] || r["Remarks"] || ""
     }));
-    if (toInsert.length) {
-      await supabase.from("scores").upsert(toInsert, {
-        onConflict: "id",
-        ignoreDuplicates: false
-      });
-    }
+    if (toInsert.length) await supabase.from("scores").insert(toInsert);
     await supabase.from("sync_log").insert({ sheet_name: "scores", rows_synced: toInsert.length, status: "success" });
-    console.log("[SYNC] Scores:", toInsert.length);
     return toInsert.length;
   } catch(e) {
-    console.error("[SYNC ERROR] Scores:", e.message);
     await supabase.from("sync_log").insert({ sheet_name: "scores", rows_synced: 0, status: "error: " + e.message });
     return 0;
   }
@@ -1401,7 +1341,7 @@ app.get("/sync/status", async (req, res) => {
   } catch(e) { res.json([]); }
 });
 
-setInterval(() => { console.log("[AUTO-SYNC]"); syncAllSheets(); }, config.SYNC_INTERVAL_MS);
+setInterval(() => { console.log("[AUTO-SYNC]"); syncAllSheets(); }, 15 * 60 * 1000);
 setTimeout(syncAllSheets, 5000);
 
 // ── DOCUMENT INTELLIGENCE ─────────────────────────────────────────────────
