@@ -1154,16 +1154,60 @@ app.post("/whatsapp", async (req, res) => {
         res.json({ success: true });
         try {
           const csvCols = Object.keys(rows[0]);
-          // Generate CSV inline
           const csvPath = path.join(os.tmpdir(), `data_${Date.now()}.csv`);
-          const header = csvCols.join(",");
-          const body = rows.map(r => csvCols.map(c => {
-            const val = String(r[c] ?? "").replace(/"/g, '""');
-            return val.includes(",") || val.includes("\n") ? `"${val}"` : val;
-          }).join(",")).join("\n");
-          fs.writeFileSync(csvPath, header + "\n" + body, "utf8");
           
-          await sendWhatsAppMedia(actualPhone, csvPath, `📊 ${recordType}\n${rows.length} records\n\n💡 Open in Excel for pivot table`, "document");
+          // Check if pivot format needed (has month column)
+          if (hasPivotStructure) {
+            // Build pivot table
+            const nameCol = csvCols.find(c => ["party_name","name","company_name","employee_name"].includes(c));
+            const months = [...new Set(rows.map(r => r.month))].sort();
+            const pivot = {};
+            const rowTotals = {};
+            const colTotals = {};
+            months.forEach(m => colTotals[m] = 0);
+            
+            rows.forEach(r => {
+              const name = r[nameCol] || "Other";
+              const val = parseFloat(r.total || r.amount || 0);
+              if (!pivot[name]) pivot[name] = {};
+              pivot[name][r.month] = (pivot[name][r.month] || 0) + val;
+              rowTotals[name] = (rowTotals[name] || 0) + val;
+              colTotals[r.month] = (colTotals[r.month] || 0) + val;
+            });
+            
+            const sortedNames = Object.keys(pivot).sort((a,b) => (rowTotals[b]||0) - (rowTotals[a]||0));
+            const grandTotal = Object.values(rowTotals).reduce((s,v) => s+v, 0);
+            
+            // CSV header
+            let csv = "Party Name," + months.map(m => fmtMonth(m)).join(",") + ",Total\n";
+            
+            // Data rows with Indian commas
+            sortedNames.forEach(name => {
+              csv += `"${name}",`;
+              csv += months.map(m => {
+                const val = pivot[name][m] || 0;
+                return val > 0 ? val.toLocaleString("en-IN") : "-";
+              }).join(",");
+              csv += "," + (rowTotals[name] || 0).toLocaleString("en-IN") + "\n";
+            });
+            
+            // Grand total row
+            csv += "Grand Total,";
+            csv += months.map(m => (colTotals[m] || 0).toLocaleString("en-IN")).join(",");
+            csv += "," + grandTotal.toLocaleString("en-IN") + "\n";
+            
+            fs.writeFileSync(csvPath, csv, "utf8");
+          } else {
+            // Regular table format
+            const header = csvCols.join(",");
+            const body = rows.map(r => csvCols.map(c => {
+              const val = String(r[c] ?? "").replace(/"/g, '""');
+              return val.includes(",") || val.includes("\n") ? `"${val}"` : val;
+            }).join(",")).join("\n");
+            fs.writeFileSync(csvPath, header + "\n" + body, "utf8");
+          }
+          
+          await sendWhatsAppMedia(actualPhone, csvPath, `📊 ${recordType}\n${rows.length} records\n\n💡 Open in Excel - Ready pivot table!`, "document");
         } catch(e) { 
           console.error("[CSV ERROR]", e.message);
           await sendWhatsAppReply(actualPhone, `⚠️ CSV error: ${e.message}`);
