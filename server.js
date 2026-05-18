@@ -2,6 +2,14 @@
 if (!process.env.RAILWAY_ENVIRONMENT) {
   require("dotenv").config();
 }
+
+// Debug: Check environment variables on startup
+console.log("[ENV DEBUG] RAILWAY_ENVIRONMENT:", process.env.RAILWAY_ENVIRONMENT);
+console.log("[ENV DEBUG] SUPABASE_URL:", process.env.SUPABASE_URL ? "✓ Set" : "✗ Missing");
+console.log("[ENV DEBUG] SUPABASE_SERVICE_KEY:", process.env.SUPABASE_SERVICE_KEY ? "✓ Set (first 20):" + process.env.SUPABASE_SERVICE_KEY.substring(0, 20) : "✗ Missing");
+console.log("[ENV DEBUG] OPENAI_API_KEY:", process.env.OPENAI_API_KEY ? "✓ Set (first 20):" + process.env.OPENAI_API_KEY.substring(0, 20) : "✗ Missing");
+console.log("[ENV DEBUG] WA_API_KEY:", process.env.WA_API_KEY ? "✓ Set" : "✗ Missing");
+
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
