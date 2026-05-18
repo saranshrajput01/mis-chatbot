@@ -1165,8 +1165,12 @@ app.post("/whatsapp", async (req, res) => {
       cols.includes("category") || cols.includes("sub_group")
     );
 
-    // If 20+ records, send PDF/CSV directly (pivot or regular table)
-    if (rows.length >= 20) {
+    // Check if multi-column query (4+ columns means user wants detailed data)
+    // Examples: invoice_no + amount + gst + link + timestamp
+    const isMultiColumn = cols.length >= 4 && !hasPivotStructure;
+
+    // If 20+ records OR multi-column query, send PDF/CSV directly
+    if (rows.length >= 20 || isMultiColumn) {
       const recordType = hasPivotStructure ? "Pivot Table" : "Data Table";
       
       // For 100+ records, send CSV instead of PDF (better for Excel)
