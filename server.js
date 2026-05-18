@@ -208,6 +208,19 @@ ${isWhatsApp ? `
 - image request → SELECT item_name, image_link, description FROM products WHERE item_name ILIKE '%X%' OR description ILIKE '%X%' ORDER BY item_name (NO LIMIT for image requests)
 - list request → SELECT id, item_name, image_link FROM products ORDER BY item_name LIMIT 200
 
+=== PIVOT TABLE RULES (CRITICAL) ===
+- "sales data party-wise with months" / "month-wise sales" → MUST return pivot format:
+  SELECT 
+    company_name as party_name,
+    TO_CHAR(created_at, 'YYYY-MM') as month,
+    SUM(total_price) as total
+  FROM sales
+  WHERE created_at >= '2025-04-01'
+  GROUP BY company_name, TO_CHAR(created_at, 'YYYY-MM')
+  ORDER BY company_name, month
+- ALWAYS include month column for time-series data
+- For expenses month-wise: TO_CHAR(date, 'YYYY-MM') as month
+
 === SQL RULES ===
 - NEVER filter NULL columns without fallback
 - Only SELECT statements
@@ -1117,16 +1130,17 @@ app.post("/whatsapp", async (req, res) => {
       cols.includes("company_name") || cols.includes("employee_name")
     );
 
-    // If pivot table with many rows, send PDF directly
-    if (hasPivotStructure && rows.length > 15) {
-      await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n⏳ Generating pivot table PDF...`);
+    // If 20+ records, send PDF directly (pivot or regular table)
+    if (rows.length >= 20) {
+      const recordType = hasPivotStructure ? "Pivot Table" : "Data Table";
+      await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n⏳ Generating ${recordType} PDF...`);
       res.json({ success: true });
       try {
         const pdfCols = Object.keys(rows[0]);
-        const pdfPath = await generateDataPDF(rows, pdfCols, query);
-        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 Sales Pivot Table\n${rows.length} records`, "document");
+        const pdfPath = await generateDataPDF(rows, pdfCols, query.substring(0, 50));
+        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 ${recordType}\n${rows.length} records`, "document");
       } catch(e) { 
-        console.error("[PIVOT PDF ERROR]", e.message);
+        console.error("[PDF ERROR]", e.message);
         await sendWhatsAppReply(actualPhone, "⚠️ PDF nahi ban paya.");
       }
       return;
