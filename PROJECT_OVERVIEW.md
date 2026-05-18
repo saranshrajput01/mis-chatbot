@@ -1,7 +1,7 @@
 # 📘 MIS Chatbot - Complete Project Overview
 
-**Last Updated:** 2026-05-18 14:45 IST  
-**Version:** 1.0  
+**Last Updated:** 2026-05-18 16:04 IST  
+**Version:** 1.1  
 **Status:** 🚀 **PRODUCTION - Live on Railway** ✅
 
 ---
@@ -18,6 +18,8 @@
 - "Top 5 salary wale employees kaun hain?"
 - "Shammi ji ki pending payments"
 - "ABC product ki image bhejo"
+- "Sales ka data party-wise with months" → CSV export ⭐
+- "Top 100 parties sales month-wise" → CSV pivot table ⭐
 
 ---
 
@@ -84,13 +86,29 @@ liveSchema updated
 - Receives messages via webhook (`POST /whatsapp`)
 - Sends replies via app.mis.work API
 - Supports:
-  - Text responses
-  - PDF reports (20+ records)
+  - Text responses (< 20 records)
+  - PDF reports (20-99 records)
+  - CSV exports (100+ records) ⭐ **NEW**
   - Product images
   - Ledger selection (numbered options)
   - Image confirmation flow
 
-### 3. Data Sync
+### 3. Smart Response Formatting ⭐ **NEW**
+- **< 20 records:** Compact WhatsApp text with Indian commas
+  - Format: `1️⃣ Party Name = 1,23,456`
+  - Smart amount detection
+  - Grand total at bottom
+- **20-99 records:** PDF file (landscape A4)
+  - Dynamic column sizing (up to 14 columns for pivot tables)
+  - Smaller font for wide tables
+- **100+ records:** CSV file (Excel-ready)
+  - Proper pivot table format (party rows × month columns)
+  - Indian comma formatting with quotes: `"1,23,456"`
+  - Grand total row
+  - Party-wise total column
+  - Ready to open in Excel/Google Sheets
+
+### 4. Data Sync
 - Auto-syncs 4 Google Sheets every 15 minutes:
   - Products (2606 items)
   - Delegation Tasks (64 items)
@@ -98,16 +116,24 @@ liveSchema updated
   - Scores (311 items)
 - Uses **upsert pattern** (transaction-safe)
 
-### 4. PDF Generation
+### 5. PDF Generation
 - Ledger reports (party-wise transactions)
 - Data tables (expenses, sales, etc.)
-- Max 8 columns per page (landscape A4)
+- Dynamic column sizing (8-14 columns)
+- Landscape A4 format
 
-### 5. Chart Generation
+### 6. CSV Export ⭐ **NEW**
+- Excel-ready pivot tables
+- Indian comma formatting (quoted)
+- Grand total row + party-wise totals
+- Handles unlimited records (no memory limit)
+- Perfect for large datasets (100+ records)
+
+### 7. Chart Generation
 - Bar, Line, Pie, Doughnut charts
 - Rendered via Chart.js (web interface)
 
-### 6. Multi-Interface
+### 8. Multi-Interface
 - WhatsApp (primary)
 - Web chat (`/public/index.html`)
 - REST API (`POST /query`)
@@ -262,8 +288,15 @@ PORT=3000
 - Builds system prompt with:
   - Database schema
   - Query rules (Hinglish mapping, SQL patterns)
+  - Pivot table rules ⭐ **NEW** (month-wise data formatting)
   - Response format (JSON)
 - Returns: String prompt
+
+**Key Prompt Rules:**
+- Salary queries: `design_number` column contains employee names
+- Pending payments: `sales_person` column with ILIKE search
+- Pivot tables: MUST include `month` column for time-series data
+- Month-wise queries: `TO_CHAR(date, 'YYYY-MM') as month`
 
 **`processQuery(userMessage, chatHistory, isWhatsApp)`**
 - Main query processing function
@@ -307,8 +340,26 @@ PORT=3000
 - Returns: Temp file path
 
 **`generateDataPDF(rows, cols, title)`**
-- Creates data table PDF (max 8 columns)
+- Creates data table PDF
+- Dynamic column sizing (8-14 columns)
+- Smaller font for wide tables (pivot tables)
 - Returns: Temp file path
+
+### CSV Functions ⭐ **NEW**
+
+**CSV Generation (inline in WhatsApp handler)**
+- Detects pivot structure (month + party columns)
+- Converts raw data to pivot format
+- Applies Indian comma formatting with quotes
+- Adds grand total row and party-wise totals
+- Returns: Temp CSV file path
+
+**Pivot Logic:**
+- Groups by party name and month
+- Calculates row totals (party-wise)
+- Calculates column totals (month-wise)
+- Sorts parties by total (highest first)
+- Format: `"1,23,456"` (quoted to preserve commas in Excel)
 
 ### Sync Functions
 
@@ -367,10 +418,19 @@ PORT=3000
 - **Number (1-100)** - Confirms image count
 
 ### Response Types
-1. **Text** - Simple answer
-2. **PDF** - 20+ records → generates PDF report
-3. **Images** - Product queries → sends product images
-4. **Clarification** - Ambiguous query → asks for clarification
+1. **Text** - Simple answer (< 20 records)
+   - Compact format: `emoji name = amount`
+   - Indian comma formatting
+   - Grand total at bottom
+2. **PDF** - 20-99 records → generates PDF report
+   - Dynamic column sizing
+   - Landscape A4 format
+3. **CSV** - 100+ records → Excel-ready pivot table ⭐ **NEW**
+   - Proper pivot format (rows × columns)
+   - Indian commas with quotes
+   - Grand total row
+4. **Images** - Product queries → sends product images
+5. **Clarification** - Ambiguous query → asks for clarification
 
 ---
 
@@ -544,6 +604,17 @@ module.exports = {
 - [x] Auto-sync runs every 15 minutes (2606 products, 64 delegation tasks, 593 checklist tasks, 311 scores)
 - [x] Simple queries working ("Total expenses kitni hain?" → ₹2,83,82,103)
 - [x] Date queries working ("April 2026 ki sales" → ₹13,12,850)
+- [x] CSV export working (100+ records) ⭐ **NEW**
+- [x] Pivot table formatting (party × months) ⭐ **NEW**
+- [x] Indian comma formatting in CSV ⭐ **NEW**
+
+**Recent Improvements (2026-05-18):**
+- ✅ Compact WhatsApp text format with Indian commas
+- ✅ CSV export for large datasets (100+ records)
+- ✅ Proper pivot table format in CSV
+- ✅ Grand total row and party-wise totals
+- ✅ Dynamic PDF column sizing (8-14 columns)
+- ✅ Smart amount detection in responses
 
 **Known Issues:**
 - ⚠️ Relative date queries ("Last 30 days") need refinement - use specific dates as workaround
