@@ -1,7 +1,7 @@
 # 📘 MIS Chatbot - Complete Project Overview
 
-**Last Updated:** 2026-05-18 16:04 IST  
-**Version:** 1.1  
+**Last Updated:** 2026-05-18 16:54 IST  
+**Version:** 1.2  
 **Status:** 🚀 **PRODUCTION - Live on Railway** ✅
 
 ---
@@ -562,6 +562,100 @@ module.exports = {
 5. **Single Server Instance**
    - No load balancing
    - Railway free tier = 1 instance
+
+---
+
+## 🚧 Pending Issues - Work in Progress (2026-05-18)
+
+### ⚠️ PDF Generation Issues
+
+**1. Emoji Rendering in PDF** ❌ **NOT WORKING**
+- **Issue:** PDF mein emoji 📄 garbled characters dikhata hai (`Ø=ÜÄ View PDF`)
+- **Root Cause:** PDFKit default Helvetica font doesn't support emojis
+- **Status:** Indian commas working ✅, but emoji links broken ❌
+- **Fix Options:**
+  - Option A: Use a Unicode-supporting font (e.g., `Noto Sans`, `Twemoji`)
+  - Option B: Remove emojis, use plain text "View PDF" with link
+  - Option C: Use `doc.font('path/to/emoji-font.ttf')` with custom font file
+- **Recommended:** Option B (simplest) or Option A (best UX)
+
+**2. WhatsApp Text Format for Multi-Column Queries**
+- **Issue:** When user asks for invoice with multiple columns, AI returns text format with truncated URLs
+- **Example:**
+  ```
+  📄 Last 5 Invoices for Pansari Indu
+  1️⃣ Invoice No: MIS-26-27-036
+  💰 Total Price: ₹127000  ← No Indian commas
+  📎 PDF: https://drive.google.c  ← Truncated URL
+  ```
+- **Status:** Multi-column detection added (4+ cols → PDF), but text fallback still has issues
+- **Fix:** Force PDF for any query with URL columns
+
+**3. Web App Features Missing in WhatsApp**
+- **Web App has:** Bar chart, Save as Image, Export CSV, Download PDF buttons
+- **WhatsApp has:** Only PDF/CSV file
+- **Improvement Ideas:**
+  - Send chart image automatically when amount data has > 3 records
+  - Provide "Show as chart" command
+  - Better column-wise formatting
+
+### ✅ What's Working Now
+
+**PDF Generation (Partial Success):**
+- ✅ Indian commas: `1,27,000`, `1,42,500` working
+- ✅ Date formatting: `2026-05-01` (no time portion)
+- ✅ Multiple columns displayed correctly
+- ✅ Total records summary
+- ❌ Emoji prefix on links broken (shows garbled chars)
+
+**WhatsApp Text Format:**
+- ✅ Compact format for ≤ 20 records: `1️⃣ Name = 1,23,456`
+- ✅ Indian comma formatting in text
+- ✅ Smart amount column detection
+- ✅ Grand total at bottom
+
+**CSV Export (100+ records):**
+- ✅ Pivot table format (party rows × month columns)
+- ✅ Indian commas with quotes preserving format
+- ✅ Grand total row + party-wise totals
+- ✅ Excel-ready output
+
+**System Prompt Improvements:**
+- ✅ Pivot table rules for sales/expenses
+- ✅ Multi-column query handling
+- ✅ Category-wise breakdown for expenses
+
+### 🎯 Next Steps (When Resuming)
+
+1. **Fix PDF emoji rendering** - Use plain text or Unicode font
+2. **Strengthen multi-column detection** - Always send PDF when URLs present
+3. **Add chart support to WhatsApp** - Send chart image with data
+4. **Test with various query types:**
+   - Last 5 invoices (multi-column with links)
+   - Sales month-wise (pivot table)
+   - Expense category-wise (pivot)
+   - Top 10 employees salary (simple list)
+5. **Consider HTML-to-PDF library** - Like Puppeteer for richer PDFs with proper emoji support
+
+### 📝 Recent Commits (Session: 2026-05-18)
+
+```
+10901a3 Fix PDF: Indian commas, clickable links (View PDF), proper date format
+26e4b93 Send PDF for multi-column queries (4+ columns) regardless of record count
+d927342 CRITICAL FIX: Missing closing brace for buildSystemPrompt + multi-column query rules
+1742c36 Docs: Update project overview with CSV export & formatting features
+6b05c13 Fix: Quote Indian comma amounts in CSV to prevent column breaks
+874e63d Add proper pivot format CSV with Indian commas & grand total
+e3f076d Fix: Inline CSV generation to avoid scope issues
+dea4eaa Add CSV export for 100+ records (Excel-friendly)
+9fb7757 Force Railway redeploy to fix function scope
+c13f962 Fix: Add 500 row limit for non-pivot PDFs & strengthen pivot prompt
+6e51fb9 Fix: Force PDF for 20+ records & add pivot table prompt rules
+301bf42 Add pivot table PDF support for WhatsApp with all columns
+ad99a16 Fix: Smart amount detection for any numeric column
+9ced22e Change to compact format: month = amount with Indian comma
+f294586 Fix WhatsApp response formatting: English text, remove duplicate month, improve display
+```
 
 ---
 
