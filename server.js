@@ -1,5 +1,5 @@
 // Load .env only for local development (Railway has native env vars)
-if (process.env.NODE_ENV !== 'production') {
+if (!process.env.RAILWAY_ENVIRONMENT) {
   require("dotenv").config();
 }
 const express = require("express");
