@@ -1,9 +1,13 @@
 import pandas as pd
 import requests
 from datetime import datetime
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 SUPABASE_URL = "https://bjrrlikjinhcbkyherim.supabase.co"
-SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJqcnJsaWtqaW5oY2JreWhlcmltIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODU3MDg3MSwiZXhwIjoyMDk0MTQ2ODcxfQ.LVp5w1R_zDGcQkcOHUh9WGW0qfh1SntsqAvph7g96i4"
+SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY")
 
 HEADERS = {
     "apikey": SERVICE_KEY,

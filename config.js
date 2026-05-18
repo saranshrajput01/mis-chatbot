@@ -1,0 +1,24 @@
+module.exports = {
+  // Sync
+  SYNC_INTERVAL_MS: 15 * 60 * 1000,  // 15 minutes
+
+  // PDF
+  PDF_MAX_COLUMNS: 8,
+
+  // WhatsApp
+  WP_DISPLAY_LIMIT: 20,
+  WP_IMAGE_CONFIRM_THRESHOLD: 10,
+  WP_SESSION_TTL_MINUTES: 10,
+
+  // Database
+  LEDGER_FETCH_LIMIT: 2000,
+  PRODUCTS_FETCH_LIMIT: 200,
+
+  // Cache
+  QUERY_CACHE_TTL_MS: 5 * 60 * 1000,  // 5 minutes
+  QUERY_CACHE_MAX_SIZE: 500,
+
+  // OpenAI
+  OPENAI_MAX_TOKENS: 3000,
+  OPENAI_TEMPERATURE: 0.1
+};
