@@ -1122,11 +1122,22 @@ app.post("/whatsapp", async (req, res) => {
       }
       if (!name) name = String(Object.values(r)[0] || "Item");
 
-      // Smart amount detection
-      const amtPriority = ["total_salary","total_sales","total","amount","pending_amount","total_price","salary","count"];
+      // Smart amount detection - try priority first, then any numeric column
+      const amtPriority = ["total_rent","total_salary","total_sales","total","amount","pending_amount","total_price","salary","count"];
       let amount = null;
       for (const col of amtPriority) {
         if (r[col] != null && String(r[col]).trim() !== "" && String(r[col]) !== "-") { amount = r[col]; break; }
+      }
+      // If no priority match, find any numeric column
+      if (amount == null) {
+        for (const col of cols) {
+          if (namePriority.includes(col) || col === "id" || col === "month") continue;
+          const val = r[col];
+          if (val != null && String(val).trim() !== "" && String(val) !== "-") {
+            const num = parseFloat(String(val).replace(/[₹,Rs.\s]/g,""));
+            if (!isNaN(num) && num > 0) { amount = val; break; }
+          }
+        }
       }
 
       // Compact format: emoji name = amount
