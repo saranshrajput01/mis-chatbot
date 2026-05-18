@@ -209,7 +209,7 @@ ${isWhatsApp ? `
 - list request → SELECT id, item_name, image_link FROM products ORDER BY item_name LIMIT 200
 
 === PIVOT TABLE RULES (CRITICAL) ===
-- "sales data party-wise with months" / "month-wise sales" → MUST return pivot format:
+- "sales data party-wise with months" / "month-wise sales" / "12 months ka data" → MUST return pivot format:
   SELECT 
     company_name as party_name,
     TO_CHAR(created_at, 'YYYY-MM') as month,
@@ -218,8 +218,10 @@ ${isWhatsApp ? `
   WHERE created_at >= '2025-04-01'
   GROUP BY company_name, TO_CHAR(created_at, 'YYYY-MM')
   ORDER BY company_name, month
+- CRITICAL: If user asks for "months" or "apr 2025, may 2025..." → MUST include "month" column
 - ALWAYS include month column for time-series data
 - For expenses month-wise: TO_CHAR(date, 'YYYY-MM') as month
+- NEVER give just party_name + total without month breakdown when months are requested
 
 === SQL RULES ===
 - NEVER filter NULL columns without fallback
@@ -1135,13 +1137,20 @@ app.post("/whatsapp", async (req, res) => {
       const recordType = hasPivotStructure ? "Pivot Table" : "Data Table";
       await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n⏳ Generating ${recordType} PDF...`);
       res.json({ success: true });
+      
+      // Limit rows for non-pivot tables to prevent memory issues
+      const pdfRows = hasPivotStructure ? rows : rows.slice(0, 500);
+      if (!hasPivotStructure && rows.length > 500) {
+        await sendWhatsAppReply(actualPhone, `ℹ️ Note: PDF mein first 500 records honge (total ${rows.length})`);
+      }
+      
       try {
-        const pdfCols = Object.keys(rows[0]);
-        const pdfPath = await generateDataPDF(rows, pdfCols, query.substring(0, 50));
-        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 ${recordType}\n${rows.length} records`, "document");
+        const pdfCols = Object.keys(pdfRows[0]);
+        const pdfPath = await generateDataPDF(pdfRows, pdfCols, query.substring(0, 50));
+        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 ${recordType}\n${pdfRows.length} records`, "document");
       } catch(e) { 
         console.error("[PDF ERROR]", e.message);
-        await sendWhatsAppReply(actualPhone, "⚠️ PDF nahi ban paya.");
+        await sendWhatsAppReply(actualPhone, `⚠️ PDF error: ${e.message}\n\nTry: "Show top 100 ${query}"`);
       }
       return;
     }
