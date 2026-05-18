@@ -1,7 +1,4 @@
-// Load .env only in local development (Railway uses native env vars)
-if (require("fs").existsSync(".env")) {
-  require("dotenv").config();
-}
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
@@ -192,17 +189,11 @@ ${isWhatsApp ? `
 - image request → SELECT item_name, image_link, description FROM products WHERE item_name ILIKE '%X%' OR description ILIKE '%X%' ORDER BY item_name (NO LIMIT for image requests)
 - list request → SELECT id, item_name, image_link FROM products ORDER BY item_name LIMIT 200
 
-=== SQL RULES (CRITICAL - MUST FOLLOW) ===
+=== SQL RULES ===
 - NEVER filter NULL columns without fallback
 - Only SELECT statements
 - ILIKE for all text searches
-- **MANDATORY**: ALL amount/numeric columns MUST be cast to ::numeric before SUM/AVG/math operations
-  Example: SUM(amount::numeric), AVG(pending_amount::numeric), ROUND(SUM(amount::numeric), 0)
-  NEVER use: SUM(amount) or SUM(pending_amount) - this will cause "function sum(text) does not exist" error
-- **DATE FILTERS**: For relative dates use CURRENT_DATE
-  Example: "last 30 days" = WHERE date >= CURRENT_DATE - INTERVAL '30 days'
-  Example: "this month" = WHERE TO_CHAR(date,'YYYY-MM') = TO_CHAR(CURRENT_DATE,'YYYY-MM')
-  Example: "last 7 days" = WHERE date >= CURRENT_DATE - INTERVAL '7 days'
+- ROUND(SUM(amount)::numeric,0) for amounts
 - TO_CHAR(date_col,'YYYY-MM') as month for grouping
 - LIMIT 100 unless products (LIMIT 200) or aggregating
 
