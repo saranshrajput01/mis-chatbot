@@ -220,8 +220,28 @@ ${isWhatsApp ? `
   ORDER BY company_name, month
 - CRITICAL: If user asks for "months" or "apr 2025, may 2025..." → MUST include "month" column
 - ALWAYS include month column for time-series data
-- For expenses month-wise: TO_CHAR(date, 'YYYY-MM') as month
+- For expenses month-wise BY CATEGORY → Use this:
+  SELECT 
+    sub_group as category,
+    TO_CHAR(date, 'YYYY-MM') as month,
+    SUM(amount) as total
+  FROM expenses
+  WHERE date >= '2025-04-01'
+  GROUP BY sub_group, TO_CHAR(date, 'YYYY-MM')
+  ORDER BY sub_group, month
+- "expense category mein month-wise" → category as first col, months as columns
 - NEVER give just party_name + total without month breakdown when months are requested
+
+=== MULTI-COLUMN QUERIES (CRITICAL) ===
+- When user asks for MULTIPLE specific columns, INCLUDE ALL of them in SELECT
+- "invoice no, amount, gst, link, timestamp" → SELECT invoice_no, total_price, gst_amount, invoice_pdf, created_at
+- For sales table specifically:
+  - invoice_no → invoice_no
+  - amount → total_price  
+  - gst → check if gst_amount column exists, else extract from total
+  - invoice link → invoice_pdf
+  - timestamp/date → created_at
+- ALWAYS include ALL requested columns, never skip any
 
 === SQL RULES ===
 - NEVER filter NULL columns without fallback
@@ -256,6 +276,7 @@ ALL business queries including vague ones → try to answer
   "clarify_options": []
   
 }`;
+}
 
 // ── CSV GENERATION ────────────────────────────────────────────────────────
 function generateCSV(rows, cols) {
@@ -324,7 +345,6 @@ async function generateDataPDF(rows, cols, title) {
       stream.on("error", reject);
     } catch(e) { reject(e); }
   });
-}
 }
 
 async function processQuery(
@@ -1137,11 +1157,12 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: true });
     }
 
-    // Check if this is a pivot table query (has month column + party/name column)
+    // Check if this is a pivot table query (has month column + party/name/category column)
     const cols = Object.keys(rows[0]);
     const hasPivotStructure = cols.includes("month") && (
       cols.includes("party_name") || cols.includes("name") || 
-      cols.includes("company_name") || cols.includes("employee_name")
+      cols.includes("company_name") || cols.includes("employee_name") ||
+      cols.includes("category") || cols.includes("sub_group")
     );
 
     // If 20+ records, send PDF/CSV directly (pivot or regular table)
@@ -1159,7 +1180,7 @@ app.post("/whatsapp", async (req, res) => {
           // Check if pivot format needed (has month column)
           if (hasPivotStructure) {
             // Build pivot table
-            const nameCol = csvCols.find(c => ["party_name","name","company_name","employee_name"].includes(c));
+            const nameCol = csvCols.find(c => ["party_name","name","company_name","employee_name","category","sub_group"].includes(c));
             const months = [...new Set(rows.map(r => r.month))].sort();
             const pivot = {};
             const rowTotals = {};
