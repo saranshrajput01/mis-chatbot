@@ -1129,21 +1129,21 @@ app.post("/whatsapp", async (req, res) => {
         if (r[col] != null && String(r[col]).trim() !== "" && String(r[col]) !== "-") { amount = r[col]; amtCol = col; break; }
       }
 
-      // Extra info
-      const usedSet = new Set([...namePriority, ...amtPriority, "id"]);
+      // Extra info - exclude month/date columns from extras to avoid duplication
+      const usedSet = new Set([...namePriority, ...amtPriority, "id", "month"]);
       const extras  = cols.filter(c => !usedSet.has(c) && r[c] != null && String(r[c]).trim() !== "" && r[c] !== "-").slice(0, 2).map(c => `${c.replace(/_/g," ")}: ${r[c]}`);
 
-      let line = `${emojis[i] || `${i+1}.`} *${name}*`;
+      let line = `${emojis[i] || `${i+1}.`} ${name}`;
       if (amount != null) {
         const num = parseFloat(String(amount).replace(/[₹,Rs.\s]/g,""));
-        if (!isNaN(num) && num > 0) line += `\n   💰 Rs. ${num.toLocaleString("en-IN")}`;
-        else if (String(amount).trim() !== "" && String(amount) !== "0") line += `\n   📌 ${amtCol}: ${amount}`;
+        if (!isNaN(num) && num > 0) line += `\n   📎 ${amtCol.replace(/_/g," ")}: ${num.toLocaleString("en-IN")}`;
+        else if (String(amount).trim() !== "" && String(amount) !== "0") line += `\n   📎 ${amtCol.replace(/_/g," ")}: ${amount}`;
       }
       if (extras.length) line += `\n   📎 ${extras.join(" | ")}`;
       return line;
     });
 
-    let replyText = `📊 *${rows.length} records mile*\n\n${replyLines.join("\n\n")}`;
+    let replyText = `📊 ${rows.length} records found\n\n${replyLines.join("\n\n")}`;
     // FIX #1 & #4: If more than 20 records, show summary breakdown at end
     if (rows.length > 20) {
       replyText += `\n\n_...aur ${rows.length - 20} aur records hain_`;
