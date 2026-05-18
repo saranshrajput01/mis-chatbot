@@ -1,4 +1,7 @@
-require("dotenv").config();
+// Load .env only in local development (Railway uses native env vars)
+if (require("fs").existsSync(".env")) {
+  require("dotenv").config();
+}
 const express = require("express");
 const cors = require("cors");
 const { createClient } = require("@supabase/supabase-js");
