@@ -246,32 +246,35 @@ async function generateDataPDF(rows, cols, title) {
   return new Promise((resolve, reject) => {
     try {
       const tmpPath = path.join(os.tmpdir(), `data_${Date.now()}.pdf`);
-      const doc = new PDFDocument({ margin: 20, size: "A4", layout: "landscape" });
+      const doc = new PDFDocument({ margin: 15, size: "A4", layout: "landscape" });
       const stream = fs.createWriteStream(tmpPath);
       doc.pipe(stream);
       const pageW = doc.page.width;
-      const margin = 20;
+      const margin = 15;
       const tableW = pageW - margin * 2;
-      const displayCols = cols.slice(0, 8);
+      
+      // Smart column limit: if >8 columns, use all (for pivot), else limit to 8
+      const displayCols = cols.length > 8 ? cols : cols.slice(0, 8);
       const colW = Math.floor(tableW / displayCols.length);
+      const fontSize = displayCols.length > 10 ? 5.5 : 6.5;
 
       function drawPageHeader() {
-        doc.rect(0, 0, pageW, 40).fill("#1a1a2e");
-        doc.fillColor("#fff").fontSize(11).font("Helvetica-Bold")
-           .text(`Mis Work India — ${title}`, margin, 14, { align: "center", width: tableW });
+        doc.rect(0, 0, pageW, 35).fill("#1a1a2e");
+        doc.fillColor("#fff").fontSize(10).font("Helvetica-Bold")
+           .text(`Mis Work India — ${title}`, margin, 12, { align: "center", width: tableW });
       }
       function drawColHeaders(y) {
-        doc.rect(margin, y, tableW, 16).fill("#333355");
-        doc.fillColor("#fff").fontSize(7).font("Helvetica-Bold");
+        doc.rect(margin, y, tableW, 14).fill("#333355");
+        doc.fillColor("#fff").fontSize(fontSize).font("Helvetica-Bold");
         displayCols.forEach((col, i) => {
-          doc.text(col.replace(/_/g," ").substring(0,18), margin + i * colW, y + 4, { width: colW - 2 });
+          doc.text(col.replace(/_/g," ").substring(0,15), margin + i * colW, y + 3, { width: colW - 2 });
         });
-        return y + 16;
+        return y + 14;
       }
       drawPageHeader();
-      let y = 45;
+      let y = 40;
       y = drawColHeaders(y);
-      doc.fontSize(6.5).font("Helvetica");
+      doc.fontSize(fontSize).font("Helvetica");
       rows.forEach((r, i) => {
         if (y > doc.page.height - 30) {
           doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
@@ -1107,8 +1110,29 @@ app.post("/whatsapp", async (req, res) => {
       return res.json({ success: true });
     }
 
+    // Check if this is a pivot table query (has month column + party/name column)
+    const cols = Object.keys(rows[0]);
+    const hasPivotStructure = cols.includes("month") && (
+      cols.includes("party_name") || cols.includes("name") || 
+      cols.includes("company_name") || cols.includes("employee_name")
+    );
+
+    // If pivot table with many rows, send PDF directly
+    if (hasPivotStructure && rows.length > 15) {
+      await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n⏳ Generating pivot table PDF...`);
+      res.json({ success: true });
+      try {
+        const pdfCols = Object.keys(rows[0]);
+        const pdfPath = await generateDataPDF(rows, pdfCols, query);
+        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 Sales Pivot Table\n${rows.length} records`, "document");
+      } catch(e) { 
+        console.error("[PIVOT PDF ERROR]", e.message);
+        await sendWhatsAppReply(actualPhone, "⚠️ PDF nahi ban paya.");
+      }
+      return;
+    }
+
     // FIX #5 & #1 & #4: Smart WP text formatting — show ALL up to 20, then summarize
-    const cols   = Object.keys(rows[0]);
     const emojis = ["1️⃣","2️⃣","3️⃣","4️⃣","5️⃣","6️⃣","7️⃣","8️⃣","9️⃣","🔟","1️⃣1️⃣","1️⃣2️⃣","1️⃣3️⃣","1️⃣4️⃣","1️⃣5️⃣","1️⃣6️⃣","1️⃣7️⃣","1️⃣8️⃣","1️⃣9️⃣","2️⃣0️⃣"];
 
     // Show max 20 records on WP
