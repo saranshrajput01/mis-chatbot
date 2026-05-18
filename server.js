@@ -257,6 +257,18 @@ ALL business queries including vague ones → try to answer
   
 }`;
 
+// ── CSV GENERATION ────────────────────────────────────────────────────────
+function generateCSV(rows, cols) {
+  const tmpPath = path.join(os.tmpdir(), `data_${Date.now()}.csv`);
+  const header = cols.join(",");
+  const body = rows.map(r => cols.map(c => {
+    const val = String(r[c] ?? "").replace(/"/g, '""');
+    return val.includes(",") || val.includes("\n") ? `"${val}"` : val;
+  }).join(",")).join("\n");
+  fs.writeFileSync(tmpPath, header + "\n" + body, "utf8");
+  return tmpPath;
+}
+
 async function generateDataPDF(rows, cols, title) {
   return new Promise((resolve, reject) => {
     try {
@@ -1132,25 +1144,36 @@ app.post("/whatsapp", async (req, res) => {
       cols.includes("company_name") || cols.includes("employee_name")
     );
 
-    // If 20+ records, send PDF directly (pivot or regular table)
+    // If 20+ records, send PDF/CSV directly (pivot or regular table)
     if (rows.length >= 20) {
       const recordType = hasPivotStructure ? "Pivot Table" : "Data Table";
+      
+      // For 100+ records, send CSV instead of PDF (better for Excel)
+      if (rows.length >= 100) {
+        await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n📄 Generating Excel CSV file...`);
+        res.json({ success: true });
+        try {
+          const csvCols = Object.keys(rows[0]);
+          const csvPath = generateCSV(rows, csvCols);
+          await sendWhatsAppMedia(actualPhone, csvPath, `📊 ${recordType}\n${rows.length} records\n\n💡 Open in Excel for pivot table`, "document");
+        } catch(e) { 
+          console.error("[CSV ERROR]", e.message);
+          await sendWhatsAppReply(actualPhone, `⚠️ CSV error: ${e.message}`);
+        }
+        return;
+      }
+      
+      // For 20-99 records, send PDF
       await sendWhatsAppReply(actualPhone, `📊 ${rows.length} records found\n\n⏳ Generating ${recordType} PDF...`);
       res.json({ success: true });
       
-      // Limit rows for non-pivot tables to prevent memory issues
-      const pdfRows = hasPivotStructure ? rows : rows.slice(0, 500);
-      if (!hasPivotStructure && rows.length > 500) {
-        await sendWhatsAppReply(actualPhone, `ℹ️ Note: PDF mein first 500 records honge (total ${rows.length})`);
-      }
-      
       try {
-        const pdfCols = Object.keys(pdfRows[0]);
-        const pdfPath = await generateDataPDF(pdfRows, pdfCols, query.substring(0, 50));
-        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 ${recordType}\n${pdfRows.length} records`, "document");
+        const pdfCols = Object.keys(rows[0]);
+        const pdfPath = await generateDataPDF(rows, pdfCols, query.substring(0, 50));
+        await sendWhatsAppMedia(actualPhone, pdfPath, `📊 ${recordType}\n${rows.length} records`, "document");
       } catch(e) { 
         console.error("[PDF ERROR]", e.message);
-        await sendWhatsAppReply(actualPhone, `⚠️ PDF error: ${e.message}\n\nTry: "Show top 100 ${query}"`);
+        await sendWhatsAppReply(actualPhone, `⚠️ PDF error: ${e.message}\n\nTry: "Show top 50 ${query}"`);
       }
       return;
     }
