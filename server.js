@@ -52,6 +52,7 @@ const wpSessions = {};
 
 async function fetchLiveSchema() {
   try {
+    console.log("[SCHEMA] Calling execute_sql RPC...");
     const { data, error } = await supabase.rpc("execute_sql", {
       query: `SELECT table_name, column_name, data_type
               FROM information_schema.columns
@@ -59,7 +60,10 @@ async function fetchLiveSchema() {
               AND table_name IN ('sales','expenses','pending','ledger','products','delegation_tasks','checklist_tasks','scores')
               ORDER BY table_name, ordinal_position`
     });
-    if (error || !data) { console.error("[SCHEMA]", error?.message); return; }
+    if (error || !data) { 
+      console.error("[SCHEMA] RPC Error:", JSON.stringify(error, null, 2)); 
+      return; 
+    }
     const tables = {};
     data.forEach(r => {
       if (!tables[r.table_name]) tables[r.table_name] = [];
