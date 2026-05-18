@@ -65,10 +65,14 @@ async function fetchLiveSchema() {
 }
 
 async function openai(systemPrompt, messages, maxTokens = 3000) {
+  // Debug: Check if API key is loaded
+  const apiKey = process.env.OPENAI_API_KEY;
+  console.log("[OPENAI DEBUG] Key exists:", !!apiKey, "| First 20 chars:", apiKey?.substring(0, 20));
+  
   const response = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": "Bearer " + process.env.OPENAI_API_KEY,
+      "Authorization": "Bearer " + apiKey,
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
