@@ -347,7 +347,7 @@ async function generateDataPDF(rows, cols, title) {
             // URL columns - show "View PDF" or "View Link" as clickable
             const urlStr = String(val);
             if (urlStr.startsWith("http")) {
-              displayVal = colLower.includes("pdf") ? "📄 View PDF" : "🔗 View Link";
+              displayVal = colLower.includes("pdf") ? "View PDF" : "View Link";
               isLink = true;
             } else {
               displayVal = urlStr.substring(0, 25);

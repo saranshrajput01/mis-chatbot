@@ -1,6 +1,6 @@
 # 🎯 MIS Chatbot - Project Roadmap
 
-**Last Updated:** 2026-05-18 (Deployment Complete ✅)
+**Last Updated:** 2026-05-20 (PDF emoji fix applied ✅)
 
 ---
 
@@ -24,6 +24,11 @@
 - ✅ **Railway Environment:** Fixed dotenv conflict (conditional loading based on RAILWAY_ENVIRONMENT)
 - ✅ **Supabase RPC Permissions:** Granted execute permissions to service_role, anon, authenticated
 - ✅ **Environment Variables:** All 6 variables properly set on Railway
+
+### Bug Fixes (2026-05-20) ✅
+- ✅ **PDF Emoji Rendering:** Fixed garbled chars `Ø=ÜÄ` in PDF "View PDF" / "View Link" cells
+  - Cause: PDFKit default Helvetica font lacks emoji glyphs
+  - Fix: Removed emoji prefix in `generateDataPDF` (server.js:350) — link still clickable, blue, underlined
 
 **Status:** 🚀 **LIVE ON RAILWAY** - Production deployment successful!
 
@@ -90,7 +95,7 @@
 
 ## 📊 SUMMARY
 
-**Total Completed:** 11 tasks
+**Total Completed:** 12 tasks
 **Production Status:** ✅ Live and working
 **Next Steps:** Monitor, test, Phase 3 (optional)
 

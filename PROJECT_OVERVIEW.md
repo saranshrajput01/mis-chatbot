@@ -569,15 +569,12 @@ module.exports = {
 
 ### ⚠️ PDF Generation Issues
 
-**1. Emoji Rendering in PDF** ❌ **NOT WORKING**
-- **Issue:** PDF mein emoji 📄 garbled characters dikhata hai (`Ø=ÜÄ View PDF`)
+**1. Emoji Rendering in PDF** ✅ **FIXED (2026-05-20)**
+- **Issue:** PDF mein emoji 📄 garbled characters dikhata tha (`Ø=ÜÄ View PDF`)
 - **Root Cause:** PDFKit default Helvetica font doesn't support emojis
-- **Status:** Indian commas working ✅, but emoji links broken ❌
-- **Fix Options:**
-  - Option A: Use a Unicode-supporting font (e.g., `Noto Sans`, `Twemoji`)
-  - Option B: Remove emojis, use plain text "View PDF" with link
-  - Option C: Use `doc.font('path/to/emoji-font.ttf')` with custom font file
-- **Recommended:** Option B (simplest) or Option A (best UX)
+- **Fix Applied:** Option B — emoji removed, plain text "View PDF" / "View Link" use kiya (server.js:350)
+- **Result:** Link still clickable, blue colored, underlined — bas emoji prefix gone
+- **Status:** ✅ Resolved
 
 **2. WhatsApp Text Format for Multi-Column Queries**
 - **Issue:** When user asks for invoice with multiple columns, AI returns text format with truncated URLs
@@ -606,7 +603,7 @@ module.exports = {
 - ✅ Date formatting: `2026-05-01` (no time portion)
 - ✅ Multiple columns displayed correctly
 - ✅ Total records summary
-- ❌ Emoji prefix on links broken (shows garbled chars)
+- ✅ Link prefix fixed (plain text "View PDF" / "View Link" — emoji removed 2026-05-20)
 
 **WhatsApp Text Format:**
 - ✅ Compact format for ≤ 20 records: `1️⃣ Name = 1,23,456`
@@ -627,7 +624,7 @@ module.exports = {
 
 ### 🎯 Next Steps (When Resuming)
 
-1. **Fix PDF emoji rendering** - Use plain text or Unicode font
+1. ~~**Fix PDF emoji rendering**~~ ✅ **DONE (2026-05-20)** — emoji removed, plain text "View PDF" / "View Link" with clickable link
 2. **Strengthen multi-column detection** - Always send PDF when URLs present
 3. **Add chart support to WhatsApp** - Send chart image with data
 4. **Test with various query types:**
