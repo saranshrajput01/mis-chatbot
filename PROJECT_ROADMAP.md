@@ -1,13 +1,70 @@
 # 🎯 MIS Chatbot - Project Roadmap
 
-**Last Updated:** 2026-05-27 17:56 IST
-**Project Status:** 🟢 **PHASE 22 — 25/25 done (100%) + Level-3 hero + page-wide polish + mobile responsive + skeleton loading.** Web app fully feature-complete, security-hardened, visually upgraded. Manual QA pass still pending. **Test-coverage work still paused at Step 1 (8 new test files NOT YET VALIDATED).**
+**Last Updated:** 2026-05-27 22:47 IST
+**Project Status:** 🟢 **PHASE 22 COMPLETE + PHASE 23A (Laravel Setup) DONE.** Node.js project pushed to GitHub. Laravel skeleton ready with DB connected.
 
-**🚧 RESUME HERE — only manual QA left:**
-1. **Sprint 3D** — Browser cross-test (Safari + Chrome), light/dark theme on each page, mobile breakpoint at 760px, click-through every sidebar link visually, WhatsApp e2e (voice + text + booking).
-2. **WhatsApp webhook resubscribe** if delivery has stalled (check `wa.apimis.in` dashboard — Meta auto-pauses subscriptions after consecutive delivery failures during transient network outages on the Tailscale Funnel).
+**🚧 RESUME HERE NEXT SESSION (2026-05-28):**
+1. **Phase 23B — Models + Migrations** in Laravel (`/Users/saranshrajput/Desktop/mis-chatbot-php/`)
+2. Generate Eloquent models for: Tenant, TenantTable, TenantNotification, TenantCalendar, etc.
+3. Port 8 SQL migrations from `migrations/` into Laravel migration files
+4. `php artisan migrate` against Supabase DB
 
-## ✨ Post-22 enhancements (this session, after Phase 22 closure)
+**Project locations:**
+- **Node.js (production/portfolio):** `/Users/saranshrajput/Desktop/mis-chatbot/` → GitHub: `saranshrajput01/mis-chatbot`
+- **Laravel (boss handover):** `/Users/saranshrajput/Desktop/mis-chatbot-php/`
+
+---
+
+## ✨ Post-22 enhancements
+
+### Z3. Session 2026-05-27 night (20:20 – 22:47 IST) — Laravel setup + GitHub push
+
+**What got done:**
+1. ✅ **Decision: Skip Node test-coverage work, start Laravel directly** (test files stay on disk, can validate later)
+2. ✅ **Phase 23A — Laravel 11 project created** (`mis-chatbot-php/`):
+   - `composer create-project laravel/laravel "^11.0"` → Laravel 11.54.0
+   - `.env` configured: Supabase Postgres direct connection (`db.bjrrlikjinhcbkyherim.supabase.co:5432`), all service keys migrated
+   - Frontend copied: 14 HTML files + `assets/` (CSS + JS) + `charts/` dir
+   - Composer deps: `openai-php/laravel ^0.19.1`, `google/apiclient ^2.19`, `barryvdh/laravel-dompdf ^3.1`
+   - `maatwebsite/excel` skipped (PHP 8.5 incompatible — will work on Hostinger's PHP 8.3)
+   - First endpoint: `GET /api/dashboard?phone=` returns stub JSON → verified 200
+   - CORS config (`config/cors.php`) + rate-limit middleware (`throttleApi 60/min`)
+   - Cache/session switched to `file` driver (avoids needing Laravel tables in Supabase)
+   - DB connection verified: `SELECT COUNT(*) FROM tenants` → 8 ✅
+3. ✅ **Node.js project pushed to GitHub** (portfolio-ready):
+   - 104 files committed (43,751 insertions), commit `6fdae6d`
+   - Professional README.md created
+   - `.env.example` template created (partially — needs push)
+   - No secrets leaked (`.gitignore` verified)
+4. ✅ **Strategy locked:**
+   - Node project = Saransh's portfolio/resume demo (GitHub public)
+   - Laravel project = Boss handover (separate repo later)
+
+**DB connection details (Laravel .env):**
+```
+DB_CONNECTION=pgsql
+DB_HOST=db.bjrrlikjinhcbkyherim.supabase.co
+DB_PORT=5432
+DB_DATABASE=postgres
+DB_USERNAME=postgres
+DB_PASSWORD=@shaR@nsh1301
+```
+
+**PHP 8.5 quirk:** `PDO::MYSQL_ATTR_SSL_CA` deprecation warnings — fixed in `config/database.php` with conditional constant. Harmless, won't exist on Hostinger (PHP 8.3).
+
+**Files modified/created in Laravel project:**
+- `bootstrap/app.php` — API routes + CORS + throttle middleware
+- `routes/api.php` — stub `/dashboard` endpoint
+- `config/cors.php` — env-based CORS origins
+- `config/database.php` — PHP 8.5 deprecation fix
+- `.env` — full config with all keys
+
+**How to demo the Node project in future:**
+- It's live at `mis-chatbot.vercel.app` (Vercel frontend)
+- Backend needs: `node server.js` on any machine with the `.env` keys
+- Or just show the GitHub repo + live Vercel URL in interviews
+
+---
 
 ### Z2. Session 2026-05-27 evening (16:48 – 17:56 IST) — NO-OP session
 
@@ -22,8 +79,6 @@
 **Why "kuch nhi hua":** the test command was cancelled before producing any output, then no further instructions came in for ~66 min. The agent was waiting on input, not stuck or working in the background.
 
 **Net effect on repository:** none. All files identical to start of session. State of the 6 paused tasks below is unchanged — Step 1 still NOT validated.
-
-**Next session: same resume plan as §Z below applies. Just don't cancel `npm run test:unit` — let it print the failure list so we can fix assertions.**
 
 ---
 
