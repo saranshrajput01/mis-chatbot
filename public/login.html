@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Sign in · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .auth-theme-toggle {
+      position: fixed;
+      top: 18px; right: 18px;
+      width: 40px; height: 40px;
+      border-radius: 999px;
+      border: 1px solid var(--hairline);
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      display: grid; place-items: center;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      z-index: 100;
+      transition: transform var(--motion-fast) var(--ease-pop),
+                  border-color var(--motion-fast) var(--ease-apple);
+    }
+    .auth-theme-toggle:hover {
+      transform: scale(1.05);
+      border-color: var(--color-primary-400);
+      color: var(--color-primary-400);
+    }
+    .auth-theme-toggle svg { width: 18px; height: 18px; }
+    .auth-theme-toggle .moon-ic { display: none; }
+    .auth-theme-toggle .sun-ic  { display: block; }
+    [data-theme="dark"] .auth-theme-toggle .moon-ic { display: block; }
+    [data-theme="dark"] .auth-theme-toggle .sun-ic  { display: none; }
+  </style>
+</head>
+<body>
+
+<button class="auth-theme-toggle" id="themeBtn" type="button" aria-label="Toggle theme">
+  <i class="sun-ic" data-lucide="sun"></i>
+  <i class="moon-ic" data-lucide="moon"></i>
+</button>
+
+<main class="auth-stage">
+  <section class="auth-card" role="dialog" aria-labelledby="login-title">
+    <div class="brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="t-meta" style="font-size:11px; margin-top:1px;">Make It Simple</div>
+      </div>
+    </div>
+
+    <h1 id="login-title">Welcome back</h1>
+    <p class="sub">Sign in with your registered WhatsApp number to access your dashboard.</p>
+
+    <form id="loginForm" novalidate>
+      <div class="form-row">
+        <label class="field-label" for="phone">Phone number</label>
+        <div class="input-group">
+          <span class="prefix">+91</span>
+          <input
+            id="phone"
+            name="phone"
+            type="tel"
+            inputmode="numeric"
+            autocomplete="tel-national"
+            placeholder="98765 43210"
+            maxlength="15"
+            required
+            autofocus>
+        </div>
+      </div>
+
+      <div id="login-status" class="status"></div>
+
+      <div class="actions">
+        <button type="submit" class="btn btn-primary" id="loginBtn">
+          <span class="btn-label">Continue</span>
+          <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+    </form>
+
+    <p class="footer-link">
+      New to MIS? <a href="/register">Create an account</a>
+    </p>
+  </section>
+</main>
+
+<script>
+  (function () {
+    'use strict';
+
+    function showStatus(kind, msg) {
+      const el = document.getElementById('login-status');
+      el.className = 'status show ' + kind;
+      el.textContent = msg;
+    }
+
+    function setLoading(state) {
+      const btn = document.getElementById('loginBtn');
+      btn.disabled = !!state;
+      btn.style.opacity = state ? '0.7' : '1';
+      btn.querySelector('.btn-label').textContent = state ? 'Checking…' : 'Continue';
+    }
+
+    async function doLogin(e) {
+      if (e) e.preventDefault();
+      const raw = document.getElementById('phone').value.replace(/\D/g, '');
+      if (raw.length < 10 || raw.length > 15) {
+        showStatus('error', 'Please enter a valid phone number (10–15 digits).');
+        return false;
+      }
+      // Normalise: ensure 91XXXXXXXXXX
+      let phone = raw;
+      if (phone.length > 10 && phone.startsWith('91')) phone = phone.slice(2);
+      if (phone.length === 11 && phone.startsWith('0')) phone = phone.slice(1);
+      const stored = '91' + phone;
+
+      setLoading(true);
+      try {
+        const res = await fetch('/api/tenant/check-phone', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: stored })
+        });
+        const data = await res.json();
+        if (data && data.exists) {
+          window.MIS.auth.setPhone(stored);
+          const tName = (data.tenant && data.tenant.name) || data.tenant_name || data.name;
+          if (tName) window.MIS.auth.setTenantName(tName);
+          // Sprint 1.4: issue chat token (best-effort — don't block login on failure)
+          try { await window.MIS.auth.issueChatToken(stored); } catch (_) {}
+          showStatus('success', 'Welcome back! Redirecting…');
+          setTimeout(() => window.location.replace('/dashboard'), 400);
+        } else {
+          setLoading(false);
+          showStatus('error', 'This number is not registered yet. Please create an account.');
+        }
+      } catch (err) {
+        console.error(err);
+        setLoading(false);
+        showStatus('error', 'Network issue. Please try again.');
+      }
+      return false;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // Already logged in? Skip to dashboard.
+      if (window.MIS && window.MIS.auth && window.MIS.auth.getPhone()) {
+        window.location.replace('/dashboard');
+        return;
+      }
+
+      // Form submit
+      const form = document.getElementById('loginForm');
+      form.addEventListener('submit', doLogin);
+
+      // Theme toggle
+      const themeBtn = document.getElementById('themeBtn');
+      themeBtn.addEventListener('click', () => {
+        window.MIS.theme.toggle();
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    });
+  })();
+</script>
+</body>
+</html>

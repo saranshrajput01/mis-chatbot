@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reports · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .mobile-toggle { display: none; }
+    @media (max-width: 760px) { .mobile-toggle { display: inline-grid; } }
+
+    .report-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .report-card {
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: var(--shadow-card);
+      transition: all 320ms cubic-bezier(0.22, 1, 0.36, 1);
+      cursor: pointer;
+    }
+    .report-card:hover {
+      box-shadow: var(--shadow-card-hover);
+      transform: translateY(-2px);
+      border-color: var(--accent-cyan);
+    }
+    .report-card .head {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 12px;
+    }
+    .report-card .ic {
+      width: 40px; height: 40px;
+      border-radius: 11px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, var(--accent-cyan-soft), rgba(139,92,246,0.1));
+      color: var(--accent-cyan);
+    }
+    .report-card .ic svg { width: 20px; height: 20px; }
+    .report-card .t { font-size: 15px; font-weight: 600; }
+    .report-card .desc {
+      font-size: 12.5px;
+      color: var(--color-text-tertiary);
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .report-card .formats {
+      display: flex; gap: 8px;
+      flex-wrap: wrap;
+    }
+    .format-pill {
+      font-size: 11px; font-weight: 600;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--hairline);
+      color: var(--color-text-secondary);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    /* Filter bar */
+    .filter-bar {
+      display: flex; align-items: center; gap: 12px;
+      flex-wrap: wrap;
+      padding: 14px 18px;
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 14px;
+      margin-bottom: 20px;
+    }
+    .filter-bar label {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 12.5px;
+      color: var(--color-text-secondary);
+    }
+    .filter-bar input[type="date"], .filter-bar select {
+      font: inherit; font-size: 13px;
+      padding: 7px 10px;
+      border: 1px solid var(--hairline);
+      border-radius: 7px;
+      background: var(--surface-input, transparent);
+      color: var(--color-text-primary);
+    }
+
+    /* Modal for picking format */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      display: none; place-items: center;
+      z-index: 9000;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal-card {
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 18px;
+      padding: 24px;
+      width: 92%; max-width: 460px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 14px; }
+    .modal-options {
+      display: flex; gap: 12px;
+      margin: 18px 0;
+    }
+    .format-btn {
+      flex: 1;
+      padding: 14px;
+      border: 1.5px solid var(--hairline);
+      background: transparent;
+      border-radius: 11px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 220ms ease;
+      font: inherit;
+    }
+    .format-btn:hover { border-color: var(--accent-cyan); transform: translateY(-1px); }
+    .format-btn.selected { border-color: var(--accent-cyan); background: var(--accent-cyan-soft); }
+    .format-btn .icon { font-size: 24px; margin-bottom: 6px; }
+    .format-btn .label { font-size: 13px; font-weight: 600; }
+    .format-btn .sub { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+    .modal-actions {
+      display: flex; gap: 10px; justify-content: flex-end;
+    }
+    .btn-primary {
+      font: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 18px;
+      border: none; cursor: pointer;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      color: white;
+    }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-secondary {
+      font: inherit; font-size: 13px;
+      padding: 9px 14px;
+      border: 1px solid var(--hairline); cursor: pointer;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--color-text-secondary);
+    }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 18px;
+      background: rgba(20, 20, 22, 0.95);
+      color: white; border-radius: 10px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      opacity: 0; transform: translateY(8px);
+      pointer-events: none;
+      transition: all 240ms ease;
+      z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.err  { background: rgba(239, 68, 68, 0.95); }
+    .toast.ok   { background: rgba(34, 197, 94, 0.95); }
+
+    /* Print-only report layout */
+    .print-only { display: none; }
+    @media print {
+      body * { visibility: hidden; }
+      .print-only, .print-only * { visibility: visible; }
+      .print-only {
+        display: block !important;
+        position: absolute; top: 0; left: 0;
+        width: 100%; padding: 24px;
+        font-family: 'Inter', system-ui, sans-serif;
+        color: #000;
+        background: white;
+      }
+      .print-only h1 { font-size: 20px; margin: 0 0 4px; }
+      .print-only h2 { font-size: 14px; margin: 14px 0 8px; color: #333; }
+      .print-only .meta { font-size: 11px; color: #666; margin-bottom: 14px; }
+      .print-only table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      .print-only th, .print-only td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+      .print-only th { background: #f5f5f5; font-weight: 600; }
+      .print-only .num { text-align: right; font-family: 'JetBrains Mono', monospace; }
+      .print-only .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+      .print-only .stat {
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 6px;
+      }
+      .print-only .stat .lbl { font-size: 10px; text-transform: uppercase; color: #888; }
+      .print-only .stat .val { font-size: 16px; font-weight: 700; margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+    }
+
+    /* Topbar avatar + status dot — reports theme: amber → rose → indigo */
+    .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #F59E0B, #F43F5E, #6366F1); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 4px 14px rgba(244,63,94,0.28); }
+    [data-theme="dark"] .tenant-avatar { box-shadow: 0 4px 14px rgba(244,63,94,0.18); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: dotPulse 2.4s ease-in-out infinite; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar glass">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div><div class="name">MIS</div><div class="tag">Make It Simple</div></div>
+    </div>
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item active" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;"><i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode</span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar glass">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-icon mobile-toggle"><i data-lucide="menu"></i></button>
+        <div class="tenant-avatar" id="tenantAvatar">M</div>
+        <div class="greeting">
+          <div class="who"><span id="tenant-name">…</span> <span class="status-dot"></span></div>
+          <div class="when">Reports · downloadable summaries</div>
+        </div>
+      </div>
+    </header>
+
+    <div class="page">
+      <div class="page-header page-header-hero">
+        <div class="page-header-bg">
+          <div class="aurora aurora-1"></div>
+          <div class="aurora aurora-2"></div>
+          <div class="aurora aurora-3"></div>
+          <div class="grid-overlay"></div>
+        </div>
+        <div class="page-header-content">
+          <div class="page-icon-glow"><i data-lucide="bar-chart-3"></i></div>
+          <div class="page-header-text">
+            <div class="page-title-row">
+              <h1 class="t-h1 page-title-gradient">Reports</h1>
+              <span class="live-pill"><span class="live-dot"></span>Live</span>
+            </div>
+            <p class="page-desc">Generate PDF or Excel summaries from your data. Click any card.</p>
+            <div class="page-chips">
+              <span class="page-chip"><i data-lucide="layers" style="width:12px;height:12px;"></i> Multi-sheet XLSX</span>
+              <span class="page-chip"><i data-lucide="filter" style="width:12px;height:12px;"></i> Date-range filter</span>
+            </div>
+            <div class="page-underline"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="filter-bar">
+        <label>From <input id="fFrom" type="date"></label>
+        <label>To <input id="fTo" type="date"></label>
+        <button class="btn-secondary" id="resetFilter" type="button">Reset to last 30 days</button>
+      </div>
+
+      <div class="report-grid" id="reportGrid">
+        <div id="reportGridLoader" style="grid-column:1/-1; padding:40px; text-align:center; color:var(--color-text-tertiary); font-size:13px;">
+          <i data-lucide="loader-2" style="width:18px;height:18px;vertical-align:-3px;animation:spin 0.9s linear infinite;"></i>
+          &nbsp;&nbsp;Loading available reports for your database…
+        </div>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+<!-- ──── Format picker modal ──── -->
+<div class="modal-backdrop" id="formatModal">
+  <div class="modal-card">
+    <div class="modal-title" id="formatTitle">Select format</div>
+    <div style="font-size:12.5px; color:var(--color-text-tertiary); margin-bottom:6px;" id="formatDateLine"></div>
+    <div class="modal-options">
+      <button class="format-btn" data-fmt="pdf">
+        <div class="icon">📄</div>
+        <div class="label">PDF</div>
+        <div class="sub">Print-ready, formatted</div>
+      </button>
+      <button class="format-btn" data-fmt="xlsx">
+        <div class="icon">📊</div>
+        <div class="label">Excel (XLSX)</div>
+        <div class="sub">Multi-sheet, opens directly in Excel/Numbers/Sheets</div>
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="formatCancel" type="button">Cancel</button>
+      <button class="btn-primary" id="formatGenerate" type="button" disabled>Generate</button>
+    </div>
+  </div>
+</div>
+
+<div id="printArea" class="print-only"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    location.href = '/login?redirect=' + encodeURIComponent(location.pathname);
+    return;
+  }
+  const PHONE = window.MIS.auth.getPhone();
+
+  let toastTimer;
+  function toast(msg, kind = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (kind || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function fmtInr(n) {
+    if (n == null || isNaN(n)) return '—';
+    n = Number(n);
+    if (Math.abs(n) >= 1e7) return '₹' + (n / 1e7).toFixed(2) + ' Cr';
+    if (Math.abs(n) >= 1e5) return '₹' + (n / 1e5).toFixed(2) + ' L';
+    if (Math.abs(n) >= 1e3) return '₹' + (n / 1e3).toFixed(2) + ' K';
+    return '₹' + n.toLocaleString('en-IN');
+  }
+  function fmtNum(n) {
+    if (n == null || isNaN(n)) return '—';
+    return Number(n).toLocaleString('en-IN');
+  }
+  function isoDate(d) { return d.toISOString().split('T')[0]; }
+
+  // ─── Default date range ───
+  function setDefaultRange() {
+    const today = new Date();
+    const monthAgo = new Date(today.getTime() - 30 * 86400000);
+    document.getElementById('fFrom').value = isoDate(monthAgo);
+    document.getElementById('fTo').value = isoDate(today);
+  }
+  setDefaultRange();
+  document.getElementById('resetFilter').addEventListener('click', setDefaultRange);
+
+  // ─── State ───
+  let activeReport = null;       // report id
+  let activeReportTitle = null;  // display title
+  let activeReportSource = null; // 'sales' | 'purchases' | 'outstanding' | 'stock' | 'ledger' | 'expenses'
+  let activeFormat = null;       // 'pdf' | 'xlsx'
+  const REPORT_INDEX = {};       // id → {title, desc, icon, source}
+
+  // ─── Load available reports for THIS tenant's DB ───
+  async function loadReports() {
+    const grid = document.getElementById('reportGrid');
+    try {
+      const res = await fetch(`/api/reports/list?phone=${encodeURIComponent(PHONE)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        grid.innerHTML = `<div style="grid-column:1/-1; padding:40px; text-align:center; color:var(--color-text-tertiary);">
+          ${escapeHtml(err.error || 'Could not load reports.')}</div>`;
+        return;
+      }
+      const data = await res.json();
+      const reports = data.reports || [];
+      if (!reports.length) {
+        grid.innerHTML = `<div style="grid-column:1/-1; padding:40px; text-align:center; color:var(--color-text-tertiary);">
+          No reports available for your database yet. Sync your sheets first.</div>`;
+        return;
+      }
+      grid.innerHTML = reports.map(r => {
+        REPORT_INDEX[r.id] = r;
+        return `<div class="report-card" data-report="${r.id}">
+          <div class="head">
+            <div class="ic"><i data-lucide="${r.icon || 'file-text'}"></i></div>
+            <div class="t">${escapeHtml(r.title)}</div>
+          </div>
+          <div class="desc">${escapeHtml(r.desc || '')}</div>
+          <div class="formats"><span class="format-pill">PDF</span><span class="format-pill">XLSX</span></div>
+        </div>`;
+      }).join('');
+
+      // Wire click → open format modal
+      document.querySelectorAll('.report-card').forEach(card => {
+        card.addEventListener('click', () => openFormatModal(card.dataset.report));
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    } catch (e) {
+      console.error('[loadReports]', e);
+      grid.innerHTML = `<div style="grid-column:1/-1; padding:40px; text-align:center; color:var(--color-text-tertiary);">Network issue — please refresh.</div>`;
+    }
+  }
+
+  function openFormatModal(reportId) {
+    const r = REPORT_INDEX[reportId];
+    if (!r) return;
+    activeReport = reportId;
+    activeReportTitle = r.title;
+    activeReportSource = r.source;
+    document.getElementById('formatTitle').textContent = r.title;
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const usesRange = !['outstanding-aging', 'stock-valuation', 'ledger-summary'].includes(reportId);
+    document.getElementById('formatDateLine').textContent = usesRange
+      ? `Range: ${from || '—'} to ${to || '—'}`
+      : 'Snapshot — current state';
+    activeFormat = null;
+    document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('selected'));
+    document.getElementById('formatGenerate').disabled = true;
+    document.getElementById('formatModal').classList.add('open');
+  }
+
+  document.querySelectorAll('.format-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      activeFormat = b.dataset.fmt;
+      document.querySelectorAll('.format-btn').forEach(x => x.classList.remove('selected'));
+      b.classList.add('selected');
+      document.getElementById('formatGenerate').disabled = false;
+    });
+  });
+
+  document.getElementById('formatCancel').addEventListener('click', () => {
+    document.getElementById('formatModal').classList.remove('open');
+  });
+  document.getElementById('formatModal').addEventListener('click', (e) => {
+    if (e.target.id === 'formatModal') document.getElementById('formatModal').classList.remove('open');
+  });
+
+  document.getElementById('formatGenerate').addEventListener('click', async () => {
+    if (!activeReport || !activeFormat) return;
+    const btn = document.getElementById('formatGenerate');
+    btn.disabled = true; btn.textContent = 'Generating…';
+    try {
+      await generateReport(activeReport, activeFormat);
+      document.getElementById('formatModal').classList.remove('open');
+    } catch (e) {
+      toast(e.message || 'Generation failed', 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Generate';
+    }
+  });
+
+  // ─── Generate report — fetch data from the right /api/page/* ───
+  async function generateReport(type, format) {
+    const from = document.getElementById('fFrom').value;
+    const to = document.getElementById('fTo').value;
+    const source = activeReportSource || REPORT_INDEX[type]?.source || 'sales';
+    const title = activeReportTitle || REPORT_INDEX[type]?.title || type;
+
+    // Build URL based on source
+    let url = `/api/page/${source}?phone=${encodeURIComponent(PHONE)}`;
+    if (['sales', 'purchases', 'expenses'].includes(source)) {
+      if (from) url += `&from=${from}`;
+      if (to) url += `&to=${to}`;
+    }
+    const r = await fetch(url);
+    if (!r.ok) throw new Error((await r.json().catch(()=>({}))).error || 'Failed to fetch report data');
+    const data = await r.json();
+
+    if (format === 'xlsx') {
+      downloadXlsx(type, data, title);
+    } else {
+      printPdf(type, data, title, from, to);
+    }
+    toast('Report ready.', 'ok');
+  }
+
+  // ─── XLSX download (replaces CSV) ───
+  function downloadXlsx(type, data, title) {
+    const ts = new Date().toISOString().split('T')[0];
+    const filename = title.replace(/\s+/g, '-').toLowerCase() + '-' + ts + '.xlsx';
+    const sheets = [];
+
+    // Metadata sheet — always included
+    const tName = data.tenant?.name || 'MIS';
+    sheets.push({
+      name: 'Info',
+      headers: ['Field', 'Value'],
+      rows: [
+        ['Report', title],
+        ['Tenant', tName],
+        ['Generated', new Date().toLocaleString('en-IN')],
+        ['Date Range', (data.range?.from && data.range?.to) ? `${data.range.from} to ${data.range.to}` : '—']
+      ]
+    });
+
+    if (type === 'sales-summary') {
+      const k = data.kpis || {};
+      sheets.push({ name: 'Summary', headers: ['Metric', 'Value'], rows: [
+        ['Total Sales', Number(k.total_sales?.value || 0)],
+        ['Invoice Count', Number(k.invoice_count?.value || 0)],
+        ['Unique Parties', Number(k.unique_parties?.value || 0)],
+        ['Avg Invoice', Number(k.avg_invoice?.value || 0)]
+      ]});
+      sheets.push({ name: 'Top Customers', headers: ['Customer', 'Sales (₹)'],
+        rows: (data.charts?.top_parties?.labels || []).map((l, i) => [l, Number(data.charts.top_parties.data[i] || 0)]) });
+      sheets.push({ name: 'Top Items', headers: ['Item', 'Revenue (₹)'],
+        rows: (data.charts?.top_items?.labels || []).map((l, i) => [l, Number(data.charts.top_items.data[i] || 0)]) });
+      sheets.push({ name: 'Invoices', headers: ['Date', 'Voucher', 'Party', 'Item', 'Amount (₹)'],
+        rows: (data.invoices?.rows || []).map(r => [r.date, r.voucher, r.party, r.item, Number(r.amount || 0)]) });
+    }
+    else if (type === 'top-customers') {
+      sheets.push({ name: 'Top Customers', headers: ['Rank', 'Customer', 'Sales (₹)'],
+        rows: (data.charts?.top_parties?.labels || []).map((l, i) => [i+1, l, Number(data.charts.top_parties.data[i] || 0)]) });
+    }
+    else if (type === 'top-items') {
+      sheets.push({ name: 'Top Items', headers: ['Rank', 'Item', 'Revenue (₹)'],
+        rows: (data.charts?.top_items?.labels || []).map((l, i) => [i+1, l, Number(data.charts.top_items.data[i] || 0)]) });
+    }
+    else if (type === 'sales-by-city') {
+      sheets.push({ name: 'Sales by City', headers: ['Rank', 'City', 'Revenue (₹)'],
+        rows: (data.charts?.by_city?.labels || []).map((l, i) => [i+1, l, Number(data.charts.by_city.data[i] || 0)]) });
+    }
+    else if (type === 'purchase-summary') {
+      // /api/page/purchases isn't implemented yet — graceful fallback to whatever fields exist
+      const k = data.kpis || {};
+      sheets.push({ name: 'Summary', headers: ['Metric', 'Value'], rows: Object.keys(k).map(key => [key, Number(k[key]?.value || k[key] || 0)]) });
+      if (data.charts?.top_parties) {
+        sheets.push({ name: 'Top Suppliers', headers: ['Supplier', 'Purchases (₹)'],
+          rows: (data.charts.top_parties.labels || []).map((l, i) => [l, Number(data.charts.top_parties.data[i] || 0)]) });
+      }
+    }
+    else if (type === 'top-suppliers') {
+      sheets.push({ name: 'Top Suppliers', headers: ['Rank', 'Supplier', 'Purchases (₹)'],
+        rows: (data.charts?.top_parties?.labels || []).map((l, i) => [i+1, l, Number(data.charts.top_parties.data[i] || 0)]) });
+    }
+    else if (type === 'outstanding-aging') {
+      const k = data.kpis || {};
+      sheets.push({ name: 'Aging Summary', headers: ['Bucket', 'Amount (₹)'], rows: [
+        ['Total Outstanding', Number(k.total_outstanding?.value || 0)],
+        ['Unpaid Count', Number(k.unpaid_count?.value || 0)],
+        ['90+ days bucket', Number(k.bucket_90plus?.value || 0)],
+        ['Oldest age (days)', Number(k.oldest_age?.value || 0)]
+      ]});
+      const aging = data.aging || data.charts?.aging || {};
+      if (aging.labels && aging.data) {
+        sheets.push({ name: 'Buckets', headers: ['Bucket', 'Amount (₹)'],
+          rows: aging.labels.map((l, i) => [l, Number(aging.data[i] || 0)]) });
+      }
+      if (data.top_defaulters?.length) {
+        sheets.push({ name: 'Top Defaulters', headers: ['Rank', 'Party', 'Outstanding (₹)', 'Bucket'],
+          rows: data.top_defaulters.map((d, i) => [i+1, d.party, Number(d.amount || 0), d.bucket || '—']) });
+      }
+    }
+    else if (type === 'stock-valuation') {
+      const rows = data.items_table || [];
+      const totalValue = rows.reduce((a, r) => a + (Number(r.value) || 0), 0);
+      sheets.push({ name: 'Summary', headers: ['Metric', 'Value'], rows: [
+        ['Total Stock Value (₹)', totalValue],
+        ['SKU Count', rows.length],
+        ['Slow Moving', (data.slow_moving || []).length],
+        ['Low Stock', (data.low_stock || []).length]
+      ]});
+      sheets.push({ name: 'Items', headers: ['Item','Bought','Sold','Balance','Avg Price (₹)','Value (₹)','Status'],
+        rows: rows.map(it => [it.item, Number(it.bought||0), Number(it.sold||0), Number(it.balance||0),
+                              Number(it.avg_price||0), Number(it.value||0), it.status || '']) });
+    }
+    else if (type === 'ledger-summary') {
+      const parties = data.parties || data.summary || [];
+      sheets.push({ name: 'Ledger', headers: ['Party', 'Net Balance (₹)', 'Sales (₹)', 'Purchases (₹)'],
+        rows: parties.map(p => [p.party || p.name || '—', Number(p.balance || p.net || 0),
+                                Number(p.sales || 0), Number(p.purchases || 0)]) });
+    }
+    else if (type === 'expense-summary') {
+      const k = data.kpis || {};
+      sheets.push({ name: 'Summary', headers: ['Metric', 'Value'], rows: Object.keys(k).map(key => [key, Number(k[key]?.value || k[key] || 0)]) });
+      if (data.rows || data.expenses) {
+        const rows = data.rows || data.expenses || [];
+        sheets.push({ name: 'Expenses', headers: ['Date', 'Category', 'Description', 'Amount (₹)'],
+          rows: rows.map(r => [r.date, r.category || r.head, r.description || r.particulars, Number(r.amount || 0)]) });
+      }
+    }
+    else {
+      // Fallback — dump available KPIs as a single sheet
+      const k = data.kpis || {};
+      sheets.push({ name: 'Data', headers: ['Field', 'Value'],
+        rows: Object.keys(k).map(key => [key, Number(k[key]?.value || k[key] || 0)]) });
+    }
+
+    if (window.MIS && window.MIS.xlsx && window.MIS.xlsx.isReady()) {
+      window.MIS.xlsx.download(filename, sheets);
+    } else {
+      toast('Excel library still loading — please retry in a moment.', 'err');
+    }
+  }
+
+  // ─── PDF via browser print ───
+  function printPdf(type, data, title, from, to) {
+    const tenant = data.tenant?.name || 'MIS';
+    let body = `
+      <h1>${escapeHtml(title)}</h1>
+      <div class="meta">${escapeHtml(tenant)} · Generated ${new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
+      ${from && to && (type === 'sales-summary' || type === 'top-customers' || type === 'top-items') ? ` · Range: ${from} to ${to}` : ''}
+      </div>
+    `;
+
+    if (type === 'sales-summary') {
+      const k = data.kpis || {};
+      body += `<div class="summary">
+        <div class="stat"><div class="lbl">Total Sales</div><div class="val">${fmtInr(k.total)}</div></div>
+        <div class="stat"><div class="lbl">Invoices</div><div class="val">${fmtNum(k.count)}</div></div>
+        <div class="stat"><div class="lbl">Avg Invoice</div><div class="val">${fmtInr(k.avg)}</div></div>
+        <div class="stat"><div class="lbl">Top Customer</div><div class="val" style="font-size:13px;">${escapeHtml(k.top_party_name || '—')}</div></div>
+      </div>`;
+      if (data.charts?.top_parties?.length) {
+        body += `<h2>Top Customers</h2><table><thead><tr><th>Rank</th><th>Customer</th><th class="num">Sales</th></tr></thead><tbody>`;
+        data.charts.top_parties.forEach((p, i) => {
+          body += `<tr><td>${i+1}</td><td>${escapeHtml(p.label)}</td><td class="num">${fmtInr(p.value)}</td></tr>`;
+        });
+        body += `</tbody></table>`;
+      }
+    }
+    else if (type === 'top-customers') {
+      body += `<table><thead><tr><th>Rank</th><th>Customer</th><th class="num">Total Sales</th></tr></thead><tbody>`;
+      (data.charts?.top_parties || []).forEach((p, i) => {
+        body += `<tr><td>${i+1}</td><td>${escapeHtml(p.label)}</td><td class="num">${fmtInr(p.value)}</td></tr>`;
+      });
+      body += `</tbody></table>`;
+    }
+    else if (type === 'top-items') {
+      body += `<table><thead><tr><th>Rank</th><th>Item</th><th class="num">Revenue</th></tr></thead><tbody>`;
+      (data.charts?.top_items || []).forEach((p, i) => {
+        body += `<tr><td>${i+1}</td><td>${escapeHtml(p.label)}</td><td class="num">${fmtInr(p.value)}</td></tr>`;
+      });
+      body += `</tbody></table>`;
+    }
+    else if (type === 'outstanding-aging') {
+      const a = data.aging || {};
+      body += `<div class="summary">
+        <div class="stat"><div class="lbl">0-30 days</div><div class="val">${fmtInr(a['0-30']?.amount)}</div></div>
+        <div class="stat"><div class="lbl">31-60 days</div><div class="val">${fmtInr(a['31-60']?.amount)}</div></div>
+        <div class="stat"><div class="lbl">61-90 days</div><div class="val">${fmtInr(a['61-90']?.amount)}</div></div>
+        <div class="stat"><div class="lbl">90+ days</div><div class="val">${fmtInr(a['90+']?.amount)}</div></div>
+      </div>`;
+      body += `<h2>Top Defaulters</h2><table><thead><tr><th>Rank</th><th>Party</th><th class="num">Outstanding</th><th>Bucket</th></tr></thead><tbody>`;
+      (data.top_defaulters || []).forEach((d, i) => {
+        body += `<tr><td>${i+1}</td><td>${escapeHtml(d.party)}</td><td class="num">${fmtInr(d.amount)}</td><td>${escapeHtml(d.bucket || '—')}</td></tr>`;
+      });
+      body += `</tbody></table>`;
+    }
+    else if (type === 'stock-valuation') {
+      const rows = data.items_table || [];
+      const totalValue = rows.reduce((a, r) => a + (Number(r.value) || 0), 0);
+      body += `<div class="summary">
+        <div class="stat"><div class="lbl">Total Stock Value</div><div class="val">${fmtInr(totalValue)}</div></div>
+        <div class="stat"><div class="lbl">SKU Count</div><div class="val">${fmtNum(rows.length)}</div></div>
+        <div class="stat"><div class="lbl">Slow Moving</div><div class="val">${fmtNum((data.slow_moving || []).length)}</div></div>
+        <div class="stat"><div class="lbl">Low Stock</div><div class="val">${fmtNum((data.low_stock || []).length)}</div></div>
+      </div>`;
+      body += `<h2>Item-wise Stock</h2><table><thead><tr><th>Item</th><th class="num">Bought</th><th class="num">Sold</th><th class="num">Balance</th><th class="num">Value</th><th>Status</th></tr></thead><tbody>`;
+      rows.forEach(it => {
+        body += `<tr><td>${escapeHtml(it.item)}</td><td class="num">${fmtNum(it.bought)}</td><td class="num">${fmtNum(it.sold)}</td><td class="num">${fmtNum(it.balance)}</td><td class="num">${fmtInr(it.value)}</td><td>${escapeHtml(it.status || '')}</td></tr>`;
+      });
+      body += `</tbody></table>`;
+    }
+
+    document.getElementById('printArea').innerHTML = body;
+    setTimeout(() => {
+      window.print();
+    }, 100);
+  }
+
+  // ─── Theme + logout ───
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('logoutLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (confirm('Sign out of MIS?')) window.MIS.auth.logout();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') document.getElementById('formatModal').classList.remove('open');
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
+    const tName = window.MIS.auth.getTenantName() || 'Account';
+    document.getElementById('tenant-name').textContent = tName;
+    document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+    loadReports();
+  });
+
+})();
+</script>
+</body>
+</html>

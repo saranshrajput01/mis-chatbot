@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access Control Panel - MIS Chatbot</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header {
+      background: rgba(255,255,255,0.95);
+      padding: 24px;
+      border-radius: 16px;
+      margin-bottom: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+    }
+    .header h1 {
+      font-size: 28px;
+      color: #1a1a2e;
+      margin-bottom: 8px;
+    }
+    .header p {
+      color: #666;
+      font-size: 14px;
+    }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: rgba(255,255,255,0.95);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+    }
+    .stat-card h3 {
+      font-size: 32px;
+      color: #667eea;
+      margin-bottom: 4px;
+    }
+    .stat-card p {
+      color: #666;
+      font-size: 13px;
+    }
+    .add-user-btn {
+      background: #667eea;
+      color: #fff;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(102,126,234,0.3);
+      transition: all 0.2s;
+    }
+    .add-user-btn:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(102,126,234,0.4);
+    }
+    .users-table {
+      background: rgba(255,255,255,0.95);
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    th {
+      text-align: left;
+      padding: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: #666;
+      text-transform: uppercase;
+      border-bottom: 2px solid #eee;
+    }
+    td {
+      padding: 16px 12px;
+      border-bottom: 1px solid #f0f0f0;
+      font-size: 14px;
+    }
+    tr:hover {
+      background: #f8f9ff;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge-all { background: #e3f2fd; color: #1976d2; }
+    .badge-limited { background: #fff3e0; color: #f57c00; }
+    .badge-blocked { background: #ffebee; color: #c62828; }
+    .badge-active { background: #e8f5e9; color: #2e7d32; }
+    .badge-inactive { background: #fafafa; color: #757575; }
+    .toggle {
+      position: relative;
+      display: inline-block;
+      width: 36px;
+      height: 20px;
+    }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: .3s;
+      border-radius: 20px;
+    }
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 14px;
+      width: 14px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .3s;
+      border-radius: 50%;
+    }
+    input:checked + .slider { background-color: #4caf50; }
+    input:checked + .slider:before { transform: translateX(16px); }
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.5);
+      backdrop-filter: blur(4px);
+    }
+    .modal-content {
+      background-color: #fff;
+      margin: 5% auto;
+      padding: 32px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 600px;
+      box-shadow: 0 16px 48px rgba(0,0,0,0.2);
+    }
+    .modal-content h2 {
+      margin-bottom: 24px;
+      color: #1a1a2e;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #555;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 14px;
+      transition: border 0.2s;
+    }
+    .form-group input:focus, .form-group select:focus {
+      outline: none;
+      border-color: #667eea;
+    }
+    .permissions-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+    .permission-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px;
+      background: #f8f9ff;
+      border-radius: 8px;
+    }
+    .permission-item label {
+      font-size: 13px;
+      color: #555;
+      margin: 0;
+    }
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+    }
+    .btn {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #667eea;
+      color: #fff;
+    }
+    .btn-primary:hover {
+      background: #5568d3;
+    }
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #555;
+    }
+    .btn-secondary:hover {
+      background: #d0d0d0;
+    }
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔐 Access Control Panel</h1>
+      <p>Manage user permissions and access levels</p>
+    </div>
+
+    <div class="stats">
+      <div class="stat-card">
+        <h3 id="totalUsers">0</h3>
+        <p>Total Users</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="activeUsers">0</h3>
+        <p>Active Users</p>
+      </div>
+      <div class="stat-card">
+        <h3 id="limitedUsers">0</h3>
+        <p>Limited Access</p>
+      </div>
+      <div class="stat-card">
+        <button class="add-user-btn" onclick="openAddUserModal()">+ Add New User</button>
+      </div>
+    </div>
+
+    <div class="users-table">
+      <div id="loading" class="loading">Loading users...</div>
+      <table id="usersTable" style="display:none;">
+        <thead>
+          <tr>
+            <th>Phone</th>
+            <th>Name</th>
+            <th>Access Mode</th>
+            <th>Status</th>
+            <th>Sales</th>
+            <th>Expenses</th>
+            <th>Pending</th>
+            <th>Ledger</th>
+            <th>Products</th>
+            <th>Delegation</th>
+            <th>Checklist</th>
+          </tr>
+        </thead>
+        <tbody id="usersBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Add User Modal -->
+  <div id="addUserModal" class="modal">
+    <div class="modal-content">
+      <h2>Add New User</h2>
+      <form id="addUserForm">
+        <div class="form-group">
+          <label>Phone Number (with country code)</label>
+          <input type="text" id="phone" placeholder="918750285420" required>
+        </div>
+        <div class="form-group">
+          <label>Name</label>
+          <input type="text" id="name" placeholder="John Doe" required>
+        </div>
+        <div class="form-group">
+          <label>Access Mode</label>
+          <select id="accessMode">
+            <option value="LIMITED">LIMITED - Can view only their data</option>
+            <option value="ALL">ALL - Can view all data</option>
+            <option value="BLOCKED">BLOCKED - No access</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Status</label>
+          <select id="status">
+            <option value="active">Active</option>
+            <option value="blocked">Blocked</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Permissions (for LIMITED mode)</label>
+          <div class="permissions-grid">
+            <div class="permission-item">
+              <label>Sales</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_sales" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Expenses</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_expenses" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Pending</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_pending" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Ledger</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_ledger">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Products</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_products" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Delegation</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_delegation" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div class="permission-item">
+              <label>Checklist</label>
+              <label class="toggle">
+                <input type="checkbox" id="perm_checklist" checked>
+                <span class="slider"></span>
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="btn-group">
+          <button type="button" class="btn btn-secondary" onclick="closeAddUserModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary">Add User</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function loadUsers() {
+      try {
+        const res = await fetch('/api/access/users');
+        const data = await res.json();
+        
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('usersTable').style.display = 'table';
+        
+        const tbody = document.getElementById('usersBody');
+        tbody.innerHTML = '';
+        
+        let total = 0, active = 0, limited = 0;
+        
+        Object.entries(data.users || {}).forEach(([phone, user]) => {
+          total++;
+          if (user.status !== 'blocked') active++;
+          if (user.access === 'LIMITED') limited++;
+          
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${phone}</td>
+            <td>${user.name}</td>
+            <td><span class="badge badge-${user.access.toLowerCase()}">${user.access}</span></td>
+            <td><span class="badge badge-${user.status === 'active' ? 'active' : 'inactive'}">${user.status}</span></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_sales === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_expenses === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_pending === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_ledger === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_products === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_delegation === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+            <td><label class="toggle"><input type="checkbox" ${user.can_view_checklist === 'YES' ? 'checked' : ''} disabled><span class="slider"></span></label></td>
+          `;
+          tbody.appendChild(row);
+        });
+        
+        document.getElementById('totalUsers').textContent = total;
+        document.getElementById('activeUsers').textContent = active;
+        document.getElementById('limitedUsers').textContent = limited;
+        
+      } catch (e) {
+        console.error('Load error:', e);
+        document.getElementById('loading').textContent = 'Error loading users';
+      }
+    }
+
+    function openAddUserModal() {
+      document.getElementById('addUserModal').style.display = 'block';
+    }
+
+    function closeAddUserModal() {
+      document.getElementById('addUserModal').style.display = 'none';
+      document.getElementById('addUserForm').reset();
+    }
+
+    document.getElementById('addUserForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const phone = document.getElementById('phone').value;
+      const name = document.getElementById('name').value;
+      const accessMode = document.getElementById('accessMode').value;
+      const status = document.getElementById('status').value;
+      
+      const permissions = {
+        can_view_sales: document.getElementById('perm_sales').checked ? 'YES' : 'NO',
+        can_view_expenses: document.getElementById('perm_expenses').checked ? 'YES' : 'NO',
+        can_view_pending: document.getElementById('perm_pending').checked ? 'YES' : 'NO',
+        can_view_ledger: document.getElementById('perm_ledger').checked ? 'YES' : 'NO',
+        can_view_products: document.getElementById('perm_products').checked ? 'YES' : 'NO',
+        can_view_delegation: document.getElementById('perm_delegation').checked ? 'YES' : 'NO',
+        can_view_checklist: document.getElementById('perm_checklist').checked ? 'YES' : 'NO'
+      };
+      
+      try {
+        const res = await fetch('/api/access/add-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone, name, accessMode, status, permissions })
+        });
+        
+        const result = await res.json();
+        
+        if (result.success) {
+          alert('✅ User added successfully!');
+          closeAddUserModal();
+          loadUsers();
+        } else {
+          alert('❌ Error: ' + result.error);
+        }
+      } catch (e) {
+        alert('❌ Error adding user');
+      }
+    });
+
+    // Load users on page load
+    loadUsers();
+    
+    // Refresh every 30 seconds
+    setInterval(loadUsers, 30000);
+  </script>
+</body>
+</html>

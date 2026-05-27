@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Chat · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <link rel="stylesheet" href="/assets/css/chat.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    /* Page-local refinements (matches dashboard's pattern) */
+    .mobile-toggle { display: none; }
+    @media (max-width: 760px) {
+      .sidebar.open { display: flex; position: fixed; inset: 0; z-index: 100; }
+      .mobile-toggle { display: inline-flex !important; }
+    }
+    .nav-item {
+      transition: background 200ms ease, color 200ms ease, transform 220ms cubic-bezier(0.22,1,0.36,1);
+    }
+    .nav-item:hover { transform: translateX(2px); }
+    .nav-item.active {
+      background: linear-gradient(135deg, var(--accent-cyan-soft), var(--accent-indigo-soft));
+      color: var(--accent-cyan);
+    }
+    [data-theme="dark"] .nav-item.active { color: var(--accent-cyan); }
+    .topbar-actions { gap: 8px; }
+    .btn-icon {
+      transition: background 220ms ease, transform 200ms ease, color 220ms ease;
+    }
+    .btn-icon:hover { transform: scale(1.06); }
+
+    /* ── Chat-app-style topbar greeting ── */
+    .tenant-avatar {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet) 65%, var(--accent-fuchsia));
+      color: #fff;
+      display: grid; place-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+      box-shadow:
+        0 0 0 3px rgba(0,164,210,0.10),
+        0 4px 10px rgba(0,164,210,0.18);
+      position: relative;
+      transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .tenant-avatar:hover { transform: scale(1.06) rotate(-2deg); }
+
+    .topbar .greeting {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .topbar .greeting .who {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+      color: var(--color-text-primary);
+    }
+    .topbar .greeting .who .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 0 0 rgba(16,185,129,0.55);
+      animation: dotPulse 2.4s ease-out infinite;
+    }
+    @keyframes dotPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
+      70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    .topbar .greeting .when {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-weight: 500;
+      letter-spacing: 0.005em;
+      line-height: 1.2;
+      margin-top: 1px;
+    }
+    [data-theme="dark"] .tenant-avatar {
+      box-shadow:
+        0 0 0 3px rgba(0,164,210,0.18),
+        0 4px 10px rgba(0,164,210,0.30);
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ────────── SIDEBAR (same as dashboard) ────────── -->
+  <aside class="sidebar glass" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="tag">Make It Simple</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard">
+        <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+      </a>
+      <a class="nav-item active" href="/chat">
+        <i data-lucide="message-square-text"></i> <span>Chatbot</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;">
+          <i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode
+        </span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" data-action="logout"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <!-- ────────── MAIN ────────── -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar glass">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-icon mobile-toggle" data-action="toggle-sidebar" aria-label="Menu" type="button">
+          <i data-lucide="menu"></i>
+        </button>
+        <div class="tenant-avatar" id="tenantAvatar" aria-hidden="true">M</div>
+        <div class="greeting">
+          <div class="who">
+            <span id="tenantNameEl">Loading…</span>
+            <span class="status-dot" title="Connected"></span>
+          </div>
+          <div class="when" id="tbSub">Good afternoon · just synced</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-icon" data-action="sync" id="topSyncBtn" title="Sync data" type="button">
+          <i data-lucide="refresh-cw"></i>
+        </button>
+        <button class="btn-icon" data-action="open-panel" title="Tools" aria-label="Tools panel" type="button">
+          <i data-lucide="panel-right-open"></i>
+        </button>
+        <button class="btn-icon" data-action="clear-chat" title="Clear chat" type="button">
+          <i data-lucide="trash-2"></i>
+        </button>
+        <div class="avatar" id="tbAvatar" title="Account">U</div>
+      </div>
+    </header>
+
+    <!-- CHAT PAGE -->
+    <section class="page chat-page" id="chatPage">
+
+      <!-- Hero (visible until first message) -->
+      <div class="chat-hero" id="chatHero">
+        <h1 id="heroTitle">Hello there 👋</h1>
+        <p id="heroSubtitle">Ask anything about your data — sales, ledger, charts, or just say hi.</p>
+        <span class="underline"></span>
+      </div>
+
+      <!-- Suggestion chips -->
+      <div class="chips-row" id="chipsRow" aria-label="Suggested prompts">
+        <!-- Filled by /api/chat-suggestions -->
+        <div class="chip" data-i="0" data-skeleton="true" style="opacity:0.5">
+          <i data-lucide="sparkles"></i> Loading…
+        </div>
+      </div>
+
+      <!-- Chat stream -->
+      <div class="chat-stream" id="chatStream"></div>
+
+      <!-- Composer -->
+      <div class="composer-wrap">
+        <!-- Voice waveform overlay (above composer) -->
+        <div class="waveform-wrap" id="waveformWrap" aria-live="polite">
+          <span class="rec-dot"></span>
+          <span class="rec-time" id="recTime">00:00</span>
+          <canvas id="waveformCanvas" width="480" height="36"></canvas>
+          <button class="rec-stop" data-action="mic-stop" aria-label="Stop recording">
+            <i data-lucide="square" style="width:14px;height:14px;"></i>
+          </button>
+        </div>
+
+        <form class="composer" id="composer" autocomplete="off" onsubmit="return false;">
+          <button type="button" class="composer-btn" data-action="open-panel" title="Tools">
+            <i data-lucide="paperclip"></i>
+          </button>
+          <textarea
+            class="composer-input"
+            id="msgInput"
+            rows="1"
+            placeholder="Type a message, or hold the mic to speak…"
+            aria-label="Message input"></textarea>
+          <button type="button" class="composer-btn mic-btn" id="micBtn" data-action="mic-toggle" title="Voice (max 60s)">
+            <i data-lucide="mic"></i>
+          </button>
+          <button type="submit" class="composer-btn send" data-action="send" title="Send" aria-label="Send">
+            <i data-lucide="arrow-up"></i>
+          </button>
+        </form>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ────────── SLIDE-OVER PANEL ────────── -->
+<div class="slideover-backdrop" id="panelBackdrop" data-action="close-panel"></div>
+<aside class="slideover" id="panel" role="dialog" aria-label="Tools panel">
+  <div class="slideover-head">
+    <h3>Tools</h3>
+    <button class="slideover-close" data-action="close-panel" aria-label="Close">
+      <i data-lucide="x" style="width:14px;height:14px;"></i>
+    </button>
+  </div>
+  <div class="slideover-body">
+
+    <!-- Document analyzer -->
+    <div class="so-section">
+      <h4>Document analyzer</h4>
+      <div class="so-card">
+        <div class="so-input-row">
+          <input class="so-input" id="docUrlInput" type="url" placeholder="Paste a Google Sheet, Drive, or PDF link…">
+          <button class="so-btn" data-action="analyze-doc" id="analyzeBtn">
+            <i data-lucide="search" style="width:14px;height:14px;vertical-align:-2px;"></i>
+          </button>
+        </div>
+        <div class="so-result" id="docResult"></div>
+      </div>
+    </div>
+
+    <!-- File upload -->
+    <div class="so-section">
+      <h4>Upload an image or CSV</h4>
+      <label class="drop-zone" id="dropZone">
+        <i data-lucide="upload-cloud"></i>
+        <div>Drop a file here or <u>browse</u></div>
+        <input type="file" id="fileInput" hidden>
+      </label>
+      <div class="so-result" id="fileResult"></div>
+    </div>
+
+    <!-- Sync -->
+    <div class="so-section">
+      <h4>Data sync</h4>
+      <div class="so-card">
+        <div class="sync-row">
+          <div class="sync-status" id="syncStatusText"><span class="ok-dot"></span><span id="syncStatusLabel">Up to date</span></div>
+          <button class="so-btn ghost" data-action="sync" id="panelSyncBtn">
+            <i data-lucide="refresh-cw" style="width:13px;height:13px;vertical-align:-2px;margin-right:4px;"></i> Sync now
+          </button>
+        </div>
+        <div class="so-result" id="syncResult"></div>
+      </div>
+    </div>
+
+    <!-- Clear chat -->
+    <div class="so-section">
+      <h4>Conversation</h4>
+      <div class="so-card">
+        <button class="so-btn ghost" data-action="clear-chat" style="width:100%;">
+          <i data-lucide="trash-2" style="width:13px;height:13px;vertical-align:-2px;margin-right:4px;"></i> Clear this conversation
+        </button>
+      </div>
+    </div>
+
+  </div>
+</aside>
+
+<!-- ────────── IMAGE LIGHTBOX ────────── -->
+<div class="lightbox" id="lightbox" data-action="close-lightbox" role="dialog" aria-label="Image preview">
+  <button class="close" data-action="close-lightbox" aria-label="Close">×</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  // ── Auth gate (same model as dashboard) ──────────────────────────────
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    window.location.replace('/login');
+    return;
+  }
+
+  const PHONE = MIS.auth.getPhone();
+  const TENANT_NAME = MIS.auth.getTenantName();
+  let SESSION_ID = sessionStorage.getItem('mis_session_id');
+  if (!SESSION_ID) {
+    SESSION_ID = 'web_' + Math.random().toString(36).slice(2, 12);
+    sessionStorage.setItem('mis_session_id', SESSION_ID);
+  }
+
+  // ── Topbar greeting personalisation (chat-app style) ────────────────
+  const tbSubEl    = document.getElementById('tbSub');
+  const tenantNameEl = document.getElementById('tenantNameEl');
+  const tenantAvatar = document.getElementById('tenantAvatar');
+  const heroTitle = document.getElementById('heroTitle');
+  const tbAvatar = document.getElementById('tbAvatar');
+
+  const displayName = TENANT_NAME || (PHONE ? '+' + PHONE.slice(-4) : 'Guest');
+  tenantNameEl.textContent = displayName;
+  tenantAvatar.textContent = (displayName[0] || 'M').toUpperCase();
+  tbAvatar.textContent = (PHONE || 'U').slice(-2);
+
+  // Live "Good afternoon · synced X ago" subtitle, auto-tick every 30s
+  let lastSyncAt = Date.now();
+  function greetWord() {
+    const h = new Date().getHours();
+    return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  }
+  function syncLabel() {
+    const sec = Math.floor((Date.now() - lastSyncAt) / 1000);
+    if (sec < 30)   return 'just synced';
+    if (sec < 90)   return 'synced 1m ago';
+    if (sec < 3600) return 'synced ' + Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400)return 'synced ' + Math.floor(sec / 3600) + 'h ago';
+    return 'synced earlier';
+  }
+  function refreshSubtitle() {
+    tbSubEl.textContent = greetWord() + ' · ' + syncLabel();
+  }
+  refreshSubtitle();
+  setInterval(refreshSubtitle, 30000);
+
+  // Hero title (only if hero is visible — empty chat)
+  if (heroTitle) heroTitle.textContent = greetWord() + ' 👋';
+
+  // ── State ────────────────────────────────────────────────────────────
+  let history = [];                  // [{role, content}, ...]
+  let pendingExactName = null;       // for ledger disambiguation
+  let chatStream = document.getElementById('chatStream');
+  let heroEl = document.getElementById('chatHero');
+  let chipsRow = document.getElementById('chipsRow');
+  let composer = document.getElementById('composer');
+  let msgInput = document.getElementById('msgInput');
+
+  // ── Auto-grow textarea ──────────────────────────────────────────────
+  function autosize(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+  }
+  msgInput.addEventListener('input', () => autosize(msgInput));
+  msgInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // ── Suggestion chips loader ──────────────────────────────────────────
+  async function loadChips() {
+    try {
+      const url = '/api/chat-suggestions?phone=' + encodeURIComponent(PHONE) + '&limit=6';
+      const r = await fetch(url);
+      const d = await r.json();
+      renderChips(d.chips || []);
+    } catch (e) {
+      console.warn('chip load failed', e);
+      chipsRow.innerHTML = '';
+    }
+  }
+
+  function renderChips(chips) {
+    chipsRow.innerHTML = '';
+    chips.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'chip';
+      btn.dataset.i = String(i);
+      btn.dataset.kind = c.kind || 'generic';
+      btn.dataset.action = 'chip';
+      btn.dataset.prompt = c.prompt || c.label;
+      btn.innerHTML = '<i data-lucide="' + (c.icon || 'sparkles') + '"></i> <span>' + escapeHTML(c.label) + '</span>';
+      chipsRow.appendChild(btn);
+    });
+    if (window.lucide) lucide.createIcons();
+  }
+  function hideChipsOnFirstMessage() {
+    chipsRow.style.display = 'none';
+    heroEl.style.display = 'none';
+  }
+
+  // ── Helpers: HTML cleanup, markdown, attachments ─────────────────────
+  function escapeHTML(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // Convert WhatsApp *bold* + newlines + dashify undefined/null
+  function renderText(content) {
+    let safe = escapeHTML(content);
+    safe = safe.replace(/\*([^*\n]+)\*/g, '<b>$1</b>');
+    safe = safe.replace(/\bundefined\b|\bnull\b|\bEMPTY\b/gi, '–');
+    safe = safe.replace(/\n/g, '<br>');
+    return safe;
+  }
+
+  function fixHTML(html) {
+    html = String(html || '');
+    html = html.replace(/\bundefined\b/gi, '–').replace(/\bnull\b/gi, '–').replace(/\bEMPTY\b/g, '–');
+    const M = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])-(\d{2})\b/g, (_, y, mo, d) => d + '-' + M[parseInt(mo)-1] + '-' + y.slice(2));
+    html = html.replace(/\b(20\d{2})-(0[1-9]|1[0-2])\b/g, (_, y, mo) => M[parseInt(mo)-1] + '-' + y.slice(2));
+    return html.replace(/^(\s*<br\s*\/?>\s*)+/gi, '').replace(/(\s*<br\s*\/?>\s*)+$/gi, '').trim();
+  }
+
+  function makeLinksClickable(container) {
+    container.querySelectorAll('td').forEach(td => {
+      const t = td.textContent.trim();
+      if ((t.startsWith('http://') || t.startsWith('https://')) && !td.querySelector('a')) {
+        td.innerHTML = '<a href="' + t + '" target="_blank" rel="noopener">📄 View</a>';
+      }
+    });
+  }
+
+  // ── Image lightbox ───────────────────────────────────────────────────
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
+  function openLightbox(src) {
+    lightboxImg.src = src;
+    lightbox.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeLightbox() {
+    lightbox.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      if (lightbox.classList.contains('show')) closeLightbox();
+      else if (panel.classList.contains('show')) closePanel();
+    }
+  });
+
+  // ── Attachment renderer (shape from server.js mediaToWebAttachments) ─
+  function renderAttachments(bubble, attachments) {
+    if (!attachments || !attachments.length) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'attachments';
+    for (const a of attachments) {
+      if (a.type === 'image_url' && a.url) {
+        const img = document.createElement('img');
+        img.className = 'att-img';
+        img.src = a.url;
+        img.alt = a.caption || '';
+        img.title = 'Click to zoom';
+        img.addEventListener('click', () => openLightbox(a.url));
+        wrap.appendChild(img);
+        if (a.caption) {
+          const cap = document.createElement('div');
+          cap.className = 'att-caption';
+          cap.textContent = a.caption;
+          wrap.appendChild(cap);
+        }
+      } else if (a.type === 'image' && a.base64) {
+        const src = 'data:' + (a.mime || 'image/png') + ';base64,' + a.base64;
+        const img = document.createElement('img');
+        img.className = 'att-img';
+        img.src = src;
+        img.alt = a.name || '';
+        img.title = (a.name || '') + ' — click to zoom';
+        img.addEventListener('click', () => openLightbox(src));
+        wrap.appendChild(img);
+      } else if (a.type === 'document' && a.base64) {
+        const url = 'data:' + (a.mime || 'application/octet-stream') + ';base64,' + a.base64;
+        const link = document.createElement('a');
+        link.className = 'att-doc';
+        link.href = url;
+        link.download = a.name || 'download';
+        const icon = document.createElement('span'); icon.className = 'att-icon';
+        icon.textContent = (a.mime || '').includes('pdf') ? '📄'
+                         : (a.mime || '').includes('csv') ? '📊'
+                         : (a.mime || '').includes('sheet') ? '📊' : '📎';
+        const name = document.createElement('span'); name.className = 'att-name';
+        name.textContent = a.name || 'Download';
+        const meta = document.createElement('span'); meta.className = 'att-meta';
+        const kb = Math.round((a.base64.length * 0.75) / 1024);
+        meta.textContent = kb < 1024 ? kb + ' KB' : (kb / 1024).toFixed(1) + ' MB';
+        link.appendChild(icon); link.appendChild(name); link.appendChild(meta);
+        wrap.appendChild(link);
+      }
+    }
+    bubble.appendChild(wrap);
+  }
+
+  // ── Message bubble factory ───────────────────────────────────────────
+  function addMessage(role, content, opts) {
+    opts = opts || {};
+    const type = opts.type || 'text';
+    const attachments = opts.attachments || [];
+
+    const row = document.createElement('div');
+    row.className = 'bubble-row ' + (role === 'user' ? 'user' : 'bot');
+
+    const av = document.createElement('div');
+    av.className = 'avatar ' + (role === 'user' ? 'user' : 'bot');
+    av.textContent = role === 'user' ? 'U' : 'M';
+
+    const col = document.createElement('div');
+    col.className = 'bubble-col';
+
+    const bubble = document.createElement('div');
+
+    const hasHTML = type === 'html' || (typeof content === 'string' && /<table|<tr|<td|<th|<div/i.test(content));
+
+    if (hasHTML && role === 'assistant') {
+      bubble.className = 'bubble bot html';
+      bubble.innerHTML = fixHTML(content);
+      setTimeout(() => {
+        makeLinksClickable(bubble);
+        renderAttachments(bubble, attachments);
+      }, 50);
+    } else {
+      bubble.className = 'bubble ' + (role === 'user' ? 'user' : 'bot');
+      bubble.innerHTML = renderText(content || '') || (attachments.length ? '' : '&nbsp;');
+      if (attachments.length) {
+        setTimeout(() => renderAttachments(bubble, attachments), 50);
+      }
+    }
+
+    if (opts.typewriter) {
+      bubble.classList.add('typing-cursor');
+      typewriterTo(bubble, content || '', () => {
+        bubble.classList.remove('typing-cursor');
+        if (attachments.length) renderAttachments(bubble, attachments);
+        polishBubble(bubble);   // polish AFTER typewriter finishes overwriting innerHTML
+      });
+    }
+
+    const ts = document.createElement('div');
+    ts.className = 'ts';
+    const now = new Date();
+    ts.textContent = String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+
+    col.appendChild(bubble);
+    col.appendChild(ts);
+    row.appendChild(av);
+    row.appendChild(col);
+    chatStream.appendChild(row);
+    chatStream.scrollTop = chatStream.scrollHeight;
+    if (!opts.typewriter) polishBubble(bubble);   // typewriter path polishes in its own done callback
+    return bubble;
+  }
+
+  // ── Polish: money pill + result-card detection ────────────────────────
+  // Wraps every ₹X.XX (with optional Cr/L/K) inside a styled mono pill, and
+  // tags bubbles that look like "📋 N results / 📊 Total across N" lists with
+  // a `.result-card` class so CSS can give them a richer accent treatment.
+  function polishBubble(bubble) {
+    if (!bubble) return;
+    if (bubble.dataset.polished === '1') return;
+    bubble.dataset.polished = '1';
+    if (bubble.classList.contains('html')) return;   // tables already styled
+
+    // Money pill — match ₹ values like "₹12,34,567", "₹2.58 Cr", "₹76.94 L"
+    let html = bubble.innerHTML;
+    html = html.replace(
+      /(₹\s?[\d,]+(?:\.\d+)?(?:\s*(?:Cr|L|K|cr|l|k))?)\b/g,
+      function (full) {
+        // mark "big" if accompanied by Cr / L (typical totals)
+        const big = /\b(Cr|L)\b/.test(full) ? ' big' : '';
+        return '<span class="money' + big + '">' + full + '</span>';
+      }
+    );
+    bubble.innerHTML = html;
+
+    // Result-card flag — list-shaped bot replies
+    if (bubble.classList.contains('bot')) {
+      const txt = bubble.textContent || '';
+      if (/results:|Total across\b/i.test(txt) || /^📋|📊/.test(txt.trim())) {
+        bubble.classList.add('result-card');
+      }
+    }
+  }
+
+  // Char-by-char typewriter for plain-text replies (skip for HTML)
+  function typewriterTo(el, text, done) {
+    const safe = renderText(text);
+    el.innerHTML = '';
+    let i = 0;
+    const speed = Math.max(8, Math.min(28, 1500 / Math.max(40, safe.length)));
+    function tick() {
+      if (i >= safe.length) { done && done(); return; }
+      // Find safe slice end (avoid splitting tags)
+      const next = safe.indexOf('<', i);
+      let end = i + Math.ceil(speed / 4);
+      if (next !== -1 && next > i && next < end) {
+        const close = safe.indexOf('>', next);
+        end = close === -1 ? safe.length : close + 1;
+      } else if (end > safe.length) end = safe.length;
+      el.innerHTML = safe.slice(0, end);
+      i = end;
+      chatStream.scrollTop = chatStream.scrollHeight;
+      setTimeout(tick, speed);
+    }
+    tick();
+  }
+
+  // ── Typing indicator ─────────────────────────────────────────────────
+  function showTyping() {
+    if (document.getElementById('typingRow')) return;
+    const row = document.createElement('div');
+    row.className = 'bubble-row bot';
+    row.id = 'typingRow';
+    row.innerHTML = '<div class="avatar bot">M</div>'
+                  + '<div class="bubble-col"><div class="bubble bot typing-dots">'
+                  + '<span></span><span></span><span></span>'
+                  + '</div></div>';
+    chatStream.appendChild(row);
+    chatStream.scrollTop = chatStream.scrollHeight;
+  }
+  function removeTyping() {
+    const t = document.getElementById('typingRow');
+    if (t) t.remove();
+  }
+
+  // ── Send message → /chat ─────────────────────────────────────────────
+  async function sendMessage(overrideText) {
+    const text = (overrideText !== undefined ? overrideText : msgInput.value).trim();
+    if (!text) return;
+
+    hideChipsOnFirstMessage();
+    addMessage('user', text);
+    history.push({ role: 'user', content: text });
+    if (!overrideText) {
+      msgInput.value = '';
+      autosize(msgInput);
+    }
+    showTyping();
+
+    try {
+      const body = { message: text, history, session_id: SESSION_ID };
+      if (PHONE) body.phone = PHONE;
+      if (pendingExactName) { body.exactName = pendingExactName; pendingExactName = null; }
+
+      const res = await window.MIS.chatFetch(body);
+      const data = await res.json();
+      removeTyping();
+
+      const reply = data.reply || data.message || '';
+      const type = data.type || 'text';
+      const attachments = data.attachments || [];
+
+      if (type === 'suggestions' && Array.isArray(data.options) && data.options.length) {
+        // Inline disambiguation chips
+        const bubble = addMessage('assistant', reply, { type: 'text' });
+        const wrap = document.createElement('div');
+        wrap.className = 'chips-row';
+        wrap.style.cssText = 'padding:10px 0 0;justify-content:flex-start;';
+        data.options.forEach((opt, i) => {
+          const b = document.createElement('button');
+          b.type = 'button';
+          b.className = 'chip';
+          b.dataset.i = String(i);
+          b.dataset.action = 'chip';
+          // Detect ledger context — same heuristic as legacy
+          const last = [...document.querySelectorAll('.bubble.user')].pop();
+          const isInvoice = last && /invoice|bill/i.test(last.textContent);
+          if (['Show all sales','Show all expenses','Show pending payments','Show ledger'].includes(opt)) {
+            b.dataset.prompt = opt;
+          } else if (isInvoice) {
+            b.dataset.prompt = 'give me invoice of ' + opt;
+          } else {
+            // ledger pick
+            b.dataset.prompt = opt + ' ledger';
+            b.dataset.exactName = opt;
+          }
+          b.innerHTML = '<i data-lucide="chevron-right"></i><span>' + escapeHTML(opt) + '</span>';
+          wrap.appendChild(b);
+        });
+        bubble.appendChild(wrap);
+        if (window.lucide) lucide.createIcons();
+      } else {
+        // Use typewriter only for plain text (HTML is rendered immediately)
+        const wantsTypewriter = (type === 'text' || !type) && reply && !/<table|<tr|<td|<th|<div/i.test(reply);
+        addMessage('assistant', reply, { type, attachments, typewriter: wantsTypewriter });
+      }
+
+      if (reply && type !== 'suggestions') history.push({ role: 'assistant', content: reply });
+    } catch (e) {
+      removeTyping();
+      addMessage('assistant', '⚠️ ' + (e.message || 'Server error. Please try again.'));
+    }
+  }
+
+  // ── Load history — actual loader is `loadHistoryWithDividers` defined later
+  //    (placed after polishBubble/addMessage wraps so date dividers work).
+
+  // ── Voice mic + waveform (Web Audio API AnalyserNode) ────────────────
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let isRecording = false;
+  let audioCtx = null;
+  let analyser = null;
+  let streamRef = null;
+  let waveAnimId = null;
+  let recStart = 0;
+  let recTimerId = null;
+  const waveformWrap = document.getElementById('waveformWrap');
+  const waveformCanvas = document.getElementById('waveformCanvas');
+  const recTimeEl = document.getElementById('recTime');
+  const micBtn = document.getElementById('micBtn');
+
+  async function micToggle() {
+    if (isRecording) return micStop();
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      alert('Voice not supported in this browser. Use latest Chrome / Safari / Edge.');
+      return;
+    }
+    try {
+      streamRef = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimes = ['audio/webm;codecs=opus','audio/webm','audio/ogg;codecs=opus','audio/mp4'];
+      const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || '';
+      mediaRecorder = mime ? new MediaRecorder(streamRef, { mimeType: mime }) : new MediaRecorder(streamRef);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = e => { if (e.data && e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = onMicData;
+
+      // Waveform analyser
+      try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const src = audioCtx.createMediaStreamSource(streamRef);
+        analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 256;
+        src.connect(analyser);
+        drawWaveform();
+      } catch(e) { /* analyser optional */ }
+
+      mediaRecorder.start();
+      isRecording = true;
+      micBtn.classList.add('recording');
+      waveformWrap.classList.add('show');
+      recStart = Date.now();
+      recTimerId = setInterval(() => {
+        const s = Math.floor((Date.now() - recStart) / 1000);
+        recTimeEl.textContent = String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0');
+        if (s >= 60) micStop();   // hard 60s safety cap
+      }, 250);
+    } catch (e) {
+      alert('Mic access denied: ' + e.message);
+    }
+  }
+
+  function micStop() {
+    if (!isRecording) return;
+    try { mediaRecorder.stop(); } catch(e) {}
+    isRecording = false;
+    micBtn.classList.remove('recording');
+    waveformWrap.classList.remove('show');
+    if (recTimerId) { clearInterval(recTimerId); recTimerId = null; }
+    if (waveAnimId) { cancelAnimationFrame(waveAnimId); waveAnimId = null; }
+    if (audioCtx) { try { audioCtx.close(); } catch(e){} audioCtx = null; }
+    if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
+  }
+
+  function drawWaveform() {
+    const ctx = waveformCanvas.getContext('2d');
+    const w = waveformCanvas.width, h = waveformCanvas.height;
+    const dataArr = new Uint8Array(analyser.frequencyBinCount);
+
+    function frame() {
+      analyser.getByteFrequencyData(dataArr);
+      ctx.clearRect(0, 0, w, h);
+      const bars = 48;
+      const step = Math.floor(dataArr.length / bars);
+      const bw = w / bars - 2;
+      for (let i = 0; i < bars; i++) {
+        let sum = 0;
+        for (let j = 0; j < step; j++) sum += dataArr[i*step + j];
+        const v = (sum / step) / 255;
+        const bh = Math.max(2, v * h);
+        // Gradient pink→purple
+        const grd = ctx.createLinearGradient(0, h - bh, 0, h);
+        grd.addColorStop(0, '#F43F5E');
+        grd.addColorStop(1, '#8B5CF6');
+        ctx.fillStyle = grd;
+        const x = i * (bw + 2);
+        ctx.fillRect(x, (h - bh) / 2, bw, bh);
+      }
+      waveAnimId = requestAnimationFrame(frame);
+    }
+    frame();
+  }
+
+  function onMicData() {
+    if (!audioChunks.length) return;
+    const blob = new Blob(audioChunks, { type: (mediaRecorder && mediaRecorder.mimeType) || 'audio/webm' });
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const dataUrl = reader.result;
+      const base64 = (dataUrl || '').split(',')[1];
+      if (!base64) { alert('Recording failed.'); return; }
+      showTyping();
+      try {
+        const r = await fetch('/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_base64: base64, mime: blob.type })
+        });
+        const d = await r.json();
+        removeTyping();
+        if (!r.ok || !d.text) {
+          addMessage('assistant', '⚠️ ' + (d.error || 'Transcription failed. Please try again.'));
+          return;
+        }
+        msgInput.value = d.text;
+        autosize(msgInput);
+        sendMessage();
+      } catch(e) {
+        removeTyping();
+        addMessage('assistant', '⚠️ Voice upload failed: ' + e.message);
+      }
+    };
+    reader.readAsDataURL(blob);
+  }
+
+  // ── Slide-over panel ─────────────────────────────────────────────────
+  const panel = document.getElementById('panel');
+  const panelBackdrop = document.getElementById('panelBackdrop');
+  function openPanel() { panel.classList.add('show'); panelBackdrop.classList.add('show'); }
+  function closePanel() { panel.classList.remove('show'); panelBackdrop.classList.remove('show'); }
+
+  // ── Document analyzer ────────────────────────────────────────────────
+  async function analyzeDoc() {
+    const input = document.getElementById('docUrlInput');
+    const result = document.getElementById('docResult');
+    const url = input.value.trim();
+    if (!url) { input.focus(); return; }
+    result.classList.add('show');
+    result.textContent = '⏳ Reading document…';
+    try {
+      const r = await fetch('/doc-intelligence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doc_url: url })
+      });
+      const d = await r.json();
+      if (d.ok || d.summary) {
+        result.innerHTML = '<b>✅ Analysis</b><br><br>' + escapeHTML(d.summary || '');
+      } else {
+        result.textContent = '❌ ' + (d.error || 'Could not analyze');
+      }
+    } catch (e) {
+      result.textContent = '❌ ' + e.message;
+    }
+  }
+
+  // ── File upload ──────────────────────────────────────────────────────
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('click', () => fileInput.click());
+  dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault();
+    dropZone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f) processFile(f);
+  });
+  fileInput.addEventListener('change', e => {
+    const f = e.target.files && e.target.files[0];
+    if (f) processFile(f);
+  });
+
+  async function processFile(file) {
+    const result = document.getElementById('fileResult');
+    result.classList.add('show');
+    result.textContent = '⏳ Reading ' + file.name + '…';
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target.result.split(',')[1];
+        try {
+          const r = await fetch('/analyze-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ base64, mediaType: file.type })
+          });
+          const d = await r.json();
+          result.innerHTML = '<b>🖼️ ' + escapeHTML(file.name) + '</b><br><br>' + escapeHTML(d.summary || 'No summary available');
+        } catch (e2) { result.textContent = '❌ ' + e2.message; }
+      };
+      reader.readAsDataURL(file);
+      return;
+    }
+
+    if (file.type === 'text/csv' || file.name.endsWith('.csv') || file.name.endsWith('.txt')) {
+      try {
+        const text = await file.text();
+        const r = await fetch('/doc-intelligence', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ doc_url: 'file://' + file.name, doc_type: 'text', question: text.slice(0, 5000) })
+        });
+        const d = await r.json();
+        result.innerHTML = '<b>📄 ' + escapeHTML(file.name) + '</b><br><br>' + escapeHTML(d.summary || d.error || '');
+      } catch (e2) {
+        result.textContent = '❌ ' + e2.message;
+      }
+    } else {
+      result.textContent = '⚠️ For Excel/PDF, paste a Drive link in the analyzer above. CSV and image files are directly supported.';
+    }
+  }
+
+  // ── Manual sync ─────────────────────────────────────────────────────
+  async function doSync() {
+    const label = document.getElementById('syncStatusLabel');
+    const result = document.getElementById('syncResult');
+    const btn1 = document.getElementById('topSyncBtn');
+    const btn2 = document.getElementById('panelSyncBtn');
+    if (label) label.textContent = 'Syncing…';
+    if (btn1) btn1.classList.add('spin');
+    if (btn2) btn2.disabled = true;
+    if (result) { result.classList.add('show'); result.textContent = '⏳ Syncing latest data…'; }
+    try {
+      const r = await fetch('/sync', { method: 'POST' });
+      const d = await r.json();
+      const ok = r.ok && (d.ok === undefined ? true : d.ok);
+      if (label) label.textContent = ok ? 'Up to date' : 'Sync failed';
+      if (result) result.innerHTML = ok ? '<b>✅ Synced</b><br><br>' + escapeHTML(JSON.stringify(d.results || d || {}, null, 2)).slice(0, 600) : '❌ ' + (d.error || 'Sync failed');
+      if (ok) { lastSyncAt = Date.now(); refreshSubtitle(); }
+    } catch (e) {
+      if (label) label.textContent = 'Sync failed';
+      if (result) result.textContent = '❌ ' + e.message;
+    } finally {
+      if (btn1) btn1.classList.remove('spin');
+      if (btn2) btn2.disabled = false;
+    }
+  }
+
+  // ── Clear chat ──────────────────────────────────────────────────────
+  function clearChat() {
+    if (!confirm('Clear this conversation?')) return;
+    fetch('/history/' + SESSION_ID, { method: 'DELETE' }).catch(() => {});
+    chatStream.innerHTML = '';
+    history = [];
+    heroEl.style.display = '';
+    chipsRow.style.display = '';
+    loadChips();
+  }
+
+  // ── Sidebar toggle (mobile) ─────────────────────────────────────────
+  function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+  }
+
+  // ── Single delegated click handler (Sprint-1 lesson — no inline onclick) ──
+  document.body.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-action]');
+    if (!target) return;
+    const action = target.dataset.action;
+    switch (action) {
+      case 'send':           sendMessage(); break;
+      case 'mic-toggle':     micToggle(); break;
+      case 'mic-stop':       micStop(); break;
+      case 'open-panel':     openPanel(); break;
+      case 'close-panel':    closePanel(); break;
+      case 'analyze-doc':    analyzeDoc(); break;
+      case 'sync':           doSync(); break;
+      case 'clear-chat':     clearChat(); break;
+      case 'logout':         e.preventDefault(); MIS.auth.logout(); break;
+      case 'toggle-sidebar': toggleSidebar(); break;
+      case 'close-lightbox': closeLightbox(); break;
+      case 'scroll-bottom':  scrollToBottom(); break;
+      case 'chip': {
+        const prompt = target.dataset.prompt || target.textContent.trim();
+        if (target.dataset.exactName) pendingExactName = target.dataset.exactName;
+        sendMessage(prompt);
+        break;
+      }
+    }
+  });
+
+  // ── Polish: cycling placeholder ──────────────────────────────────────
+  // When the textarea is empty and unfocused, gently rotate the placeholder
+  // through tenant chip prompts so the user always has fresh inspiration.
+  const DEFAULT_PH = 'Type a message, or hold the mic to speak…';
+  let phTimer = null;
+  let phIdx = 0;
+  function getCyclePrompts() {
+    const chips = chipsRow.querySelectorAll('.chip[data-prompt]');
+    const out = [DEFAULT_PH];
+    chips.forEach(c => { if (c.dataset.prompt) out.push('Try: ' + c.dataset.prompt); });
+    return out;
+  }
+  function startPlaceholderCycle() {
+    if (phTimer) clearInterval(phTimer);
+    phTimer = setInterval(() => {
+      if (msgInput.value || document.activeElement === msgInput) return;
+      const list = getCyclePrompts();
+      if (list.length < 2) return;
+      phIdx = (phIdx + 1) % list.length;
+      msgInput.classList.remove('ph-fade');
+      // Force reflow so re-applying the class restarts the fade animation
+      void msgInput.offsetWidth;
+      msgInput.placeholder = list[phIdx];
+      msgInput.classList.add('ph-fade');
+    }, 3500);
+  }
+  msgInput.addEventListener('focus', () => msgInput.classList.remove('ph-fade'));
+  msgInput.addEventListener('blur', () => { phIdx = 0; msgInput.placeholder = DEFAULT_PH; });
+
+  // ── Polish: scroll-to-bottom FAB ─────────────────────────────────────
+  const scrollFab = document.createElement('button');
+  scrollFab.type = 'button';
+  scrollFab.className = 'scroll-fab';
+  scrollFab.dataset.action = 'scroll-bottom';
+  scrollFab.setAttribute('aria-label', 'Scroll to latest');
+  scrollFab.innerHTML = '<i data-lucide="arrow-down"></i><span class="badge" id="scrollFabBadge" style="display:none;">1</span>';
+  document.body.appendChild(scrollFab);
+  let pendingNewMsg = 0;
+  function updateFabVisibility() {
+    const dist = chatStream.scrollHeight - chatStream.scrollTop - chatStream.clientHeight;
+    const show = dist > 120;
+    scrollFab.classList.toggle('show', show);
+    if (!show) {
+      pendingNewMsg = 0;
+      const b = document.getElementById('scrollFabBadge');
+      if (b) b.style.display = 'none';
+    }
+  }
+  chatStream.addEventListener('scroll', updateFabVisibility, { passive: true });
+  function scrollToBottom() {
+    chatStream.scrollTo({ top: chatStream.scrollHeight, behavior: 'smooth' });
+    pendingNewMsg = 0;
+    const b = document.getElementById('scrollFabBadge');
+    if (b) b.style.display = 'none';
+  }
+  // When a NEW assistant bubble arrives while user is scrolled up, increment badge
+  const _origAddMessage = addMessage;
+  addMessage = function (role, content, opts) {
+    const dist = chatStream.scrollHeight - chatStream.scrollTop - chatStream.clientHeight;
+    const wasScrolledUp = dist > 120;
+    const result = _origAddMessage(role, content, opts);
+    if (role === 'assistant' && wasScrolledUp) {
+      pendingNewMsg++;
+      const b = document.getElementById('scrollFabBadge');
+      if (b) { b.textContent = String(pendingNewMsg); b.style.display = 'grid'; }
+    }
+    setTimeout(updateFabVisibility, 50);
+    return result;
+  };
+
+  // ── Polish: date divider helper ──────────────────────────────────────
+  function dayLabel(ts) {
+    const d = new Date(ts);
+    if (isNaN(d.getTime())) return null;
+    const now = new Date(); now.setHours(0,0,0,0);
+    const that = new Date(d); that.setHours(0,0,0,0);
+    const diff = Math.floor((now - that) / 86400000);
+    if (diff === 0) return 'Today';
+    if (diff === 1) return 'Yesterday';
+    if (diff > 0 && diff < 7) return d.toLocaleDateString('en-IN', { weekday: 'long' });
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: diff > 365 ? 'numeric' : undefined });
+  }
+  function addDateDivider(label) {
+    if (!label) return;
+    const last = chatStream.querySelector('.date-divider:last-of-type');
+    if (last && last.textContent === label) return;   // dedupe consecutive
+    const div = document.createElement('div');
+    div.className = 'date-divider';
+    div.textContent = label;
+    chatStream.appendChild(div);
+  }
+  // Patch loadHistory's date awareness — wrap addMessage during initial load
+  // by tracking the previous timestamp seen. We re-implement loadHistory here
+  // so we can inject dividers at the right points.
+  (async function loadHistoryWithDividers() {
+    try {
+      const r = await fetch('/history/' + SESSION_ID);
+      if (!r.ok) return;
+      const data = await r.json();
+      if (!Array.isArray(data) || data.length === 0) return;
+      // Only run if chatStream hasn't already been populated by the original loader
+      // (the original IIFE block also runs; whichever finishes first wins — both are idempotent on visual output).
+      if (chatStream.querySelector('.bubble-row')) return;
+      hideChipsOnFirstMessage();
+      let lastDay = null;
+      data.forEach(m => {
+        const ts = m.created_at || m.timestamp || m.ts;
+        if (ts) {
+          const that = new Date(ts); that.setHours(0,0,0,0);
+          const key = that.getTime();
+          if (key !== lastDay) {
+            const label = dayLabel(ts);
+            if (label) addDateDivider(label);
+            lastDay = key;
+          }
+        }
+        let cleaned = m.content || '';
+        const attachments = [];
+        if (cleaned.indexOf('[ATT:') !== -1) {
+          cleaned = cleaned.replace(/\[ATT:({[\s\S]*?})\]/g, (_, json) => {
+            try {
+              const att = JSON.parse(json);
+              if (att && att.type && (att.url || att.base64)) attachments.push(att);
+            } catch (e) {}
+            return '';
+          }).trim();
+        }
+        const isHTML = cleaned && /<table|<div|<tr|<td|<th/i.test(cleaned);
+        addMessage(m.role, cleaned, {
+          type: (isHTML && m.role === 'assistant') ? 'html' : 'text',
+          attachments
+        });
+        history.push({ role: m.role, content: m.content });
+      });
+    } catch (e) { /* ignore */ }
+  })();
+
+  // ── Init ────────────────────────────────────────────────────────────
+  if (window.lucide) lucide.createIcons();
+  if (MIS.theme && MIS.theme.init) MIS.theme.init();
+
+  // Theme toggle (was missing — clicking the row in the sidebar now flips theme)
+  const _themeRow = document.getElementById('themeRow');
+  if (_themeRow) {
+    _themeRow.addEventListener('click', () => {
+      window.MIS.theme.toggle();
+    });
+  }
+  loadChips().finally(() => {
+    // Once chips are in the DOM, kick off the cycling placeholder
+    if (window.lucide) lucide.createIcons();   // pick up the FAB icon + chip icons
+    startPlaceholderCycle();
+  });
+
+  // Add a tiny "spin" CSS for the topbar sync icon (page-local)
+  const styleEl = document.createElement('style');
+  styleEl.textContent = '.spin svg { animation: misSpin 700ms linear infinite; } @keyframes misSpin { to { transform: rotate(360deg); } }';
+  document.head.appendChild(styleEl);
+
+})();
+</script>
+
+</body>
+</html>

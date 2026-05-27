@@ -1,0 +1,365 @@
+/* ==========================================================================
+   MIS.work - Design System Variables
+   Foundation file - Contains all design tokens
+   ========================================================================== */
+
+:root {
+  /* ==========================================================================
+     COLORS - Brand Palette
+     ========================================================================== */
+  
+  /* Primary Brand Blue (Refined - more premium) */
+  --color-primary-50:  #EBF8FF;
+  --color-primary-100: #BEE3F8;
+  --color-primary-200: #90CDF4;
+  --color-primary-300: #63B3ED;
+  --color-primary-400: #00A4D2;  /* Main brand color - kept */
+  --color-primary-500: #0086B3;
+  --color-primary-600: #006A91;  /* Refined deeper */
+  --color-primary-700: #014A60;
+  --color-primary-800: #013040;
+  --color-primary-900: #001620;
+
+  /* Premium Dark Navy (For sophisticated accents) */
+  --color-navy-50:  #F5F7FA;
+  --color-navy-100: #E4E7EB;
+  --color-navy-200: #CBD2D9;
+  --color-navy-300: #9AA5B1;
+  --color-navy-400: #7B8794;
+  --color-navy-500: #616E7C;
+  --color-navy-600: #52606D;
+  --color-navy-700: #3E4C59;
+  --color-navy-800: #323F4B;
+  --color-navy-900: #1F2933;
+  --color-navy-950: #0F1419;
+
+  /* Refined Neutral Grays (Linear/Vercel inspired) */
+  --color-gray-50:  #FAFAFA;
+  --color-gray-100: #F4F4F5;
+  --color-gray-200: #E4E4E7;
+  --color-gray-300: #D4D4D8;
+  --color-gray-400: #A1A1AA;
+  --color-gray-500: #71717A;
+  --color-gray-600: #52525B;
+  --color-gray-700: #3F3F46;
+  --color-gray-800: #27272A;
+  --color-gray-900: #18181B;
+  --color-gray-950: #09090B;
+
+  /* Semantic Colors */
+  --color-success: #10B981;
+  --color-success-light: #D1FAE5;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FEF3C7;
+  --color-error: #EF4444;
+  --color-error-light: #FEE2E2;
+  --color-info: #3B82F6;
+  --color-info-light: #DBEAFE;
+
+  /* Surface Colors */
+  --color-bg-primary: #FFFFFF;
+  --color-bg-secondary: var(--color-gray-50);
+  --color-bg-tertiary: var(--color-gray-100);
+  
+  /* Text Colors */
+  --color-text-primary: var(--color-gray-900);
+  --color-text-secondary: var(--color-gray-600);
+  --color-text-tertiary: var(--color-gray-500);
+  --color-text-inverse: #FFFFFF;
+  --color-text-brand: var(--color-primary-400);
+
+  /* Border Colors */
+  --color-border-light: var(--color-gray-200);
+  --color-border-medium: var(--color-gray-300);
+  --color-border-strong: var(--color-gray-400);
+
+  /* ==========================================================================
+     GRADIENTS - Refined for premium look
+     ========================================================================== */
+  
+  --gradient-primary: linear-gradient(135deg, #00A4D2 0%, #006A91 100%);
+  --gradient-primary-soft: linear-gradient(135deg, rgba(0,164,210,0.08) 0%, rgba(0,106,145,0.04) 100%);
+  --gradient-hero: linear-gradient(135deg, #00A4D2 0%, #014A60 100%);
+  --gradient-bg-subtle: linear-gradient(180deg, #FAFAFA 0%, #F4F4F5 100%);
+  --gradient-text: linear-gradient(135deg, #00A4D2 0%, #006A91 100%);
+  --gradient-glow: radial-gradient(circle at center, rgba(0,164,210,0.3) 0%, transparent 70%);
+  
+  /* Premium dark gradient (for footer, dark sections) */
+  --gradient-dark: linear-gradient(135deg, #0F1419 0%, #1F2933 100%);
+  
+  /* Animated gradient for special sections */
+  --gradient-animated: linear-gradient(270deg, #00A4D2, #006A91, #63B3ED, #00A4D2);
+
+  /* ==========================================================================
+     TYPOGRAPHY
+     ========================================================================== */
+  
+  /* Font Families */
+  --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  /* Font Weights */
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --font-weight-extrabold: 800;
+
+  /* Font Sizes - Fluid Typography (clamp for responsive) */
+  --text-xs:   0.75rem;     /* 12px */
+  --text-sm:   0.875rem;    /* 14px */
+  --text-base: 1rem;        /* 16px */
+  --text-lg:   1.125rem;    /* 18px */
+  --text-xl:   1.25rem;     /* 20px */
+  --text-2xl:  1.5rem;      /* 24px */
+  --text-3xl:  1.875rem;    /* 30px */
+  --text-4xl:  2.25rem;     /* 36px */
+  --text-5xl:  3rem;        /* 48px */
+  --text-6xl:  3.75rem;     /* 60px */
+  --text-7xl:  4.5rem;      /* 72px */
+
+  /* Responsive Heading Sizes (clamp: min, fluid, max) */
+  --heading-h1: clamp(2.5rem, 5vw, 4rem);       /* 40-64px */
+  --heading-h2: clamp(2rem, 4vw, 3rem);         /* 32-48px */
+  --heading-h3: clamp(1.5rem, 3vw, 2rem);       /* 24-32px */
+  --heading-h4: clamp(1.25rem, 2vw, 1.5rem);    /* 20-24px */
+  --heading-h5: 1.125rem;                       /* 18px */
+  --heading-h6: 1rem;                           /* 16px */
+
+  /* Line Heights */
+  --leading-none: 1;
+  --leading-tight: 1.2;       /* Headings */
+  --leading-snug: 1.375;
+  --leading-normal: 1.5;      /* Small text */
+  --leading-relaxed: 1.6;     /* Body text */
+  --leading-loose: 1.8;       /* Long form */
+
+  /* Letter Spacing */
+  --tracking-tighter: -0.05em;
+  --tracking-tight: -0.025em;
+  --tracking-normal: 0;
+  --tracking-wide: 0.025em;
+  --tracking-wider: 0.05em;
+  --tracking-widest: 0.1em;
+
+  /* ==========================================================================
+     SPACING SYSTEM (8px Grid)
+     ========================================================================== */
+  
+  --space-0:   0;
+  --space-px:  1px;
+  --space-0-5: 0.125rem;   /* 2px */
+  --space-1:   0.25rem;    /* 4px */
+  --space-1-5: 0.375rem;   /* 6px */
+  --space-2:   0.5rem;     /* 8px */
+  --space-2-5: 0.625rem;   /* 10px */
+  --space-3:   0.75rem;    /* 12px */
+  --space-4:   1rem;       /* 16px */
+  --space-5:   1.25rem;    /* 20px */
+  --space-6:   1.5rem;     /* 24px */
+  --space-7:   1.75rem;    /* 28px */
+  --space-8:   2rem;       /* 32px */
+  --space-10:  2.5rem;     /* 40px */
+  --space-12:  3rem;       /* 48px */
+  --space-14:  3.5rem;     /* 56px */
+  --space-16:  4rem;       /* 64px */
+  --space-20:  5rem;       /* 80px */
+  --space-24:  6rem;       /* 96px */
+  --space-28:  7rem;       /* 112px */
+  --space-32:  8rem;       /* 128px */
+  --space-40:  10rem;      /* 160px */
+  --space-48:  12rem;      /* 192px */
+
+  /* Section Padding (Responsive) */
+  --section-padding-y: clamp(3rem, 8vw, 6rem);
+  --section-padding-x: clamp(1rem, 4vw, 2rem);
+
+  /* ==========================================================================
+     SHADOWS - Depth & Elevation
+     ========================================================================== */
+  
+  --shadow-xs:  0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-sm:  0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md:  0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg:  0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl:  0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+
+  /* Premium glow effects (brand color) */
+  --shadow-glow-sm: 0 0 20px rgba(0, 164, 210, 0.3);
+  --shadow-glow-md: 0 0 40px rgba(0, 164, 210, 0.4);
+  --shadow-glow-lg: 0 0 60px rgba(0, 164, 210, 0.5);
+
+  /* Soft shadows for cards */
+  --shadow-card: 0 4px 20px -2px rgba(0, 0, 0, 0.08);
+  --shadow-card-hover: 0 12px 40px -4px rgba(0, 0, 0, 0.15);
+
+  /* ==========================================================================
+     BORDER RADIUS
+     ========================================================================== */
+  
+  --radius-none: 0;
+  --radius-xs:   0.125rem;   /* 2px */
+  --radius-sm:   0.25rem;    /* 4px */
+  --radius-md:   0.5rem;     /* 8px */
+  --radius-lg:   0.75rem;    /* 12px */
+  --radius-xl:   1rem;       /* 16px */
+  --radius-2xl:  1.5rem;     /* 24px */
+  --radius-3xl:  2rem;       /* 32px */
+  --radius-full: 9999px;     /* Pill */
+
+  /* ==========================================================================
+     ANIMATION & TRANSITIONS
+     ========================================================================== */
+  
+  /* Durations */
+  --duration-instant: 50ms;
+  --duration-fast:    150ms;
+  --duration-normal:  300ms;
+  --duration-slow:    500ms;
+  --duration-slower:  700ms;
+  --duration-slowest: 1000ms;
+
+  /* Easing Functions */
+  --ease-linear:    linear;
+  --ease-in:        cubic-bezier(0.4, 0, 1, 1);
+  --ease-out:       cubic-bezier(0, 0, 0.2, 1);
+  --ease-in-out:    cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-bounce:    cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --ease-smooth:    cubic-bezier(0.25, 0.1, 0.25, 1);
+  --ease-spring:    cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* Common Transitions */
+  --transition-base: all var(--duration-normal) var(--ease-smooth);
+  --transition-fast: all var(--duration-fast) var(--ease-smooth);
+  --transition-slow: all var(--duration-slow) var(--ease-smooth);
+  --transition-colors: color var(--duration-normal) var(--ease-smooth),
+                       background-color var(--duration-normal) var(--ease-smooth),
+                       border-color var(--duration-normal) var(--ease-smooth);
+  --transition-transform: transform var(--duration-normal) var(--ease-smooth);
+  --transition-opacity: opacity var(--duration-normal) var(--ease-smooth);
+
+  /* ==========================================================================
+     GLASSMORPHISM (Backdrop blur)
+     ========================================================================== */
+  
+  --blur-sm: 4px;
+  --blur-md: 8px;
+  --blur-lg: 16px;
+  --blur-xl: 24px;
+  --blur-2xl: 40px;
+
+  /* Glass surfaces */
+  --glass-bg-light: rgba(255, 255, 255, 0.7);
+  --glass-bg-dark: rgba(0, 0, 0, 0.5);
+  --glass-bg-primary: rgba(0, 164, 210, 0.1);
+  --glass-border-light: rgba(255, 255, 255, 0.3);
+  --glass-border-dark: rgba(255, 255, 255, 0.1);
+
+  /* ==========================================================================
+     BREAKPOINTS (For reference - use in media queries)
+     ========================================================================== */
+  
+  /* 
+   * --bp-sm:  640px;   Small tablets
+   * --bp-md:  768px;   Tablets
+   * --bp-lg:  1024px;  Small laptops
+   * --bp-xl:  1280px;  Laptops
+   * --bp-2xl: 1536px;  Large screens
+   */
+
+  /* ==========================================================================
+     Z-INDEX SYSTEM
+     ========================================================================== */
+  
+  --z-hide:         -1;
+  --z-base:         0;
+  --z-content:      1;
+  --z-dropdown:     10;
+  --z-sticky:       20;
+  --z-fixed:        30;
+  --z-modal-bg:     40;
+  --z-modal:        50;
+  --z-popover:      60;
+  --z-tooltip:      70;
+  --z-notification: 80;
+  --z-max:          9999;
+
+  /* ==========================================================================
+     CONTAINER WIDTHS
+     ========================================================================== */
+  
+  --container-sm: 640px;
+  --container-md: 768px;
+  --container-lg: 1024px;
+  --container-xl: 1280px;
+  --container-2xl: 1400px;
+  --container-max: 1536px;
+
+  /* ==========================================================================
+     COMPONENT-SPECIFIC TOKENS
+     ========================================================================== */
+  
+  /* Buttons */
+  --btn-padding-x-sm: var(--space-3);
+  --btn-padding-y-sm: var(--space-2);
+  --btn-padding-x-md: var(--space-5);
+  --btn-padding-y-md: var(--space-3);
+  --btn-padding-x-lg: var(--space-6);
+  --btn-padding-y-lg: var(--space-4);
+  --btn-radius: var(--radius-lg);
+  --btn-font-weight: var(--font-weight-semibold);
+
+  /* Cards */
+  --card-padding: var(--space-6);
+  --card-radius: var(--radius-xl);
+  --card-bg: var(--color-bg-primary);
+  --card-border: 1px solid var(--color-border-light);
+  --card-shadow: var(--shadow-card);
+  --card-shadow-hover: var(--shadow-card-hover);
+
+  /* Forms */
+  --input-height: 48px;
+  --input-padding-x: var(--space-4);
+  --input-radius: var(--radius-md);
+  --input-border: 1px solid var(--color-border-medium);
+  --input-border-focus: 2px solid var(--color-primary-400);
+  --input-bg: var(--color-bg-primary);
+  --input-font-size: var(--text-base);
+
+  /* Header */
+  --header-height: 80px;
+  --header-height-mobile: 64px;
+  --header-bg: rgba(255, 255, 255, 0.8);
+  --header-blur: var(--blur-lg);
+
+  /* Focus Ring (Accessibility) */
+  --focus-ring: 0 0 0 3px rgba(0, 164, 210, 0.4);
+  --focus-ring-offset: 2px;
+}
+
+/* ==========================================================================
+   REDUCED MOTION (Accessibility)
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-instant: 0ms;
+    --duration-fast: 0ms;
+    --duration-normal: 0ms;
+    --duration-slow: 0ms;
+    --duration-slower: 0ms;
+    --duration-slowest: 0ms;
+  }
+  
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Outstanding · MIS</title>
+<link rel="stylesheet" href="/assets/css/app.css" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="/assets/js/app.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  .page-grid { display: grid; gap: 18px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 1100px) { .kpi-row { grid-template-columns: repeat(2, 1fr); } .charts-row { grid-template-columns: 1fr; } }
+  .chart-card { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 16px; padding: 18px 20px; position: relative; overflow: hidden; }
+  .chart-card .body { height: 280px; position: relative; }
+  .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .chart-icon { width: 36px; height: 36px; border-radius: 10px; background: rgba(244,63,94,0.10); color: var(--accent-rose, #F43F5E); display: grid; place-items: center; }
+  [data-theme="dark"] .chart-icon { background: rgba(244,63,94,0.18); }
+  .defaulters { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 14px; padding: 18px 20px; }
+  .defaulters table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .defaulters th { text-align: left; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  .defaulters td { padding: 12px; border-bottom: 1px solid var(--hairline); color: var(--color-text-primary); }
+  .defaulters tr:hover td { background: rgba(244,63,94,0.04); }
+  [data-theme="dark"] .defaulters tr:hover td { background: rgba(244,63,94,0.08); }
+  .defaulters td.num { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+  .age-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; font-family: var(--font-mono); }
+  .age-pill.bg-30 { background: rgba(16,185,129,0.12); color: #10B981; }
+  .age-pill.bg-60 { background: rgba(245,158,11,0.12); color: #F59E0B; }
+  .age-pill.bg-90 { background: rgba(244,63,94,0.12); color: #F43F5E; }
+  .age-pill.bg-99 { background: rgba(217,70,239,0.16); color: #D946EF; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-tertiary); grid-column: 1 / -1; }
+  .empty-state .ic { font-size: 48px; margin-bottom: 12px; }
+  .nav-item.active { color: var(--color-primary-600); background: var(--color-primary-50); }
+  [data-theme="dark"] .nav-item.active { color: var(--accent-cyan); background: rgba(0,164,210,0.10); }
+  .mobile-toggle { display: none; }
+  .greeting .who { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .greeting .when { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #F43F5E, #D946EF, #6366F1); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 4px 14px rgba(244, 63, 94, 0.28); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: dotPulse 2.4s ease-in-out infinite; }
+  @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div><div class="name">MIS</div><div class="tag">Make It Simple</div></div>
+    </div>
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item active" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;"><i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode</span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mobile-toggle"><i data-lucide="menu"></i></button>
+      <div class="tenant-avatar" id="tenantAvatar">M</div>
+      <div class="greeting">
+        <div class="who"><span id="tenant-name">…</span> <span class="status-dot"></span></div>
+        <div class="when" id="topbar-sub">Outstanding · aging analysis</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-icon" id="refreshBtn"><i data-lucide="refresh-cw"></i></button>
+    </div>
+  </header>
+    <div class="page">
+    <div class="page-header page-header-hero">
+      <div class="page-header-bg">
+        <div class="aurora aurora-1"></div>
+        <div class="aurora aurora-2"></div>
+        <div class="aurora aurora-3"></div>
+        <div class="grid-overlay"></div>
+      </div>
+      <div class="page-header-content">
+        <div class="page-icon-glow"><i data-lucide="hourglass"></i></div>
+        <div class="page-header-text">
+          <div class="page-title-row">
+            <h1 class="t-h1 page-title-gradient">Outstanding</h1>
+            <span class="live-pill"><span class="live-dot"></span>Live</span>
+          </div>
+          <p class="page-desc">Unpaid purchases · aging breakdown · top defaulters</p>
+          <div class="page-chips">
+            <span class="page-chip"><i data-lucide="layers" style="width:12px;height:12px;"></i> Aging buckets</span>
+            <span class="page-chip"><i data-lucide="alert-triangle" style="width:12px;height:12px;"></i> Top defaulters</span>
+            <span class="page-chip"><i data-lucide="file-spreadsheet" style="width:12px;height:12px;"></i> Excel export</span>
+          </div>
+          <div class="page-underline"></div>
+        </div>
+        <button id="exportCsvBtn" type="button" style="padding:9px 16px; border-radius:10px; background:var(--accent-violet); color:#fff; font-weight:600; font-size:13px; border:none; cursor:pointer; flex-shrink:0; align-self:flex-start;">⬇ Export Excel</button>
+      </div>
+    </div>
+
+    <div class="page-grid">
+      <div class="kpi-row" id="kpi-row">
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">Aging Buckets</div><div class="t-meta">By days outstanding</div></div>
+            <div class="chart-icon"><i data-lucide="hourglass"></i></div>
+          </div>
+          <div class="body"><canvas id="chartAging"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">Outstanding Trend</div><div class="t-meta">Daily accrual · last 90 days</div></div>
+            <div class="chart-icon"><i data-lucide="activity"></i></div>
+          </div>
+          <div class="body"><canvas id="chartTrend"></canvas></div>
+        </div>
+      </div>
+
+      <div class="defaulters">
+        <div class="chart-header">
+          <div><div class="t-h3">Top Defaulters</div><div class="t-meta" id="defMeta">—</div></div>
+          <div class="chart-icon"><i data-lucide="alert-circle"></i></div>
+        </div>
+        <table>
+          <thead><tr><th>Party</th><th class="num">Total Outstanding</th><th class="num">Invoices</th><th>Oldest Age</th><th>0-30</th><th>31-60</th><th>61-90</th><th>90+</th></tr></thead>
+          <tbody id="defBody"></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) { window.location.replace('/login'); return; }
+  const PHONE = window.MIS.auth.getPhone();
+  const tName = window.MIS.auth.getTenantName() || '—';
+  document.getElementById('tenant-name').textContent = tName;
+  document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+
+  if (window.MIS.theme && window.MIS.theme.init) window.MIS.theme.init();
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('logoutLink').addEventListener('click', (e) => { e.preventDefault(); window.MIS.auth.logout(); });
+  document.getElementById('refreshBtn').addEventListener('click', () => loadPage());
+
+  function applyChartDefaults() {
+    if (!window.Chart) return;
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = dark ? '#F5F5F7' : '#1D1D1F';
+    Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  }
+  applyChartDefaults();
+  const charts = {};
+  new MutationObserver(() => { applyChartDefaults(); Object.values(charts).forEach(c => { try { c.update('none'); } catch {} }); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  const inr = (v) => window.MIS.fmt.inr(v);
+  const num = (v) => window.MIS.fmt.num(v);
+
+  function destroyCharts() { Object.keys(charts).forEach(k => { try { charts[k].destroy(); } catch {} delete charts[k]; }); }
+
+  function renderKpis(kpis) {
+    const row = document.getElementById('kpi-row');
+    row.innerHTML = '';
+    const cards = [
+      { id: 'total_outstanding', title: 'Total Outstanding', icon: 'wallet',     accent: 'rose' },
+      { id: 'unpaid_count',      title: 'Unpaid Invoices',   icon: 'file-x',     accent: 'amber' },
+      { id: 'bucket_90plus',     title: '90+ Days',          icon: 'alert-triangle', accent: 'rose' },
+      { id: 'oldest_age',        title: 'Oldest (days)',     icon: 'clock',      accent: 'violet' }
+    ];
+    for (const c of cards) {
+      const k = kpis[c.id];
+      if (!k) continue;
+      let v;
+      if (c.id === 'oldest_age') v = num(k.value) + ' d';
+      else v = (k.format === 'inr') ? inr(k.value) : num(k.value);
+      const div = document.createElement('div');
+      div.className = 'kpi tilt-card';
+      div.style.cssText = `--kpi-color: var(--accent-${c.accent}); --kpi-soft: var(--accent-${c.accent}-soft); --kpi-glow: var(--accent-${c.accent}-glow);`;
+      div.innerHTML = `<div class="kpi-top"><div class="kpi-icon-box"><i data-lucide="${c.icon}"></i></div></div><div class="kpi-label">${c.title}</div><div class="kpi-value">${v}</div>`;
+      row.appendChild(div);
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function renderAging(buckets) {
+    const ctx = document.getElementById('chartAging').getContext('2d');
+    const labels = ['0-30 days', '31-60 days', '61-90 days', '90+ days'];
+    const data = [buckets['0-30'] || 0, buckets['31-60'] || 0, buckets['61-90'] || 0, buckets['90+'] || 0];
+    const colors = ['#10B981', '#F59E0B', '#FB923C', '#F43F5E'];
+    charts.aging = new Chart(ctx, {
+      type: 'bar',
+      data: { labels, datasets: [{ data, backgroundColor: colors.map(c => c + 'CC'), hoverBackgroundColor: colors, borderRadius: 8, barPercentage: 0.6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15,15,20,0.92)', titleColor: '#F5F5F7', bodyColor: '#E5E5EA', callbacks: { label: (i) => '  ' + inr(i.parsed.y) } } },
+        scales: {
+          x: { grid: { display: false } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { maxTicksLimit: 5, callback: (v) => inr(v) } }
+        }
+      }
+    });
+  }
+
+  function renderTrend(trend) {
+    const ctx = document.getElementById('chartTrend').getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 280);
+    grad.addColorStop(0, 'rgba(244,63,94,0.40)'); grad.addColorStop(0.5, 'rgba(217,70,239,0.12)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: { labels: trend.labels, datasets: [{ data: trend.data, borderColor: '#F43F5E', backgroundColor: grad, borderWidth: 2.6, tension: 0.25, cubicInterpolationMode: 'monotone', fill: true, pointRadius: 0, pointHoverRadius: 6, pointHitRadius: 18, pointBackgroundColor: '#F43F5E', pointBorderColor: '#fff', pointBorderWidth: 2, spanGaps: true }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: { backgroundColor: 'rgba(15,15,20,0.92)', titleColor: '#F5F5F7', bodyColor: '#E5E5EA', callbacks: { label: (i) => '  ' + inr(i.parsed.y) } } },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 8, autoSkip: true, callback: function(v, i) { const raw = this.getLabelForValue ? this.getLabelForValue(v) : trend.labels[i]; if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) { const dd = new Date(raw + 'T00:00:00'); return isNaN(dd) ? raw : dd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); } return raw; } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { maxTicksLimit: 5, callback: (v) => inr(v) } }
+        }
+      }
+    });
+  }
+
+  function renderDefaulters(rows) {
+    const tbody = document.getElementById('defBody');
+    tbody.innerHTML = '';
+    if (!rows || !rows.length) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:30px; color:var(--color-text-tertiary);">No outstanding amounts.</td></tr>';
+      document.getElementById('defMeta').textContent = '0 parties';
+      return;
+    }
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      const ageBucket = r.oldest_age <= 30 ? 'bg-30' : r.oldest_age <= 60 ? 'bg-60' : r.oldest_age <= 90 ? 'bg-90' : 'bg-99';
+      tr.innerHTML = `
+        <td>${r.party}</td>
+        <td class="num">${inr(r.total)}</td>
+        <td class="num">${num(r.count)}</td>
+        <td><span class="age-pill ${ageBucket}">${r.oldest_age} d</span></td>
+        <td class="num">${r.buckets['0-30'] ? inr(r.buckets['0-30']) : '—'}</td>
+        <td class="num">${r.buckets['31-60'] ? inr(r.buckets['31-60']) : '—'}</td>
+        <td class="num">${r.buckets['61-90'] ? inr(r.buckets['61-90']) : '—'}</td>
+        <td class="num">${r.buckets['90+'] ? inr(r.buckets['90+']) : '—'}</td>`;
+      tbody.appendChild(tr);
+    }
+    document.getElementById('defMeta').textContent = `${rows.length} parties`;
+  }
+
+  async function loadPage() {
+    destroyCharts();
+    const res = await fetch(`/api/page/outstanding?phone=${encodeURIComponent(PHONE)}`);
+    if (!res.ok) {
+      document.getElementById('kpi-row').innerHTML = '<div class="empty-state"><div class="ic">⚠️</div>Failed to load.</div>';
+      return;
+    }
+    const d = await res.json();
+    LAST_DATA = d;
+    if (d.tenant?.name) {
+      document.getElementById('tenant-name').textContent = d.tenant.name;
+      document.getElementById('tenantAvatar').textContent = (d.tenant.name.charAt(0) || 'M').toUpperCase();
+    }
+    if (d.empty) {
+      document.getElementById('kpi-row').innerHTML = `<div class="empty-state"><div class="ic">📊</div>${d.message || 'No data'}</div>`;
+      return;
+    }
+    renderKpis(d.kpis);
+    renderAging(d.aging.buckets);
+    if (d.trend && d.trend.labels.length) renderTrend(d.trend);
+    renderDefaulters(d.top_defaulters);
+  }
+
+  let LAST_DATA = null;
+
+  document.addEventListener('DOMContentLoaded', () => { if (window.lucide) window.lucide.createIcons(); loadPage(); });
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    if (!LAST_DATA || !LAST_DATA.top_defaulters) { alert('No data to export. Wait for load.'); return; }
+    if (!window.MIS?.xlsx?.isReady()) { alert('Excel library still loading — please retry.'); return; }
+    const sheets = [];
+    sheets.push({ name: 'Info', headers: ['Field','Value'], rows: [
+      ['Report', 'Outstanding Aging'],
+      ['Tenant', LAST_DATA.tenant?.name || 'MIS'],
+      ['As of', LAST_DATA.asOf || new Date().toISOString().slice(0,10)],
+      ['Generated', new Date().toLocaleString('en-IN')]
+    ]});
+    const b = (LAST_DATA.aging && LAST_DATA.aging.buckets) || {};
+    sheets.push({ name: 'Buckets', headers: ['Bucket','Count','Amount (₹)'],
+      rows: ['0-30','31-60','61-90','90+'].map(k => [`${k} days`, Number(b[k]?.count || 0), Number(b[k]?.amount || 0)]) });
+    sheets.push({ name: 'Top Defaulters', headers: ['Rank','Party','Outstanding (₹)','Bucket'],
+      rows: (LAST_DATA.top_defaulters || []).map((d, i) => [i+1, d.party || '', Number(d.amount || 0), d.bucket || '']) });
+    const ts = new Date().toISOString().split('T')[0];
+    window.MIS.xlsx.download(`outstanding-${ts}.xlsx`, sheets);
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sales · MIS</title>
+<link rel="stylesheet" href="/assets/css/app.css" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="/assets/js/app.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  /* Page-local layout — mirrors dashboard's grid + chart-card patterns */
+  .page-grid { display: grid; gap: 18px; }
+  .kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; }
+  .charts-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 1100px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .charts-row, .charts-row-2 { grid-template-columns: 1fr; }
+  }
+  .chart-card { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 16px; padding: 18px 20px; position: relative; overflow: hidden; }
+  .chart-card .body { height: 280px; position: relative; }
+  .chart-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+  .chart-icon { width: 36px; height: 36px; border-radius: 10px; background: var(--color-primary-50); color: var(--color-primary-400); display: grid; place-items: center; }
+  [data-theme="dark"] .chart-icon { background: rgba(0,164,210,0.16); }
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 16px 20px; background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 14px; }
+  .filter-bar input { flex: 1; min-width: 200px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--surface-page); color: var(--color-text-primary); font-size: 14px; }
+  .filter-bar input:focus { outline: 2px solid var(--color-primary-300); border-color: transparent; }
+  .filter-bar .btn { padding: 9px 16px; border-radius: 10px; background: var(--color-primary-500); color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; border: none; }
+  .filter-bar .btn:hover { background: var(--color-primary-600); }
+  .filter-bar .meta { color: var(--color-text-tertiary); font-size: 13px; padding: 0 6px; }
+  .invoice-table { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 14px; padding: 18px 20px; }
+  .invoice-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .invoice-table th { text-align: left; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  .invoice-table td { padding: 12px; border-bottom: 1px solid var(--hairline); color: var(--color-text-primary); }
+  .invoice-table tr:hover td { background: var(--color-primary-50); }
+  [data-theme="dark"] .invoice-table tr:hover td { background: rgba(0,164,210,0.06); }
+  .invoice-table td.num { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+  .pager { display: flex; gap: 10px; justify-content: flex-end; align-items: center; padding-top: 14px; }
+  .pager button { padding: 7px 14px; border-radius: 8px; border: 1px solid var(--hairline); background: var(--surface-card); color: var(--color-text-primary); cursor: pointer; font-size: 13px; }
+  .pager button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pager button:hover:not(:disabled) { background: var(--color-primary-50); }
+  [data-theme="dark"] .pager button:hover:not(:disabled) { background: rgba(0,164,210,0.08); }
+  .pager .info { color: var(--color-text-tertiary); font-size: 13px; margin-right: auto; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-tertiary); }
+  .empty-state .ic { font-size: 48px; margin-bottom: 12px; }
+  .nav-item.active { color: var(--color-primary-600); background: var(--color-primary-50); }
+  [data-theme="dark"] .nav-item.active { color: var(--accent-cyan); background: rgba(0,164,210,0.10); }
+  .mobile-toggle { display: none; }
+  .greeting .who { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .greeting .when { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #00A4D2, #6366F1, #D946EF); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; transition: transform 220ms ease; box-shadow: 0 4px 14px rgba(99, 102, 241, 0.28); }
+  .tenant-avatar:hover { transform: scale(1.05) rotate(-2deg); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-emerald, #10B981); box-shadow: 0 0 0 0 rgba(16,185,129, 0.5); animation: dotPulse 2.4s ease-in-out infinite; }
+  @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129, 0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129, 0); } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <!-- ═════════ Sidebar ═════════ -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="tag">Make It Simple</div>
+      </div>
+    </div>
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item active" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;"><i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode</span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <!-- ═════════ Main ═════════ -->
+  <main class="main">
+    <!-- ═════════ Topbar ═════════ -->
+    <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mobile-toggle"><i data-lucide="menu"></i></button>
+      <div class="tenant-avatar" id="tenantAvatar">M</div>
+      <div class="greeting">
+        <div class="who"><span id="tenant-name">…</span> <span class="status-dot" title="Live"></span></div>
+        <div class="when" id="topbar-sub">Sales · drill-down</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-icon" id="refreshBtn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+    </div>
+  </header>
+
+    <div class="page">
+    <div class="page-header page-header-hero">
+      <div class="page-header-bg">
+        <div class="aurora aurora-1"></div>
+        <div class="aurora aurora-2"></div>
+        <div class="aurora aurora-3"></div>
+        <div class="grid-overlay"></div>
+      </div>
+      <div class="page-header-content">
+        <div class="page-icon-glow"><i data-lucide="trending-up"></i></div>
+        <div class="page-header-text">
+          <div class="page-title-row">
+            <h1 class="t-h1 page-title-gradient">Sales</h1>
+            <span class="live-pill"><span class="live-dot"></span>Live</span>
+          </div>
+          <p class="page-desc" id="page-sub">Detailed sales drill-down · last 90 days</p>
+          <div class="page-chips">
+            <span class="page-chip"><i data-lucide="calendar" style="width:12px;height:12px;"></i> Last 90 days</span>
+            <span class="page-chip"><i data-lucide="users" style="width:12px;height:12px;"></i> Party search</span>
+            <span class="page-chip"><i data-lucide="file-spreadsheet" style="width:12px;height:12px;"></i> Excel export</span>
+          </div>
+          <div class="page-underline"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="page-grid">
+      <!-- Filter -->
+      <div class="filter-bar">
+        <input id="partySearch" type="text" placeholder="Search by party name..." />
+        <button class="btn" id="searchBtn">Search</button>
+        <button class="btn" id="clearBtn" style="background: var(--hairline); color: var(--color-text-secondary);">Clear</button>
+        <button class="btn" id="exportCsvBtn" style="background: var(--accent-violet); margin-left: auto;" title="Export current invoices to Excel">⬇ Excel</button>
+        <div class="meta" id="filterMeta"></div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="kpi-row" id="kpi-row">
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+        <div class="skel-kpi"><div class="skel skel-icon"></div><div class="skel skel-label"></div><div class="skel skel-value"></div><div class="skel skel-delta"></div></div>
+      </div>
+
+      <!-- Charts row 1: Trend (wide) + Top Parties (donut) -->
+      <div class="charts-row">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">Sales Trend</div><div class="t-meta">Daily revenue</div></div>
+            <div class="chart-icon"><i data-lucide="activity"></i></div>
+          </div>
+          <div class="body"><canvas id="chartTrend"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">Top Customers</div><div class="t-meta">Distribution share</div></div>
+            <div class="chart-icon"><i data-lucide="pie-chart"></i></div>
+          </div>
+          <div class="body"><canvas id="chartParties"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Charts row 2: Top Items + By City -->
+      <div class="charts-row-2">
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">Top Items</div><div class="t-meta">Revenue contribution</div></div>
+            <div class="chart-icon"><i data-lucide="bar-chart-3"></i></div>
+          </div>
+          <div class="body"><canvas id="chartItems"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <div><div class="t-h3">By City</div><div class="t-meta">Top 8 locations</div></div>
+            <div class="chart-icon"><i data-lucide="map-pin"></i></div>
+          </div>
+          <div class="body"><canvas id="chartCity"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Invoice table -->
+      <div class="invoice-table">
+        <div class="chart-header">
+          <div><div class="t-h3">Recent Invoices</div><div class="t-meta" id="invMeta">—</div></div>
+          <div class="chart-icon"><i data-lucide="receipt"></i></div>
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Voucher</th><th>Party</th><th>Item</th><th class="num">Amount</th></tr></thead>
+          <tbody id="invoiceBody"></tbody>
+        </table>
+        <div class="pager">
+          <div class="info" id="pageInfo">—</div>
+          <button id="prevBtn"><i data-lucide="chevron-left"></i> Prev</button>
+          <button id="nextBtn">Next <i data-lucide="chevron-right"></i></button>
+        </div>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    window.location.replace('/login'); return;
+  }
+  const PHONE = window.MIS.auth.getPhone();
+
+  // Tenant avatar + name
+  const tName = window.MIS.auth.getTenantName() || '—';
+  document.getElementById('tenant-name').textContent = tName;
+  document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+
+  // Theme init + toggle
+  if (window.MIS.theme && window.MIS.theme.init) window.MIS.theme.init();
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('logoutLink').addEventListener('click', (e) => { e.preventDefault(); window.MIS.auth.logout(); });
+  document.getElementById('refreshBtn').addEventListener('click', () => loadPage());
+
+  // Theme observer for chart re-paint
+  function applyChartDefaults() {
+    if (!window.Chart) return;
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = dark ? '#F5F5F7' : '#1D1D1F';
+    Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  }
+  applyChartDefaults();
+  new MutationObserver(() => { applyChartDefaults(); Object.values(charts).forEach(c => { try { c.update('none'); } catch {} }); })
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  let CURRENT_PAGE = 1, CURRENT_Q = '';
+  let LAST_DATA = null;
+  const charts = {};
+  const inr = (v) => window.MIS.fmt.inr(v);
+  const num = (v) => window.MIS.fmt.num(v);
+
+  function destroyCharts() { Object.keys(charts).forEach(k => { try { charts[k].destroy(); } catch {} delete charts[k]; }); }
+
+  function renderKpis(kpis) {
+    const row = document.getElementById('kpi-row');
+    row.innerHTML = '';
+    const cards = [
+      { id: 'total_sales',    title: 'Total Sales',    icon: 'trending-up', accent: 'emerald' },
+      { id: 'invoice_count',  title: 'Invoices',       icon: 'receipt',     accent: 'indigo' },
+      { id: 'unique_parties', title: 'Customers',      icon: 'users',       accent: 'violet' },
+      { id: 'avg_invoice',    title: 'Avg Invoice',    icon: 'calculator',  accent: 'cyan' }
+    ];
+    for (const c of cards) {
+      const k = kpis[c.id];
+      if (!k) continue;
+      const v = (k.format === 'inr') ? inr(k.value) : num(k.value);
+      const div = document.createElement('div');
+      div.className = 'kpi tilt-card';
+      div.style.cssText = `--kpi-color: var(--accent-${c.accent}); --kpi-soft: var(--accent-${c.accent}-soft); --kpi-glow: var(--accent-${c.accent}-glow);`;
+      div.innerHTML = `
+        <div class="kpi-top">
+          <div class="kpi-icon-box"><i data-lucide="${c.icon}"></i></div>
+        </div>
+        <div class="kpi-label">${c.title}</div>
+        <div class="kpi-value">${v}</div>`;
+      row.appendChild(div);
+    }
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  function premiumTooltip(format) {
+    return {
+      backgroundColor: 'rgba(15,15,20,0.92)', titleColor: '#F5F5F7', bodyColor: '#E5E5EA',
+      borderColor: 'rgba(0,164,210,0.3)', borderWidth: 1, padding: 11, cornerRadius: 10,
+      titleFont: { family: 'Inter', size: 12, weight: '600' },
+      bodyFont: { family: 'JetBrains Mono', size: 12.5, weight: '600' },
+      callbacks: { label: (i) => '  ' + (format === 'inr' ? inr(i.parsed.y || i.parsed) : num(i.parsed.y || i.parsed)) }
+    };
+  }
+  function renderTrend(d) {
+    const ctx = document.getElementById('chartTrend').getContext('2d');
+    const grad = ctx.createLinearGradient(0, 0, 0, 280);
+    grad.addColorStop(0, 'rgba(0,164,210,0.45)'); grad.addColorStop(0.5, 'rgba(99,102,241,0.12)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+    charts.trend = new Chart(ctx, {
+      type: 'line',
+      data: { labels: d.labels, datasets: [{ data: d.data, borderColor: '#00A4D2', backgroundColor: grad, borderWidth: 2.6, tension: 0.25, cubicInterpolationMode: 'monotone', fill: true, pointRadius: 0, pointHoverRadius: 6, pointHitRadius: 18, pointBackgroundColor: '#00A4D2', pointBorderColor: '#fff', pointBorderWidth: 2, spanGaps: true }] },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false }, tooltip: premiumTooltip('inr') },
+        scales: {
+          x: { grid: { display: false }, ticks: { maxTicksLimit: 8, autoSkip: true, callback: function(v, i) { const raw = this.getLabelForValue ? this.getLabelForValue(v) : d.labels[i]; if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) { const dd = new Date(raw + 'T00:00:00'); return isNaN(dd) ? raw : dd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }); } return raw; } } },
+          y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { maxTicksLimit: 5, callback: (v) => inr(v) } }
+        }
+      }
+    });
+  }
+  function renderDonut(d) {
+    const palette = ['#10B981','#F59E0B','#6366F1','#8B5CF6','#F43F5E','#00A4D2','#0EA5E9','#D946EF'];
+    const ctx = document.getElementById('chartParties').getContext('2d');
+    charts.parties = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: d.labels, datasets: [{ data: d.data, backgroundColor: palette.slice(0, d.data.length), borderWidth: 2, borderColor: 'rgba(255,255,255,0.8)', hoverOffset: 12, borderRadius: 6 }] },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '64%',
+        plugins: {
+          legend: { display: true, position: 'right', labels: { padding: 12, font: { family: 'Inter', size: 11.5, weight: '600' }, generateLabels: (chart) => {
+            const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+            return chart.data.labels.map((label, i) => ({ text: label.length > 24 ? label.slice(0, 23) + '…' : label, fillStyle: chart.data.datasets[0].backgroundColor[i], pointStyle: 'circle', hidden: false, index: i, fontColor: dark ? '#F5F5F7' : '#1D1D1F' }));
+          } } },
+          tooltip: premiumTooltip('inr')
+        }
+      }
+    });
+  }
+  function renderBar(canvasId, d, color = '#6366F1') {
+    const palette = ['#10B981','#F59E0B','#6366F1','#8B5CF6','#F43F5E','#00A4D2','#0EA5E9','#D946EF'];
+    const ctx = document.getElementById(canvasId).getContext('2d');
+    return new Chart(ctx, {
+      type: 'bar',
+      data: { labels: d.labels, datasets: [{ data: d.data, backgroundColor: d.data.map((_, i) => palette[i % palette.length] + 'CC'), hoverBackgroundColor: d.data.map((_, i) => palette[i % palette.length]), borderRadius: 8, barPercentage: 0.72 }] },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false }, tooltip: premiumTooltip('inr') },
+        scales: {
+          x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { maxTicksLimit: 5, callback: (v) => inr(v) } },
+          y: { grid: { display: false }, ticks: { autoSkip: false, callback: function(v) { const raw = (this.getLabelForValue ? this.getLabelForValue(v) : d.labels[v]) || ''; return typeof raw === 'string' && raw.length > 24 ? raw.slice(0, 23) + '…' : raw; } } }
+        }
+      }
+    });
+  }
+
+  function renderInvoices(inv) {
+    const tbody = document.getElementById('invoiceBody');
+    tbody.innerHTML = '';
+    if (!inv.rows.length) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--color-text-tertiary);">No invoices match this filter.</td></tr>';
+      document.getElementById('invMeta').textContent = '0 invoices';
+      document.getElementById('pageInfo').textContent = '';
+      document.getElementById('prevBtn').disabled = true;
+      document.getElementById('nextBtn').disabled = true;
+      return;
+    }
+    for (const r of inv.rows) {
+      const tr = document.createElement('tr');
+      const dateStr = r.date ? new Date(r.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—';
+      tr.innerHTML = `<td>${dateStr}</td><td>${r.voucher || '—'}</td><td>${r.party || '—'}</td><td>${r.item || '—'}</td><td class="num">${inr(r.amount)}</td>`;
+      tbody.appendChild(tr);
+    }
+    const start = (inv.page - 1) * inv.pageSize + 1;
+    const end = Math.min(inv.page * inv.pageSize, inv.total);
+    document.getElementById('invMeta').textContent = `${inv.total.toLocaleString('en-IN')} total · showing ${start}–${end}`;
+    document.getElementById('pageInfo').textContent = `Page ${inv.page} of ${Math.ceil(inv.total / inv.pageSize)}`;
+    document.getElementById('prevBtn').disabled = inv.page <= 1;
+    document.getElementById('nextBtn').disabled = inv.page * inv.pageSize >= inv.total;
+  }
+
+  async function loadPage() {
+    destroyCharts();
+    const params = new URLSearchParams({ phone: PHONE, page: CURRENT_PAGE });
+    if (CURRENT_Q) params.set('q', CURRENT_Q);
+    const res = await fetch('/api/page/sales?' + params);
+    if (!res.ok) {
+      document.getElementById('kpi-row').innerHTML = '<div class="empty-state"><div class="ic">⚠️</div>Failed to load.</div>';
+      return;
+    }
+    const d = await res.json();
+    LAST_DATA = d;
+    if (d.tenant?.name) {
+      document.getElementById('tenant-name').textContent = d.tenant.name;
+      document.getElementById('tenantAvatar').textContent = (d.tenant.name.charAt(0) || 'M').toUpperCase();
+    }
+    if (d.empty) {
+      document.getElementById('kpi-row').innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="ic">📊</div>${d.message || 'No data'}</div>`;
+      return;
+    }
+    renderKpis(d.kpis);
+    document.getElementById('filterMeta').textContent = CURRENT_Q ? `Filtered: ${CURRENT_Q}` : `Range: ${d.range.from} → ${d.range.to}`;
+    if (d.charts.trend.labels.length) renderTrend(d.charts.trend);
+    if (d.charts.top_parties.labels.length) renderDonut(d.charts.top_parties);
+    if (d.charts.top_items.labels.length) charts.items = renderBar('chartItems', d.charts.top_items);
+    if (d.charts.by_city.labels.length) charts.city = renderBar('chartCity', d.charts.by_city);
+    renderInvoices(d.invoices);
+  }
+
+  // Search/filter wiring
+  document.getElementById('searchBtn').addEventListener('click', () => { CURRENT_Q = document.getElementById('partySearch').value.trim(); CURRENT_PAGE = 1; loadPage(); });
+  document.getElementById('partySearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { CURRENT_Q = e.target.value.trim(); CURRENT_PAGE = 1; loadPage(); } });
+  document.getElementById('clearBtn').addEventListener('click', () => { CURRENT_Q = ''; document.getElementById('partySearch').value = ''; CURRENT_PAGE = 1; loadPage(); });
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    if (!LAST_DATA || !LAST_DATA.invoices || !LAST_DATA.invoices.length) { alert('No invoices to export. Load data first.'); return; }
+    const rows = LAST_DATA.invoices.rows || LAST_DATA.invoices;
+    const headers = ['Date', 'Voucher', 'Party', 'Item', 'Qty', 'Rate', 'Amount'];
+    const xlsxRows = rows.map(r => [r.date || '', r.voucher || '', r.party || '', r.item || '', Number(r.qty || 0), Number(r.rate || 0), Number(r.amount || 0)]);
+    const ts = new Date().toISOString().split('T')[0];
+    const filename = `sales-${CURRENT_Q ? CURRENT_Q.replace(/\W+/g, '-') + '-' : ''}${ts}.xlsx`;
+    if (!window.MIS?.xlsx?.isReady()) { alert('Excel library still loading — please retry.'); return; }
+    window.MIS.xlsx.downloadSimple(filename, headers, xlsxRows, 'Invoices');
+  });
+  document.getElementById('prevBtn').addEventListener('click', () => { if (CURRENT_PAGE > 1) { CURRENT_PAGE--; loadPage(); } });
+  document.getElementById('nextBtn').addEventListener('click', () => { CURRENT_PAGE++; loadPage(); });
+
+  document.addEventListener('DOMContentLoaded', () => { if (window.lucide) window.lucide.createIcons(); loadPage(); });
+})();
+</script>
+</body>
+</html>

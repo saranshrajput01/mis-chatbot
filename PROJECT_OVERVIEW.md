@@ -396,7 +396,7 @@ PORT=3000
 ## 📱 WhatsApp Integration Details
 
 ### Webhook Flow
-1. User sends message to bot number (918750285420)
+1. User sends message to bot number (918178525310)
 2. app.mis.work sends webhook to `POST /whatsapp`
 3. Server extracts:
    - `senderNumber` (from multiple possible fields)

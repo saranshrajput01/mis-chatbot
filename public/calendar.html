@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calendar · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .mobile-toggle { display: none; }
+    @media (max-width: 760px) { .mobile-toggle { display: inline-grid; } }
+
+    .cal-toolbar {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      padding: 14px 18px;
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 14px;
+      margin-bottom: 16px;
+    }
+    .cal-nav { display: flex; align-items: center; gap: 10px; }
+    .cal-nav .month-label {
+      font-size: 17px; font-weight: 700;
+      letter-spacing: -0.01em;
+      min-width: 180px;
+    }
+    .cal-nav button {
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      border: 1px solid var(--hairline);
+      background: transparent;
+      cursor: pointer;
+      display: grid; place-items: center;
+      color: var(--color-text-secondary);
+      transition: all 180ms ease;
+    }
+    .cal-nav button:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+    .cal-nav button svg { width: 16px; height: 16px; }
+
+    .btn-primary {
+      font: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 16px;
+      border: none; cursor: pointer;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet));
+      color: white;
+      display: inline-flex; align-items: center; gap: 6px;
+      transition: transform 180ms ease, box-shadow 180ms ease;
+      box-shadow: 0 2px 6px rgba(0, 164, 210, 0.2);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 164, 210, 0.3); }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-primary svg { width: 14px; height: 14px; }
+
+    .btn-secondary {
+      font: inherit; font-size: 13px;
+      padding: 8px 14px;
+      border: 1px solid var(--hairline); cursor: pointer;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--color-text-secondary);
+    }
+    .btn-secondary:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+    .btn-danger {
+      font: inherit; font-size: 13px;
+      padding: 8px 14px;
+      border: 1px solid rgba(239, 68, 68, 0.35); cursor: pointer;
+      border-radius: 9px;
+      background: rgba(239, 68, 68, 0.06);
+      color: rgb(239, 68, 68);
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.16); }
+
+    /* Month grid */
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      background: var(--hairline);
+      border: 1px solid var(--hairline);
+      border-radius: 14px;
+      overflow: hidden;
+    }
+    .cal-day-head {
+      background: var(--surface-card);
+      padding: 10px 12px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--color-text-tertiary);
+      text-align: center;
+    }
+    .cal-cell {
+      background: var(--surface-card);
+      min-height: 110px;
+      padding: 8px;
+      position: relative;
+      cursor: pointer;
+      transition: background 180ms ease;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .cal-cell:hover { background: var(--accent-cyan-soft); }
+    .cal-cell.other-month { opacity: 0.4; }
+    .cal-cell.today { background: var(--accent-cyan-soft); }
+    .cal-cell .date {
+      font-size: 13px; font-weight: 600;
+      width: 24px; height: 24px;
+      display: grid; place-items: center;
+      border-radius: 50%;
+    }
+    .cal-cell.today .date {
+      background: var(--accent-cyan);
+      color: white;
+    }
+    .cal-cell .events {
+      display: flex; flex-direction: column; gap: 3px;
+      overflow: hidden;
+    }
+    .cal-event {
+      font-size: 11.5px;
+      padding: 3px 7px;
+      border-radius: 5px;
+      background: linear-gradient(135deg, rgba(0,164,210,0.18), rgba(139,92,246,0.14));
+      border-left: 3px solid var(--accent-cyan);
+      color: var(--color-text-primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      cursor: pointer;
+      transition: transform 140ms ease;
+    }
+    .cal-event:hover { transform: translateX(2px); }
+    .cal-event .t-time { color: var(--color-text-tertiary); font-family: var(--font-mono); font-size: 10.5px; margin-right: 4px; }
+    .cal-event-more {
+      font-size: 11px; color: var(--color-text-tertiary);
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.55);
+      backdrop-filter: blur(6px);
+      display: none; place-items: center;
+      z-index: 9000;
+    }
+    .modal-backdrop.open { display: grid; }
+    .modal-card {
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 18px;
+      padding: 24px;
+      width: 92%; max-width: 480px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-height: 90vh; overflow-y: auto;
+    }
+    .modal-title { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
+    .modal-row { margin-bottom: 12px; }
+    .modal-row label { display: block; font-size: 12px; color: var(--color-text-secondary); margin-bottom: 4px; }
+    .modal-row input,
+    .modal-row textarea {
+      width: 100%;
+      font: inherit; font-size: 13.5px;
+      padding: 8px 12px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      background: var(--surface-input, transparent);
+      color: var(--color-text-primary);
+    }
+    .modal-row input:focus, .modal-row textarea:focus {
+      outline: none; border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 164, 210, 0.12);
+    }
+    .modal-row textarea { resize: vertical; min-height: 60px; }
+    .modal-actions {
+      display: flex; gap: 10px; justify-content: flex-end;
+      margin-top: 18px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: 60px 20px;
+      color: var(--color-text-tertiary);
+    }
+    .empty-state .ic {
+      font-size: 36px; margin-bottom: 14px;
+      opacity: 0.6;
+    }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 18px;
+      background: rgba(20, 20, 22, 0.95);
+      color: white; border-radius: 10px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      opacity: 0; transform: translateY(8px);
+      pointer-events: none;
+      transition: all 240ms ease;
+      z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.err  { background: rgba(239, 68, 68, 0.95); }
+    .toast.ok   { background: rgba(34, 197, 94, 0.95); }
+
+    .conflict-list {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-size: 12.5px;
+    }
+    .conflict-list ul { margin: 6px 0 0; padding-left: 18px; }
+
+    .event-detail-row {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      gap: 8px;
+      font-size: 13px;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .event-detail-row:last-child { border-bottom: none; }
+    .event-detail-row .lab { color: var(--color-text-tertiary); font-size: 12px; }
+
+    /* Topbar avatar + status dot — calendar theme: emerald → teal → cyan */
+    .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #10B981, #14B8A6, #00A4D2); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 4px 14px rgba(20,184,166,0.28); }
+    [data-theme="dark"] .tenant-avatar { box-shadow: 0 4px 14px rgba(20,184,166,0.18); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: dotPulse 2.4s ease-in-out infinite; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+  <aside class="sidebar glass">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div><div class="name">MIS</div><div class="tag">Make It Simple</div></div>
+    </div>
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item active" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;"><i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode</span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar glass">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-icon mobile-toggle"><i data-lucide="menu"></i></button>
+        <div class="tenant-avatar" id="tenantAvatar">M</div>
+        <div class="greeting">
+          <div class="who"><span id="tenant-name">…</span> <span class="status-dot"></span></div>
+          <div class="when">Calendar · meetings + bookings</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-icon" id="refreshBtn" title="Refresh"><i data-lucide="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page">
+      <div class="page-header page-header-hero">
+        <div class="page-header-bg">
+          <div class="aurora aurora-1"></div>
+          <div class="aurora aurora-2"></div>
+          <div class="aurora aurora-3"></div>
+          <div class="grid-overlay"></div>
+        </div>
+        <div class="page-header-content">
+          <div class="page-icon-glow"><i data-lucide="calendar"></i></div>
+          <div class="page-header-text">
+            <div class="page-title-row">
+              <h1 class="t-h1 page-title-gradient">Calendar</h1>
+              <span class="live-pill"><span class="live-dot"></span>Synced</span>
+            </div>
+            <p class="page-desc">Your Google Calendar events. Click any day to book a new meeting.</p>
+            <div class="page-chips">
+              <span class="page-chip"><i data-lucide="zap" style="width:12px;height:12px;"></i> Live Google sync</span>
+              <span class="page-chip"><i data-lucide="mouse-pointer-click" style="width:12px;height:12px;"></i> Click-to-book</span>
+              <span class="page-chip"><i data-lucide="repeat" style="width:12px;height:12px;"></i> Reschedule + cancel</span>
+            </div>
+            <div class="page-underline"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cal-toolbar">
+        <div class="cal-nav">
+          <button id="prevMonth" title="Previous month"><i data-lucide="chevron-left"></i></button>
+          <div class="month-label" id="monthLabel">…</div>
+          <button id="nextMonth" title="Next month"><i data-lucide="chevron-right"></i></button>
+          <button id="todayBtn" class="btn-secondary" type="button">Today</button>
+        </div>
+        <button class="btn-primary" id="newBookBtn" type="button">
+          <i data-lucide="plus"></i> New booking
+        </button>
+      </div>
+
+      <div id="calContainer">
+        <div class="empty-state"><div class="ic">📅</div>Loading…</div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- ──── Booking modal ──── -->
+<div class="modal-backdrop" id="bookModal">
+  <div class="modal-card">
+    <div class="modal-title" id="bookTitle">Book a meeting</div>
+    <div id="bookConflict"></div>
+    <form id="bookForm" autocomplete="off">
+      <input type="hidden" id="bookEventId">
+      <div class="modal-row">
+        <label>Title*</label>
+        <input id="bookT" type="text" maxlength="200" required>
+      </div>
+      <div class="modal-row">
+        <label>Date*</label>
+        <input id="bookD" type="date" required>
+      </div>
+      <div class="modal-row" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div>
+          <label>Start time*</label>
+          <input id="bookSt" type="time" required>
+        </div>
+        <div>
+          <label>End time</label>
+          <input id="bookEt" type="time">
+        </div>
+      </div>
+      <div class="modal-row">
+        <label>Guests (comma-separated emails)</label>
+        <input id="bookG" type="text" placeholder="rahul@example.com, priya@example.com">
+      </div>
+      <div class="modal-row">
+        <label>Description</label>
+        <textarea id="bookDesc" maxlength="1000"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" id="bookCancel">Cancel</button>
+        <button type="submit" class="btn-primary" id="bookSave">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ──── Event detail modal ──── -->
+<div class="modal-backdrop" id="detailModal">
+  <div class="modal-card">
+    <div class="modal-title" id="detTitle">Event details</div>
+    <div id="detBody"></div>
+    <div class="modal-actions">
+      <button type="button" class="btn-secondary" id="detClose">Close</button>
+      <button type="button" class="btn-secondary" id="detEdit">Reschedule</button>
+      <button type="button" class="btn-danger" id="detCancel">Cancel meeting</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    location.href = '/login?redirect=' + encodeURIComponent(location.pathname);
+    return;
+  }
+  const PHONE = window.MIS.auth.getPhone();
+
+  let toastTimer;
+  function toast(msg, kind = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (kind || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 2400);
+  }
+
+  // ─── State ───
+  let currentMonth = new Date();
+  currentMonth.setDate(1);
+  let eventsCache = []; // current loaded events
+  let activeEvent = null;
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function pad2(n) { return String(n).padStart(2, '0'); }
+  function isoDate(d) { return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate()); }
+  function fmtTime(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    return d.toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+  }
+  function fmtDateLong(iso) {
+    if (!iso) return '';
+    return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' });
+  }
+
+  // ─── Render month grid ───
+  function renderMonth() {
+    const y = currentMonth.getFullYear();
+    const m = currentMonth.getMonth();
+    document.getElementById('monthLabel').textContent =
+      currentMonth.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+
+    const firstDay = new Date(y, m, 1);
+    const startWeekday = firstDay.getDay();
+    const start = new Date(y, m, 1 - startWeekday);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let html = '<div class="cal-grid">';
+    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => html += `<div class="cal-day-head">${d}</div>`);
+
+    for (let i = 0; i < 42; i++) {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      const isOther = d.getMonth() !== m;
+      const isToday = d.getTime() === today.getTime();
+      const dayKey = isoDate(d);
+      const dayEvents = eventsCache.filter(e => {
+        const ed = new Date(e.start);
+        return isoDate(ed) === dayKey;
+      });
+
+      html += `<div class="cal-cell ${isOther ? 'other-month' : ''} ${isToday ? 'today' : ''}" data-date="${dayKey}">`;
+      html += `<div class="date">${d.getDate()}</div><div class="events">`;
+      const visible = dayEvents.slice(0, 3);
+      visible.forEach(ev => {
+        html += `<div class="cal-event" data-event-id="${ev.id}">
+          <span class="t-time">${fmtTime(ev.start)}</span>${escapeHtml(ev.title)}
+        </div>`;
+      });
+      if (dayEvents.length > 3) html += `<div class="cal-event-more" data-date="${dayKey}">+${dayEvents.length - 3} more</div>`;
+      html += `</div></div>`;
+    }
+    html += '</div>';
+    document.getElementById('calContainer').innerHTML = html;
+
+    // Wire up clicks
+    document.querySelectorAll('.cal-cell').forEach(cell => {
+      cell.addEventListener('click', (e) => {
+        if (e.target.closest('.cal-event')) return; // event click handled separately
+        openBookModal({ date: cell.dataset.date });
+      });
+    });
+    document.querySelectorAll('.cal-event').forEach(el => {
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const evId = el.dataset.eventId;
+        const ev = eventsCache.find(x => x.id === evId);
+        if (ev) openDetailModal(ev);
+      });
+    });
+  }
+
+  // ─── Load events for current view ───
+  async function loadEvents() {
+    const y = currentMonth.getFullYear();
+    const m = currentMonth.getMonth();
+    const from = new Date(y, m - 1, 1);
+    const to = new Date(y, m + 2, 0);
+    try {
+      const res = await fetch(`/api/tenant/calendar/events?phone=${encodeURIComponent(PHONE)}&from=${isoDate(from)}&to=${isoDate(to)}`);
+      if (res.status === 412) {
+        document.getElementById('calContainer').innerHTML = `
+          <div class="empty-state">
+            <div class="ic">🔌</div>
+            <div style="margin-bottom:14px;">Google Calendar not connected.</div>
+            <a class="btn-primary" href="/settings">Go to Settings to connect</a>
+          </div>`;
+        return;
+      }
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Load failed');
+      }
+      const data = await res.json();
+      eventsCache = data.events || [];
+      if (data.tenant?.name) {
+        document.getElementById('tenant-name').textContent = data.tenant.name;
+        document.getElementById('tenantAvatar').textContent = (data.tenant.name.charAt(0) || 'M').toUpperCase();
+      }
+      renderMonth();
+    } catch (e) {
+      console.error(e);
+      toast('Could not load events. ' + e.message, 'err');
+    }
+  }
+
+  // ─── Booking modal ───
+  function openBookModal(opts) {
+    document.getElementById('bookConflict').innerHTML = '';
+    document.getElementById('bookEventId').value = opts?.eventId || '';
+    document.getElementById('bookTitle').textContent = opts?.eventId ? 'Reschedule meeting' : 'Book a meeting';
+    document.getElementById('bookT').value = opts?.title || '';
+    document.getElementById('bookD').value = opts?.date || isoDate(new Date());
+    document.getElementById('bookSt').value = opts?.start || '10:00';
+    document.getElementById('bookEt').value = opts?.end || '11:00';
+    document.getElementById('bookG').value = (opts?.guests || []).join(', ');
+    document.getElementById('bookDesc').value = opts?.description || '';
+    document.getElementById('bookModal').classList.add('open');
+    setTimeout(() => document.getElementById('bookT').focus(), 60);
+  }
+  function closeBookModal() {
+    document.getElementById('bookModal').classList.remove('open');
+  }
+
+  document.getElementById('bookCancel').addEventListener('click', closeBookModal);
+  document.getElementById('newBookBtn').addEventListener('click', () => openBookModal({}));
+  document.getElementById('bookModal').addEventListener('click', (e) => {
+    if (e.target.id === 'bookModal') closeBookModal();
+  });
+
+  document.getElementById('bookForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const eventId = document.getElementById('bookEventId').value;
+    const t = document.getElementById('bookT').value.trim();
+    const date = document.getElementById('bookD').value;
+    const st = document.getElementById('bookSt').value;
+    const et = document.getElementById('bookEt').value;
+    const guests = document.getElementById('bookG').value.split(',').map(g => g.trim()).filter(Boolean);
+    const desc = document.getElementById('bookDesc').value.trim();
+    const startISO = new Date(date + 'T' + st + ':00').toISOString();
+    const endISO = et ? new Date(date + 'T' + et + ':00').toISOString() : null;
+
+    const btn = document.getElementById('bookSave');
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      let res, data;
+      if (eventId) {
+        res = await fetch('/api/tenant/calendar/reschedule', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: PHONE, event_id: eventId, new_start: startISO, new_end: endISO })
+        });
+        data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Reschedule failed');
+        toast('Meeting rescheduled.', 'ok');
+      } else {
+        res = await fetch('/api/tenant/calendar/book', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: PHONE, title: t, start: startISO, end: endISO, guests, description: desc })
+        });
+        data = await res.json();
+        if (res.status === 409) {
+          // Conflict — show conflicts and let user force
+          const list = (data.conflicts || []).map(c => `<li><strong>${escapeHtml(c.title)}</strong> · ${fmtTime(c.start)}–${fmtTime(c.end)}</li>`).join('');
+          document.getElementById('bookConflict').innerHTML =
+            `<div class="conflict-list">⚠️ Time slot conflicts with existing event(s):<ul>${list}</ul>
+              <button type="button" class="btn-danger" id="forceBookBtn" style="margin-top:8px;">Book anyway</button>
+            </div>`;
+          document.getElementById('forceBookBtn').addEventListener('click', async () => {
+            const r2 = await fetch('/api/tenant/calendar/book', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ phone: PHONE, title: t, start: startISO, end: endISO, guests, description: desc, force: true })
+            });
+            if (!r2.ok) { toast('Booking failed', 'err'); return; }
+            toast('Meeting booked.', 'ok');
+            closeBookModal();
+            loadEvents();
+          });
+          return;
+        }
+        if (!res.ok) throw new Error(data.error || 'Booking failed');
+        toast('Meeting booked.', 'ok');
+      }
+      closeBookModal();
+      loadEvents();
+    } catch (err) {
+      toast(err.message || 'Save failed', 'err');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+  });
+
+  // ─── Detail modal ───
+  function openDetailModal(ev) {
+    activeEvent = ev;
+    document.getElementById('detTitle').textContent = ev.title;
+    let html = '';
+    html += `<div class="event-detail-row"><div class="lab">When</div><div>${fmtDateLong(ev.start)} · ${fmtTime(ev.start)}–${fmtTime(ev.end)}</div></div>`;
+    if ((ev.attendees || []).length) {
+      html += `<div class="event-detail-row"><div class="lab">Guests</div><div>${ev.attendees.map(escapeHtml).join(', ')}</div></div>`;
+    }
+    if (ev.location) {
+      html += `<div class="event-detail-row"><div class="lab">Location</div><div>${escapeHtml(ev.location)}</div></div>`;
+    }
+    if (ev.meet_link) {
+      html += `<div class="event-detail-row"><div class="lab">Video</div><div><a href="${ev.meet_link}" target="_blank" rel="noopener">${escapeHtml(ev.meet_link)}</a></div></div>`;
+    }
+    if (ev.description) {
+      // Strip the auto-added meet link from description for display
+      const cleanDesc = ev.description.replace(/🔗 Video Call:.*$/m, '').trim();
+      if (cleanDesc) {
+        html += `<div class="event-detail-row"><div class="lab">Notes</div><div style="white-space:pre-wrap;">${escapeHtml(cleanDesc)}</div></div>`;
+      }
+    }
+    document.getElementById('detBody').innerHTML = html;
+    document.getElementById('detailModal').classList.add('open');
+  }
+  function closeDetailModal() {
+    document.getElementById('detailModal').classList.remove('open');
+    activeEvent = null;
+  }
+  document.getElementById('detClose').addEventListener('click', closeDetailModal);
+  document.getElementById('detailModal').addEventListener('click', (e) => {
+    if (e.target.id === 'detailModal') closeDetailModal();
+  });
+
+  document.getElementById('detEdit').addEventListener('click', () => {
+    if (!activeEvent) return;
+    const startD = new Date(activeEvent.start);
+    const endD = new Date(activeEvent.end);
+    closeDetailModal();
+    openBookModal({
+      eventId: activeEvent.id,
+      title: activeEvent.title,
+      date: isoDate(startD),
+      start: pad2(startD.getHours()) + ':' + pad2(startD.getMinutes()),
+      end:   pad2(endD.getHours())   + ':' + pad2(endD.getMinutes()),
+      guests: activeEvent.attendees,
+      description: activeEvent.description
+    });
+  });
+
+  document.getElementById('detCancel').addEventListener('click', async () => {
+    if (!activeEvent) return;
+    if (!confirm(`Cancel "${activeEvent.title}"? This sends a notification to attendees.`)) return;
+    try {
+      const res = await fetch('/api/tenant/calendar/cancel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: PHONE, event_id: activeEvent.id })
+      });
+      if (!res.ok) throw new Error('Cancel failed');
+      toast('Meeting cancelled.', 'ok');
+      closeDetailModal();
+      loadEvents();
+    } catch (e) {
+      toast(e.message || 'Cancel failed', 'err');
+    }
+  });
+
+  // ─── Nav ───
+  document.getElementById('prevMonth').addEventListener('click', () => {
+    currentMonth.setMonth(currentMonth.getMonth() - 1);
+    loadEvents();
+  });
+  document.getElementById('nextMonth').addEventListener('click', () => {
+    currentMonth.setMonth(currentMonth.getMonth() + 1);
+    loadEvents();
+  });
+  document.getElementById('todayBtn').addEventListener('click', () => {
+    currentMonth = new Date();
+    currentMonth.setDate(1);
+    loadEvents();
+  });
+  document.getElementById('refreshBtn').addEventListener('click', loadEvents);
+
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('logoutLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (confirm('Sign out of MIS?')) window.MIS.auth.logout();
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { closeBookModal(); closeDetailModal(); }
+  });
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
+    const tName = window.MIS.auth.getTenantName() || 'Account';
+    document.getElementById('tenant-name').textContent = tName;
+    document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+    loadEvents();
+  });
+
+})();
+</script>
+</body>
+</html>

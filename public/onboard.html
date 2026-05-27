@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SheetBot — Chat With Your Data</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0a0a0a; color: #e5e5e5; min-height: 100vh; }
+    .container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
+    h1 { font-size: 2rem; text-align: center; margin-bottom: 8px; }
+    h1 span { color: #22c55e; }
+    .subtitle { text-align: center; color: #a1a1aa; margin-bottom: 40px; font-size: 0.95rem; }
+    .card { background: #18181b; border: 1px solid #27272a; border-radius: 12px; padding: 24px; margin-bottom: 20px; }
+    .card h2 { font-size: 1.1rem; margin-bottom: 16px; color: #f5f5f5; }
+    .step-num { display: inline-block; width: 28px; height: 28px; background: #22c55e; color: #000; font-weight: 700; border-radius: 50%; text-align: center; line-height: 28px; margin-right: 8px; font-size: 0.85rem; }
+    label { display: block; font-size: 0.85rem; color: #a1a1aa; margin-bottom: 6px; margin-top: 12px; }
+    input, textarea { width: 100%; padding: 12px; background: #09090b; border: 1px solid #3f3f46; border-radius: 8px; color: #f5f5f5; font-size: 0.95rem; outline: none; transition: border 0.2s; }
+    input:focus, textarea:focus { border-color: #22c55e; }
+    textarea { min-height: 80px; resize: vertical; }
+    .btn { display: block; width: 100%; padding: 14px; background: #22c55e; color: #000; font-weight: 700; font-size: 1rem; border: none; border-radius: 8px; cursor: pointer; margin-top: 16px; transition: background 0.2s; }
+    .btn:hover { background: #16a34a; }
+    .btn:disabled { background: #3f3f46; color: #71717a; cursor: not-allowed; }
+    .btn-secondary { background: #27272a; color: #e5e5e5; }
+    .btn-secondary:hover { background: #3f3f46; }
+    .btn-blue { background: #2563eb; color: #fff; }
+    .btn-blue:hover { background: #1d4ed8; }
+    .schema-preview { background: #09090b; border: 1px solid #3f3f46; border-radius: 8px; padding: 12px; margin-top: 12px; font-family: monospace; font-size: 0.8rem; max-height: 250px; overflow-y: auto; }
+    .schema-col { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid #1f1f23; }
+    .schema-col:last-child { border: none; }
+    .tab-header { background: #1e3a5f; padding: 6px 10px; border-radius: 6px; margin: 8px 0 4px; font-weight: 600; font-size: 0.85rem; color: #60a5fa; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+    .tag-number { background: #1e3a5f; color: #60a5fa; }
+    .tag-date { background: #3b1f4a; color: #c084fc; }
+    .tag-text { background: #1c2e1c; color: #86efac; }
+    .tag-rows { background: #27272a; color: #a1a1aa; font-size: 0.7rem; margin-left: 8px; }
+    .success { background: #052e16; border: 1px solid #166534; border-radius: 12px; padding: 24px; text-align: center; display: none; }
+    .success h2 { color: #22c55e; margin-bottom: 12px; }
+    .success code { display: block; background: #09090b; padding: 12px; border-radius: 8px; margin: 12px 0; font-size: 0.85rem; word-break: break-all; }
+    .loader { display: none; text-align: center; padding: 20px; }
+    .loader::after { content: ''; display: inline-block; width: 24px; height: 24px; border: 3px solid #3f3f46; border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error { color: #ef4444; font-size: 0.85rem; margin-top: 8px; display: none; }
+    .hidden { display: none; }
+    .returning-user { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; margin-bottom: 20px; display: none; }
+    .returning-user h3 { color: #60a5fa; margin-bottom: 12px; }
+    .returning-user p { color: #94a3b8; font-size: 0.9rem; margin-bottom: 12px; }
+    .choice-btns { display: flex; gap: 12px; margin-top: 16px; }
+    .choice-btns .btn { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 Sheet<span>Bot</span></h1>
+    <p class="subtitle">Connect your Google Sheet → chat with your data on WhatsApp or web</p>
+
+    <!-- STEP 0: Phone Check (Returning User Detection) -->
+    <div class="card" id="step0">
+      <h2><span class="step-num">1</span> Enter your WhatsApp number</h2>
+      <label>WhatsApp number (with country code)</label>
+      <input type="tel" id="phoneCheck" placeholder="918178525310" />
+      <p class="error" id="phoneError"></p>
+      <button class="btn" onclick="checkPhone()">➡️ Continue</button>
+      <div class="loader" id="loader0"></div>
+    </div>
+
+    <!-- Returning User Panel -->
+    <div class="returning-user" id="returningUser">
+      <h3>👋 Welcome Back!</h3>
+      <p>You are already registered as: <strong id="existingName"></strong></p>
+      <p style="font-size:0.8rem;color:#64748b" id="existingInfo"></p>
+      <div class="choice-btns">
+        <button class="btn btn-blue" onclick="addToExisting()">📎 Add a New Sheet</button>
+        <button class="btn btn-secondary" onclick="startFresh()">🆕 Create a New DB</button>
+      </div>
+    </div>
+
+    <!-- STEP 1: Connect Sheet -->
+    <div class="card hidden" id="step1">
+      <h2><span class="step-num">2</span> Connect your Google Sheet</h2>
+      <label>Google Sheet URL (must be public)</label>
+      <input type="url" id="sheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." />
+      <p class="error" id="sheetError"></p>
+      <button class="btn" onclick="detectSchema()">🔍 Detect Schema</button>
+      <div class="loader" id="loader1"></div>
+    </div>
+
+    <!-- STEP 2: Schema Preview + Registration -->
+    <div class="card hidden" id="step2">
+      <h2><span class="step-num">3</span> Detected Tables</h2>
+      <p style="color:#a1a1aa;font-size:0.85rem" id="rowCount"></p>
+      <div class="schema-preview" id="schemaPreview"></div>
+
+      <div id="newUserFields">
+        <label>Describe your business (English/Hindi/Hinglish all welcome)</label>
+        <textarea id="bizDesc" placeholder="I run a kirana store. The 'maal' column has product names. 'baki' means pending payment..."></textarea>
+
+        <label>Your name / business name</label>
+        <input type="text" id="bizName" placeholder="Sharma General Store" />
+
+        <label>Email (optional — booking confirmations will be sent here)</label>
+        <input type="email" id="bizEmail" placeholder="you@example.com" />
+      </div>
+
+      <button class="btn" onclick="registerTenant()">✅ Complete Setup</button>
+      <div class="loader" id="loader2"></div>
+      <p class="error" id="regError"></p>
+    </div>
+
+    <!-- STEP 3: Success -->
+    <div class="success" id="step3">
+      <h2>🎉 Setup Complete!</h2>
+      <p id="successMsg">Send a WhatsApp message now to chat with your data.</p>
+      <code id="successPhone"></code>
+      <p style="color:#a1a1aa;font-size:0.85rem;margin-top:12px">Try: "What is the total sales?" or "Show top 5 products"</p>
+      <button class="btn btn-secondary" onclick="location.reload()">+ Add Another Sheet</button>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = window.location.origin;
+    let detectedSchema = null;
+    let existingTenant = null;
+    let mode = 'new'; // 'new' or 'add_to_existing'
+
+    async function checkPhone() {
+      const phone = document.getElementById('phoneCheck').value.trim().replace(/[^0-9]/g, '');
+      if (phone.length < 10) { showError('phoneError', 'Please enter a valid phone number (min 10 digits)'); return; }
+      hideError('phoneError');
+      showLoader('loader0');
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/check-phone`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone })
+        });
+        const data = await res.json();
+        if (data.exists) {
+          existingTenant = data.tenant;
+          document.getElementById('existingName').textContent = data.tenant.name;
+          const tables = data.tenant.schema_json?.tables || [];
+          document.getElementById('existingInfo').textContent = tables.length
+            ? `Tables: ${tables.map(t => t.name).join(', ')}`
+            : `Sheet: ${data.tenant.sheet_url || 'Connected'}`;
+          document.getElementById('returningUser').style.display = 'block';
+          document.getElementById('step0').classList.add('hidden');
+        } else {
+          mode = 'new';
+          document.getElementById('step0').classList.add('hidden');
+          document.getElementById('step1').classList.remove('hidden');
+          document.getElementById('newUserFields').classList.remove('hidden');
+        }
+      } catch (e) {
+        showError('phoneError', e.message);
+      } finally {
+        hideLoader('loader0');
+      }
+    }
+
+    function addToExisting() {
+      mode = 'add_to_existing';
+      document.getElementById('returningUser').style.display = 'none';
+      document.getElementById('step1').classList.remove('hidden');
+      document.getElementById('newUserFields').classList.add('hidden');
+    }
+
+    function startFresh() {
+      mode = 'new';
+      existingTenant = null;
+      document.getElementById('returningUser').style.display = 'none';
+      document.getElementById('step1').classList.remove('hidden');
+      document.getElementById('newUserFields').classList.remove('hidden');
+    }
+
+    async function detectSchema() {
+      const url = document.getElementById('sheetUrl').value.trim();
+      if (!url.includes('docs.google.com/spreadsheets')) {
+        showError('sheetError', 'Please enter a valid Google Sheet URL'); return;
+      }
+      hideError('sheetError');
+      showLoader('loader1');
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/detect-schema`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sheet_url: url })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Schema detect failed');
+        detectedSchema = data;
+        renderSchema(data);
+        document.getElementById('step2').classList.remove('hidden');
+      } catch (e) {
+        showError('sheetError', e.message);
+      } finally {
+        hideLoader('loader1');
+      }
+    }
+
+    function renderSchema(schema) {
+      const tables = schema.tables || [{ name: 'Sheet1', columns: schema.columns, row_count: schema.row_count }];
+      document.getElementById('rowCount').textContent = `${tables.length} table(s), ${schema.total_rows || schema.row_count || 0} total rows`;
+      const preview = document.getElementById('schemaPreview');
+      preview.innerHTML = tables.map(t => `
+        <div class="tab-header">📋 ${t.name} <span class="tag-rows">${t.row_count} rows</span></div>
+        ${t.columns.map(c => `<div class="schema-col"><span>${c.name}</span><span class="tag tag-${c.type}">${c.type}</span></div>`).join('')}
+      `).join('');
+    }
+
+    async function registerTenant() {
+      const phone = document.getElementById('phoneCheck').value.trim().replace(/[^0-9]/g, '');
+      const sheetUrl = document.getElementById('sheetUrl').value.trim();
+
+      const body = { phone, sheet_url: sheetUrl, schema: detectedSchema };
+
+      if (mode === 'add_to_existing' && existingTenant) {
+        body.add_to_existing = true;
+        body.tenant_id = existingTenant.id;
+      } else {
+        const name = document.getElementById('bizName').value.trim();
+        const desc = document.getElementById('bizDesc').value.trim();
+        const email = (document.getElementById('bizEmail')?.value || '').trim();
+        if (!name) { showError('regError', 'Please enter a business name'); return; }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showError('regError', 'Invalid email format'); return; }
+        body.name = name;
+        body.business_description = desc;
+        if (email) body.email = email;
+      }
+
+      hideError('regError');
+      showLoader('loader2');
+      try {
+        const res = await fetch(`${API_BASE}/api/tenant/signup`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Registration failed');
+        document.getElementById('step1').classList.add('hidden');
+        document.getElementById('step2').classList.add('hidden');
+        document.getElementById('step3').style.display = 'block';
+        document.getElementById('successPhone').textContent = `WhatsApp: +${phone}`;
+        document.getElementById('successMsg').textContent = mode === 'add_to_existing'
+          ? 'New sheet added! You can now ask questions about the new data.'
+          : 'Send a WhatsApp message now to chat with your data.';
+      } catch (e) {
+        showError('regError', e.message);
+      } finally {
+        hideLoader('loader2');
+      }
+    }
+
+    function showError(id, msg) { const el = document.getElementById(id); el.textContent = msg; el.style.display = 'block'; }
+    function hideError(id) { document.getElementById(id).style.display = 'none'; }
+    function showLoader(id) { document.getElementById(id).style.display = 'block'; }
+    function hideLoader(id) { document.getElementById(id).style.display = 'none'; }
+  </script>
+</body>
+</html>

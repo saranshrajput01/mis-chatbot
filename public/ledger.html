@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ledger · MIS</title>
+<link rel="stylesheet" href="/assets/css/app.css" />
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
+<script src="/assets/js/app.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+<style>
+  .page-grid { display: grid; gap: 18px; }
+  .filter-bar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding: 16px 20px; background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 14px; }
+  .filter-bar input { flex: 1; min-width: 240px; padding: 9px 14px; border-radius: 10px; border: 1px solid var(--hairline); background: var(--surface-page); color: var(--color-text-primary); font-size: 14px; }
+  .filter-bar input:focus { outline: 2px solid var(--color-primary-300); border-color: transparent; }
+  .filter-bar .btn { padding: 9px 18px; border-radius: 10px; background: var(--color-primary-500); color: #fff; font-weight: 600; font-size: 13px; cursor: pointer; border: none; }
+  .filter-bar .btn:hover { background: var(--color-primary-600); }
+  .balance-card { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 16px; padding: 22px 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; align-items: center; }
+  .balance-card.empty { grid-template-columns: 1fr; text-align: center; padding: 60px 20px; color: var(--color-text-tertiary); }
+  .balance-stat { padding: 4px 0; }
+  .balance-stat .lbl { font-size: 11px; color: var(--color-text-tertiary); text-transform: uppercase; letter-spacing: 0.06em; }
+  .balance-stat .val { font-family: var(--font-mono); font-size: 22px; font-weight: 700; margin-top: 4px; }
+  .balance-stat.party .val { font-family: inherit; font-size: 17px; line-height: 1.3; }
+  .balance-stat.net .val.positive { color: #10B981; }
+  .balance-stat.net .val.negative { color: #F43F5E; }
+  .timeline { background: var(--surface-card); border: 1px solid var(--hairline); border-radius: 14px; padding: 18px 20px; }
+  .timeline table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .timeline th { text-align: left; font-weight: 600; color: var(--color-text-tertiary); text-transform: uppercase; font-size: 11px; letter-spacing: 0.06em; padding: 10px 12px; border-bottom: 1px solid var(--hairline); }
+  .timeline td { padding: 11px 12px; border-bottom: 1px solid var(--hairline); color: var(--color-text-primary); }
+  .timeline tr:hover td { background: var(--color-primary-50); }
+  [data-theme="dark"] .timeline tr:hover td { background: rgba(0,164,210,0.06); }
+  .timeline td.num { text-align: right; font-family: var(--font-mono); font-weight: 600; }
+  .kind-pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; }
+  .kind-pill.sale { background: rgba(16,185,129,0.12); color: #10B981; }
+  .kind-pill.purchase { background: rgba(245,158,11,0.12); color: #F59E0B; }
+  .summary-table .timeline { padding: 18px 20px; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--color-text-tertiary); }
+  .empty-state .ic { font-size: 48px; margin-bottom: 12px; }
+  .nav-item.active { color: var(--color-primary-600); background: var(--color-primary-50); }
+  [data-theme="dark"] .nav-item.active { color: var(--accent-cyan); background: rgba(0,164,210,0.10); }
+  .mobile-toggle { display: none; }
+  .greeting .who { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .greeting .when { font-size: 11px; color: var(--color-text-tertiary); margin-top: 2px; }
+  .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #10B981, #00A4D2, #6366F1); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 4px 14px rgba(16,185,129,0.28); }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: dotPulse 2.4s ease-in-out infinite; }
+  @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+  @media (max-width: 1100px) { .balance-card { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="sidebar-brand"><div class="logo">M</div><div><div class="name">MIS</div><div class="tag">Make It Simple</div></div></div>
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item active" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;"><i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode</span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+    <div style="display:flex; align-items:center; gap:14px;">
+      <button class="mobile-toggle"><i data-lucide="menu"></i></button>
+      <div class="tenant-avatar" id="tenantAvatar">M</div>
+      <div class="greeting">
+        <div class="who"><span id="tenant-name">…</span> <span class="status-dot"></span></div>
+        <div class="when">Ledger · party-wise</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn-icon" id="refreshBtn"><i data-lucide="refresh-cw"></i></button>
+    </div>
+  </header>
+    <div class="page">
+    <div class="page-header page-header-hero">
+      <div class="page-header-bg">
+        <div class="aurora aurora-1"></div>
+        <div class="aurora aurora-2"></div>
+        <div class="aurora aurora-3"></div>
+        <div class="grid-overlay"></div>
+      </div>
+      <div class="page-header-content">
+        <div class="page-icon-glow"><i data-lucide="book-open"></i></div>
+        <div class="page-header-text">
+          <div class="page-title-row">
+            <h1 class="t-h1 page-title-gradient">Ledger</h1>
+            <span class="live-pill"><span class="live-dot"></span>Live</span>
+          </div>
+          <p class="page-desc">Party-wise account — search a customer or vendor to see their full transaction history</p>
+          <div class="page-chips">
+            <span class="page-chip"><i data-lucide="search" style="width:12px;height:12px;"></i> Party search</span>
+            <span class="page-chip"><i data-lucide="scale" style="width:12px;height:12px;"></i> Net balance</span>
+            <span class="page-chip"><i data-lucide="file-spreadsheet" style="width:12px;height:12px;"></i> Excel export</span>
+          </div>
+          <div class="page-underline"></div>
+        </div>
+        <button id="exportCsvBtn" type="button" style="padding:9px 16px; border-radius:10px; background:var(--accent-violet); color:#fff; font-weight:600; font-size:13px; border:none; cursor:pointer; flex-shrink:0; align-self:flex-start;">⬇ Export Excel</button>
+      </div>
+    </div>
+
+    <div class="page-grid">
+      <div class="filter-bar">
+        <input id="partySearch" type="text" placeholder="Search party (customer or vendor) name..." />
+        <button class="btn" id="searchBtn">Search</button>
+        <button class="btn" id="clearBtn" style="background: var(--hairline); color: var(--color-text-secondary);">Clear</button>
+      </div>
+
+      <!-- Balance card (visible when party selected) -->
+      <div id="balanceWrap"></div>
+
+      <!-- Transaction timeline (visible when party selected) -->
+      <div id="timelineWrap"></div>
+
+      <!-- Summary table (always visible) -->
+      <div class="timeline">
+        <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div><div class="t-h3">All Parties</div><div class="t-meta" id="summaryMeta">—</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Party</th><th class="num">Sales</th><th class="num">Purchases</th><th class="num">Net Balance</th><th class="num">Sales Cnt</th><th class="num">Purch Cnt</th></tr></thead>
+          <tbody id="summaryBody"></tbody>
+        </table>
+      </div>
+    </div>
+    </div>
+  </main>
+</div>
+
+<script>
+(function() {
+  'use strict';
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) { window.location.replace('/login'); return; }
+  const PHONE = window.MIS.auth.getPhone();
+  const tName = window.MIS.auth.getTenantName() || '—';
+  document.getElementById('tenant-name').textContent = tName;
+  document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+
+  if (window.MIS.theme && window.MIS.theme.init) window.MIS.theme.init();
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('logoutLink').addEventListener('click', (e) => { e.preventDefault(); window.MIS.auth.logout(); });
+  document.getElementById('refreshBtn').addEventListener('click', () => loadPage(CURRENT_Q));
+
+  const inr = (v) => window.MIS.fmt.inr(v);
+  const num = (v) => window.MIS.fmt.num(v);
+  let CURRENT_Q = '';
+
+  function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]); }
+
+  function renderBalance(detail) {
+    const wrap = document.getElementById('balanceWrap');
+    if (!detail) { wrap.innerHTML = ''; return; }
+    const cls = detail.net_balance > 0 ? 'positive' : detail.net_balance < 0 ? 'negative' : '';
+    const sign = detail.net_balance > 0 ? '+' : '';
+    wrap.innerHTML = `
+      <div class="balance-card">
+        <div class="balance-stat party">
+          <div class="lbl">Party</div>
+          <div class="val">${escHtml(detail.query)}</div>
+          <div style="color: var(--color-text-tertiary); font-size: 12px; margin-top: 4px;">${detail.matched_count} transactions</div>
+        </div>
+        <div class="balance-stat">
+          <div class="lbl">Sales (debit)</div>
+          <div class="val" style="color:#10B981;">${inr(detail.sales_total)}</div>
+        </div>
+        <div class="balance-stat">
+          <div class="lbl">Purchases (credit)</div>
+          <div class="val" style="color:#F59E0B;">${inr(detail.purchases_total)}</div>
+        </div>
+        <div class="balance-stat net">
+          <div class="lbl">Net Balance</div>
+          <div class="val ${cls}">${sign}${inr(Math.abs(detail.net_balance))}</div>
+          <div style="color: var(--color-text-tertiary); font-size: 11px; margin-top: 4px;">${detail.net_balance > 0 ? 'Party owes us' : detail.net_balance < 0 ? 'We owe party' : 'Settled'}</div>
+        </div>
+      </div>`;
+  }
+
+  function renderTimeline(detail) {
+    const wrap = document.getElementById('timelineWrap');
+    if (!detail) { wrap.innerHTML = ''; return; }
+    if (!detail.transactions || !detail.transactions.length) {
+      wrap.innerHTML = `<div class="timeline"><div class="empty-state"><div class="ic">🔍</div>No transactions for "${escHtml(detail.query)}".</div></div>`;
+      return;
+    }
+    let rowsHtml = '';
+    for (const t of detail.transactions) {
+      const dateStr = t.date ? new Date(t.date + 'T00:00:00').toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' }) : '—';
+      rowsHtml += `<tr>
+        <td>${dateStr}</td>
+        <td><span class="kind-pill ${t.kind}">${t.kind}</span></td>
+        <td>${escHtml(t.voucher) || '—'}</td>
+        <td>${escHtml(t.party) || '—'}</td>
+        <td>${escHtml(t.item) || '—'}</td>
+        <td class="num" style="color:${t.kind === 'sale' ? '#10B981' : '#F59E0B'};">${inr(t.amount)}</td>
+      </tr>`;
+    }
+    wrap.innerHTML = `
+      <div class="timeline">
+        <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+          <div><div class="t-h3">Transaction Timeline</div><div class="t-meta">${detail.matched_count > detail.transactions_shown ? `Showing ${detail.transactions_shown} of ${detail.matched_count}` : detail.transactions.length + ' entries'} · most recent first</div></div>
+        </div>
+        <table>
+          <thead><tr><th>Date</th><th>Type</th><th>Voucher</th><th>Party</th><th>Item</th><th class="num">Amount</th></tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function renderSummary(rows) {
+    const tbody = document.getElementById('summaryBody');
+    tbody.innerHTML = '';
+    if (!rows || !rows.length) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:var(--color-text-tertiary);">No party data.</td></tr>';
+      document.getElementById('summaryMeta').textContent = '0 parties';
+      return;
+    }
+    for (const r of rows) {
+      const cls = r.net_balance > 0 ? 'positive' : r.net_balance < 0 ? 'negative' : '';
+      const sign = r.net_balance > 0 ? '+' : '';
+      const tr = document.createElement('tr');
+      tr.style.cursor = 'pointer';
+      tr.innerHTML = `<td>${escHtml(r.party)}</td><td class="num">${inr(r.sales_amt)}</td><td class="num">${inr(r.purch_amt)}</td><td class="num" style="color:${cls === 'positive' ? '#10B981' : cls === 'negative' ? '#F43F5E' : 'inherit'};">${sign}${inr(Math.abs(r.net_balance))}</td><td class="num">${num(r.sales_count)}</td><td class="num">${num(r.purch_count)}</td>`;
+      tr.addEventListener('click', () => {
+        document.getElementById('partySearch').value = r.party;
+        CURRENT_Q = r.party;
+        loadPage(CURRENT_Q);
+      });
+      tbody.appendChild(tr);
+    }
+    document.getElementById('summaryMeta').textContent = `${rows.length} parties · click any row for detailed timeline`;
+  }
+
+  async function loadPage(q) {
+    const params = new URLSearchParams({ phone: PHONE });
+    if (q) params.set('q', q);
+    const res = await fetch('/api/page/ledger?' + params);
+    if (!res.ok) {
+      document.getElementById('summaryBody').innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px;">Failed to load.</td></tr>';
+      return;
+    }
+    const d = await res.json();
+    LAST_DATA = d;
+    if (d.tenant?.name) {
+      document.getElementById('tenant-name').textContent = d.tenant.name;
+      document.getElementById('tenantAvatar').textContent = (d.tenant.name.charAt(0) || 'M').toUpperCase();
+    }
+    if (d.empty) {
+      document.getElementById('balanceWrap').innerHTML = `<div class="balance-card empty"><div class="empty-state"><div class="ic">📒</div>${d.message || 'No data'}</div></div>`;
+      return;
+    }
+    renderBalance(d.party_detail);
+    renderTimeline(d.party_detail);
+    renderSummary(d.summary);
+  }
+
+  document.getElementById('searchBtn').addEventListener('click', () => { CURRENT_Q = document.getElementById('partySearch').value.trim(); loadPage(CURRENT_Q); });
+  document.getElementById('partySearch').addEventListener('keydown', (e) => { if (e.key === 'Enter') { CURRENT_Q = e.target.value.trim(); loadPage(CURRENT_Q); } });
+  document.getElementById('clearBtn').addEventListener('click', () => { CURRENT_Q = ''; document.getElementById('partySearch').value = ''; loadPage(); });
+
+  let LAST_DATA = null;
+
+  document.addEventListener('DOMContentLoaded', () => { if (window.lucide) window.lucide.createIcons(); loadPage(); });
+
+  document.getElementById('exportCsvBtn').addEventListener('click', () => {
+    if (!LAST_DATA) { alert('No data to export. Wait for load.'); return; }
+    if (!window.MIS?.xlsx?.isReady()) { alert('Excel library still loading — please retry.'); return; }
+    const ts = new Date().toISOString().split('T')[0];
+    let filename, sheets;
+    if (LAST_DATA.party_detail) {
+      const pd = LAST_DATA.party_detail;
+      const partyName = (pd.party || pd.name || 'unknown').toString();
+      filename = `ledger-${partyName.replace(/\W+/g, '-').toLowerCase()}-${ts}.xlsx`;
+      sheets = [
+        { name: 'Info', headers: ['Field','Value'], rows: [
+          ['Party', partyName],
+          ['Net Balance (₹)', Number(pd.balance || 0)],
+          ['Tenant', LAST_DATA.tenant?.name || 'MIS'],
+          ['Generated', new Date().toLocaleString('en-IN')]
+        ]},
+        { name: 'Transactions',
+          headers: ['Date','Voucher','Type','Debit (₹)','Credit (₹)','Running Balance (₹)'],
+          rows: (pd.transactions || []).map(t => [
+            t.date || '', t.voucher || '', t.type || '',
+            Number(t.debit || 0), Number(t.credit || 0), Number(t.running_balance || 0)
+          ]) }
+      ];
+    } else if (LAST_DATA.summary) {
+      filename = `ledger-summary-${ts}.xlsx`;
+      sheets = [
+        { name: 'Info', headers: ['Field','Value'], rows: [
+          ['Report', 'Ledger Summary'],
+          ['Tenant', LAST_DATA.tenant?.name || 'MIS'],
+          ['Generated', new Date().toLocaleString('en-IN')],
+          ['Party Count', (LAST_DATA.summary.parties || []).length]
+        ]},
+        { name: 'Parties',
+          headers: ['Party','Total Debit (₹)','Total Credit (₹)','Balance (₹)','Transactions'],
+          rows: (LAST_DATA.summary.parties || []).map(p => [
+            p.party || '',
+            Number(p.total_debit || 0),
+            Number(p.total_credit || 0),
+            Number(p.balance || 0),
+            Number(p.txn_count || 0)
+          ]) }
+      ];
+    } else {
+      alert('No exportable data found.'); return;
+    }
+    window.MIS.xlsx.download(filename, sheets);
+  });
+})();
+</script>
+</body>
+</html>

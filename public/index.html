@@ -226,6 +226,55 @@
     .loader { display: inline-block; width: 16px; height: 16px; border: 2px solid #fff; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 6px; }
     @keyframes spin { to { transform: rotate(360deg); } }
     /* ── END STEP 3 CSS ── */
+
+    /* ── PHASE WEB: IDENTITY MODAL + MIC BUTTON + ATTACHMENTS ── */
+    /* Identity modal (first visit / change phone) */
+    #idModal { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000; display: none; align-items: center; justify-content: center; }
+    #idModal.show { display: flex; }
+    #idModal .card { background: #fff; border-radius: 14px; padding: 28px 26px; max-width: 380px; width: 92%; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+    #idModal h2 { font-size: 18px; color: #1a1a2e; margin-bottom: 8px; }
+    #idModal p { font-size: 13px; color: #555; margin-bottom: 16px; line-height: 1.5; }
+    #idModal input { width: 100%; padding: 11px 14px; border: 1.5px solid #ddd; border-radius: 8px; font-size: 14px; outline: none; margin-bottom: 8px; }
+    #idModal input:focus { border-color: #1a73e8; }
+    #idModal .id-error { color: #e53935; font-size: 12px; min-height: 16px; margin-bottom: 8px; }
+    #idModal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+    #idModal button { padding: 9px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+    #idModal .btn-skip { background: #f0f0f0; color: #555; }
+    #idModal .btn-skip:hover { background: #e0e0e0; }
+    #idModal .btn-go { background: #1a73e8; color: #fff; }
+    #idModal .btn-go:hover { background: #1558b0; }
+    #idBadge { font-size: 11px; color: rgba(255,255,255,0.85); padding: 3px 9px; border: 1px solid rgba(255,255,255,0.3); border-radius: 12px; cursor: pointer; }
+    #idBadge:hover { background: rgba(255,255,255,0.1); }
+
+    /* Mic button */
+    #micBtn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #ddd; background: #fff; color: #1a1a2e; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: all 0.15s; }
+    #micBtn:hover { background: #f0f0f0; }
+    #micBtn.recording { background: #e53935; color: #fff; border-color: #e53935; animation: pulse 1.2s infinite; }
+    #micBtn.recording:hover { background: #c62828; }
+    #micBtn svg { width: 18px; height: 18px; fill: currentColor; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(229,57,53,0.5); } 50% { box-shadow: 0 0 0 8px rgba(229,57,53,0); } }
+    #recHint { position: absolute; bottom: 56px; right: 60px; background: #1a1a2e; color: #fff; padding: 4px 10px; border-radius: 12px; font-size: 11px; display: none; }
+    #recHint.show { display: block; }
+    #inputBar { position: relative; }
+
+    /* Server-supplied attachments */
+    .attachments { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }
+    .att-img { max-width: 100%; width: 560px; max-height: 420px; border-radius: 8px; border: 1px solid #eee; cursor: zoom-in; object-fit: contain; background: #fff; }
+    .att-img:hover { border-color: #1a73e8; }
+    .att-doc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; background: #f4f7fb; border: 1px solid #d6e3f0; border-radius: 8px; cursor: pointer; font-size: 12px; color: #1a1a2e; text-decoration: none; transition: all 0.15s; max-width: 320px; }
+    .att-doc:hover { background: #e3effa; border-color: #1a73e8; }
+    .att-doc .att-icon { font-size: 18px; }
+    .att-doc .att-name { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .att-doc .att-meta { color: #888; font-size: 10px; }
+    .att-caption { font-size: 11px; color: #666; margin-top: 2px; font-style: italic; }
+
+    /* Image lightbox — click any chart/image attachment to zoom */
+    #imgLightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 9999; display: none; align-items: center; justify-content: center; cursor: zoom-out; padding: 20px; }
+    #imgLightbox.show { display: flex; }
+    #imgLightbox img { max-width: 96vw; max-height: 92vh; object-fit: contain; box-shadow: 0 4px 30px rgba(0,0,0,0.5); border-radius: 8px; background: #fff; }
+    #imgLightbox .lb-close { position: absolute; top: 16px; right: 22px; color: #fff; background: rgba(255,255,255,0.15); border: none; font-size: 28px; line-height: 1; width: 44px; height: 44px; border-radius: 50%; cursor: pointer; }
+    #imgLightbox .lb-close:hover { background: rgba(255,255,255,0.3); }
+    /* ── END PHASE WEB CSS ── */
   </style>
 </head>
 <body>
@@ -239,8 +288,34 @@
     </div>
   </div>
   <div class="right">
+    <span id="idBadge" onclick="showIdModal()" title="Click to change identity">👤 Guest</span>
     <button id="clearBtn" onclick="clearChat()">Clear chat</button>
     <span class="online">Online</span>
+  </div>
+</div>
+
+<!-- ── Image lightbox (charts / images click-to-zoom) ── -->
+<div id="imgLightbox" onclick="closeImgLightbox(event)">
+  <button class="lb-close" onclick="closeImgLightbox(event)" aria-label="Close">×</button>
+  <img id="imgLightboxImg" alt="" />
+</div>
+
+<!-- ── PHASE WEB: Identity Modal (phone login) ── -->
+<div id="idModal">
+  <div class="card">
+    <h2>👤 Tell us who you are</h2>
+    <p>Log in with your registered WhatsApp number to access your tenant data.</p>
+    <input type="tel" id="idPhoneInput" placeholder="918750285420" maxlength="15" autocomplete="off" />
+    <div class="id-error" id="idError"></div>
+    <div class="actions">
+      <button class="btn-skip" onclick="goRegisterFromModal()" style="background:#e3effa;color:#1a73e8;border:1px solid #1a73e8">🆕 New user? Register</button>
+      <button class="btn-skip" onclick="hideIdModal(true)">Skip</button>
+      <button class="btn-go" onclick="saveIdentity()">Login</button>
+    </div>
+    <div id="idLogoutRow" style="display:none;margin-top:14px;padding-top:14px;border-top:1px solid #eee;text-align:center">
+      <span style="font-size:12px;color:#888">Currently logged in as <b id="idLogoutPhone"></b></span>
+      <button onclick="logoutIdentity()" style="display:block;margin:8px auto 0;padding:8px 18px;background:#fef2f2;border:1px solid #f87171;color:#b91c1c;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">⏻ Logout</button>
+    </div>
   </div>
 </div>
 
@@ -249,6 +324,7 @@
   <button class="tab-btn active" onclick="switchTab('chat')">💬 Chat</button>
   <button class="tab-btn" onclick="switchTab('doc')">📄 Documents</button>
   <button class="tab-btn" onclick="switchTab('sync')">🔄 Sync</button>
+  <button class="tab-btn" onclick="switchTab('connect')">🚀 Connect Sheet</button>
 </div>
 
 <!-- SYNC BAR — only on chat tab -->
@@ -263,9 +339,13 @@
   <div id="chat"></div>
   <div id="inputBar">
     <input id="msgInput" type="text" placeholder="Ask about invoices, ledger, payments, expenses..." />
+    <button id="micBtn" onclick="toggleMic()" title="Voice message">
+      <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+    </button>
     <button id="sendBtn" onclick="sendMessage()">
       <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
     </button>
+    <div id="recHint">🎙️ Recording... click mic to stop</div>
   </div>
 </div>
 
@@ -334,7 +414,7 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
     <div class="doc-card">
       <h3>🔄 Google Sheet → Supabase Sync</h3>
       <p style="font-size:13px;color:#555;margin-bottom:14px">
-        Yeh button daba ke manually sync karo. Auto-sync har 15 minute mein hoti hai.
+        Press this button to sync manually. Auto-sync runs every 15 minutes.
       </p>
       <button class="doc-submit-btn" id="syncPageBtn" onclick="doManualSync(true)">
         🔄 Sync All Sheets Now
@@ -351,6 +431,201 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
   </div>
 </div>
 
+<!-- ── CONNECT SHEET (SaaS Onboarding) TAB ── -->
+<div id="connectPage" class="tab-page">
+  <div style="padding:16px;overflow-y:auto;background:#f0f2f5;flex:1">
+    <div class="doc-card">
+      <h3>🚀 Connect your Google Sheet</h3>
+      <p style="font-size:13px;color:#555;margin-bottom:14px">
+        Paste your sheet link → AI auto-detects columns → chat with your data on WhatsApp or web.
+      </p>
+      <div class="doc-input-row">
+        <input type="url" id="connectSheetUrl" placeholder="https://docs.google.com/spreadsheets/d/..." style="flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+      </div>
+      <button class="doc-submit-btn" onclick="connectDetectSchema()">🔍 Detect Schema</button>
+      <div id="connectLoader" style="display:none;text-align:center;padding:12px;color:#1a73e8">Detecting...</div>
+      <div id="connectError" style="color:#e53935;font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+
+    <div class="doc-card" id="connectStep2" style="display:none">
+      <h3>📊 Detected Schema</h3>
+      <p id="connectRowCount" style="font-size:12px;color:#888;margin-bottom:8px"></p>
+      <div id="connectSchema" style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;font-family:monospace;font-size:12px;max-height:160px;overflow-y:auto"></div>
+
+      <div class="doc-input-row" style="margin-top:14px">
+        <input type="text" id="connectBizName" placeholder="Business name (e.g. Sharma Store)" style="flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+      </div>
+      <div class="doc-input-row">
+        <input type="tel" id="connectPhone" placeholder="WhatsApp number (918178525310)" style="flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+      </div>
+      <div class="doc-input-row">
+        <input type="email" id="connectEmail" placeholder="Email (optional — booking confirmations will be sent here)" style="flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px" />
+      </div>
+      <div class="doc-input-row">
+        <textarea id="connectBizDesc" placeholder="Describe your business (English/Hindi/Hinglish all welcome)..." style="flex:1;padding:9px 12px;border:1.5px solid #ddd;border-radius:8px;font-size:13px;min-height:60px;resize:vertical"></textarea>
+      </div>
+      <button class="doc-submit-btn" onclick="connectRegister()">✅ Complete Setup</button>
+      <div id="connectRegError" style="color:#e53935;font-size:12px;margin-top:8px;display:none"></div>
+    </div>
+
+    <div class="doc-card" id="connectSuccess" style="display:none;text-align:center;background:#e8f5e9">
+      <h3 style="color:#2e7d32">🎉 Setup Complete!</h3>
+      <p style="font-size:13px;margin:12px 0">Send a WhatsApp message now to chat with your data.</p>
+      <p id="connectSuccessPhone" style="background:#fff;padding:8px 16px;border-radius:8px;display:inline-block;font-family:monospace;font-size:14px"></p>
+      <p style="font-size:12px;color:#555;margin-top:12px">Try: "What is the total sales?" or "Show top 5 products"</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ── Connect Sheet Tab Logic ──
+  let connectSchema = null;
+  async function connectDetectSchema() {
+    const url = document.getElementById('connectSheetUrl').value.trim();
+    if (!url.includes('docs.google.com/spreadsheets')) {
+      document.getElementById('connectError').textContent = 'Please enter a valid Google Sheet URL';
+      document.getElementById('connectError').style.display = 'block'; return;
+    }
+    document.getElementById('connectError').style.display = 'none';
+    document.getElementById('connectLoader').style.display = 'block';
+    try {
+      const res = await fetch('/api/tenant/detect-schema', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sheet_url:url}) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      connectSchema = data;
+      const tables = data.tables || [{ name: 'Sheet1', columns: data.columns || [], row_count: data.row_count }];
+      document.getElementById('connectRowCount').textContent = (data.total_rows || data.row_count || 0) + ' rows, ' + tables.length + ' table(s)';
+      document.getElementById('connectSchema').innerHTML = tables.map(t =>
+        '<div style="background:#e3f2fd;padding:4px 8px;margin:6px 0 2px;border-radius:4px;font-weight:600;font-size:12px">📋 '+t.name+' ('+t.row_count+' rows)</div>' +
+        t.columns.map(c =>
+          '<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #eee"><span>'+c.name+'</span><span style="color:'+(c.type==='number'?'#1a73e8':c.type==='date'?'#9c27b0':'#4caf50')+';font-size:11px;font-weight:600">'+c.type+'</span></div>'
+        ).join('')
+      ).join('');
+      document.getElementById('connectStep2').style.display = 'block';
+    } catch(e) {
+      document.getElementById('connectError').textContent = e.message;
+      document.getElementById('connectError').style.display = 'block';
+    } finally { document.getElementById('connectLoader').style.display = 'none'; }
+  }
+  async function connectRegister() {
+    const name = document.getElementById('connectBizName').value.trim();
+    const phone = document.getElementById('connectPhone').value.trim().replace(/[^0-9]/g,'');
+    const email = (document.getElementById('connectEmail')?.value || '').trim();
+    const desc = document.getElementById('connectBizDesc').value.trim();
+    const sheetUrl = document.getElementById('connectSheetUrl').value.trim();
+    if (!name || !phone || phone.length < 10) {
+      document.getElementById('connectRegError').textContent = 'Please enter a name and a valid phone (10-15 digits with country code)';
+      document.getElementById('connectRegError').style.display = 'block'; return;
+    }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      document.getElementById('connectRegError').textContent = 'Invalid email format (or leave it blank)';
+      document.getElementById('connectRegError').style.display = 'block'; return;
+    }
+    document.getElementById('connectRegError').style.display = 'none';
+    await submitSignup({ name, phone, email, desc, sheetUrl, mode: undefined, tenant_id: undefined });
+  }
+
+  // Submit helper — called by initial register and also by choice buttons
+  async function submitSignup({ name, phone, email, desc, sheetUrl, mode, tenant_id }) {
+    try {
+      const body = { name, phone, email: email || undefined, sheet_url: sheetUrl, business_description: desc, schema: connectSchema };
+      if (mode === 'new_separate') body.mode = 'new_separate';
+      if (mode === 'add_to_existing' && tenant_id) {
+        body.add_to_existing = true;
+        body.tenant_id = tenant_id;
+      }
+
+      const res = await fetch('/api/tenant/signup', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)
+      });
+      const data = await res.json();
+
+      // ─── Server says "you already have DBs — pick one" ───
+      if (res.ok && data.requires_choice) {
+        renderExistingChoice({ name, phone, desc, sheetUrl, existing: data.existing || [] });
+        return;
+      }
+
+      if (!res.ok) throw new Error(data.error || 'Registration failed');
+
+      // SUCCESS path: hide register form, show success card, auto-login + go to chat
+      document.getElementById('connectStep2').style.display = 'none';
+      document.getElementById('connectSuccess').style.display = 'block';
+      document.getElementById('connectSuccessPhone').textContent = '+' + phone;
+
+      try {
+        if (typeof USER_PHONE !== 'undefined') USER_PHONE = phone;
+        localStorage.setItem('mis_phone', phone);
+        localStorage.removeItem('mis_id_skipped');
+        if (typeof refreshIdBadge === 'function') refreshIdBadge();
+      } catch(_) {}
+
+      setTimeout(() => {
+        try {
+          switchTab('chat');
+          if (typeof addMessage === 'function') {
+            const what = data.mode === 'added_to_existing'
+              ? 'New sheet added to existing DB *' + (data.name || '') + '*.'
+              : data.mode === 'new'
+                ? 'Brand-new DB *' + (data.name || name) + '* created.'
+                : 'Setup complete.';
+            addMessage('assistant',
+              '🎉 *Welcome ' + (data.name || name) + '!*\n\nLogged in as +' + phone + '.\n\n' + what + '\n\n' +
+              (sheetUrl ? '📊 Sheet is syncing in the background (1-2 minutes).\n\n' : '') +
+              'Try:\n• "What is the total?"\n• "switch db" — see all your databases\n• 🎙️ Use the mic to send a voice message',
+              'text');
+          }
+        } catch(_) {}
+      }, 1500);
+    } catch(e) {
+      document.getElementById('connectRegError').textContent = e.message;
+      document.getElementById('connectRegError').style.display = 'block';
+    }
+  }
+
+  // Render the "Add to existing OR new separate" choice UI
+  function renderExistingChoice(ctx) {
+    const errEl = document.getElementById('connectRegError');
+    errEl.style.display = 'none';
+    // Find or create choice container
+    let box = document.getElementById('connectChoice');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'connectChoice';
+      box.style.cssText = 'margin-top:14px;padding:14px;background:#fff8e1;border:1px solid #ffd54f;border-radius:10px';
+      document.getElementById('connectStep2').appendChild(box);
+    }
+    const list = (ctx.existing || []).map((t, i) =>
+      `<button onclick="pickAddToExisting('${t.id}')" style="display:block;width:100%;text-align:left;padding:10px 14px;margin:4px 0;background:#fff;border:1.5px solid #1a73e8;color:#1a73e8;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">📋 *${i+1}.* Add new tabs to existing DB: <b>${escapeHTML(t.name)}</b></button>`
+    ).join('');
+    box.innerHTML =
+      '<div style="font-weight:600;color:#1a1a2e;margin-bottom:8px">⚠️ You already own ' + (ctx.existing || []).length + ' database(s)</div>' +
+      '<div style="font-size:12px;color:#555;margin-bottom:10px">What would you like to do?</div>' +
+      list +
+      '<button onclick="pickNewSeparate()" style="display:block;width:100%;text-align:left;padding:10px 14px;margin:4px 0 0;background:#fff;border:1.5px solid #4caf50;color:#2e7d32;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🆕 Create a completely separate new DB (existing untouched)</button>' +
+      '<button onclick="cancelChoice()" style="display:block;width:100%;text-align:center;padding:8px;margin:6px 0 0;background:transparent;border:none;color:#888;cursor:pointer;font-size:12px">Cancel</button>';
+
+    // Stash ctx for handlers
+    window.__signupCtx = ctx;
+  }
+  function escapeHTML(s) { return String(s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function pickAddToExisting(tenant_id) {
+    const ctx = window.__signupCtx; if (!ctx) return;
+    document.getElementById('connectChoice').innerHTML = '<div style="text-align:center;color:#1a73e8;padding:8px">Adding to existing DB...</div>';
+    submitSignup({ ...ctx, mode: 'add_to_existing', tenant_id });
+  }
+  function pickNewSeparate() {
+    const ctx = window.__signupCtx; if (!ctx) return;
+    document.getElementById('connectChoice').innerHTML = '<div style="text-align:center;color:#2e7d32;padding:8px">Creating new separate DB...</div>';
+    submitSignup({ ...ctx, mode: 'new_separate' });
+  }
+  function cancelChoice() {
+    const box = document.getElementById('connectChoice');
+    if (box) box.remove();
+    window.__signupCtx = null;
+  }
+</script>
+
 <script>
   let SESSION_ID = sessionStorage.getItem("mis_session_id");
   if (!SESSION_ID) {
@@ -360,6 +635,174 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
   let history = [];
   let pendingExactName = null;
   let chartCounter = 0;
+
+  // ── PHASE WEB: IDENTITY (phone) ───────────────────────────────────────
+  let USER_PHONE = localStorage.getItem("mis_phone") || "";
+  function refreshIdBadge() {
+    const badge = document.getElementById("idBadge");
+    if (!badge) return;
+    badge.textContent = USER_PHONE ? ("👤 +" + USER_PHONE) : "👤 Guest";
+    badge.title = USER_PHONE ? "Click to change identity" : "Click to login with your registered phone";
+  }
+  function showIdModal() {
+    const modal = document.getElementById("idModal");
+    document.getElementById("idPhoneInput").value = USER_PHONE || "";
+    document.getElementById("idError").textContent = "";
+    // Toggle logout row based on login state
+    const logoutRow = document.getElementById("idLogoutRow");
+    if (logoutRow) {
+      if (USER_PHONE) {
+        logoutRow.style.display = "block";
+        const lp = document.getElementById("idLogoutPhone");
+        if (lp) lp.textContent = "+" + USER_PHONE;
+      } else {
+        logoutRow.style.display = "none";
+      }
+    }
+    modal.classList.add("show");
+    setTimeout(() => document.getElementById("idPhoneInput").focus(), 50);
+  }
+  function hideIdModal(skip) {
+    document.getElementById("idModal").classList.remove("show");
+    if (skip) {
+      // Mark as deliberately skipped so we don't re-prompt every load
+      localStorage.setItem("mis_id_skipped", "1");
+    }
+  }
+  function logoutIdentity() {
+    if (!confirm("Log out? Your in-memory chat history will be cleared.")) return;
+    // Clear identity
+    USER_PHONE = "";
+    localStorage.removeItem("mis_phone");
+    localStorage.removeItem("mis_id_skipped");
+    // Clear session (so DB chat_history won't load for the same SESSION_ID)
+    try { sessionStorage.removeItem("mis_session_id"); } catch(_) {}
+    // Generate fresh session for next login
+    SESSION_ID = "s_" + Math.random().toString(36).slice(2);
+    sessionStorage.setItem("mis_session_id", SESSION_ID);
+    // Clear in-memory state
+    history = [];
+    document.getElementById("chat").innerHTML = "";
+    refreshIdBadge();
+    // Reopen modal so user can log in as someone else
+    hideIdModal();
+    setTimeout(() => showIdModal(), 100);
+  }
+  function goRegisterFromModal() {
+    // Close modal + switch to "Connect Sheet" tab so new user can register
+    hideIdModal(true);
+    try { switchTab('connect'); } catch(_) {}
+    // Smooth-scroll the connect URL input into view
+    setTimeout(() => {
+      const inp = document.getElementById('connectSheetUrl');
+      if (inp) { inp.focus(); inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    }, 200);
+  }
+  function saveIdentity() {
+    const raw = (document.getElementById("idPhoneInput").value || "").replace(/[^0-9]/g, "");
+    const errEl = document.getElementById("idError");
+    if (raw.length < 10 || raw.length > 15) {
+      errEl.textContent = "Please enter a valid number (with country code, e.g. 918750285420)";
+      return;
+    }
+    USER_PHONE = raw;
+    localStorage.setItem("mis_phone", raw);
+    localStorage.removeItem("mis_id_skipped");
+    refreshIdBadge();
+    hideIdModal();
+    // Greet (cosmetic)
+    const chat = document.getElementById("chat");
+    if (chat && chat.children.length === 0) {
+      addMessage("assistant", "🙏 Welcome! You are logged in as +" + raw + ". Ask anything about your data — sales, ledger, charts, voice messages, all of it.", "text");
+    }
+  }
+  // Show modal on first visit (not seen + not skipped)
+  if (!USER_PHONE && !localStorage.getItem("mis_id_skipped")) {
+    setTimeout(showIdModal, 400);
+  }
+  refreshIdBadge();
+  document.addEventListener("DOMContentLoaded", () => {
+    const ip = document.getElementById("idPhoneInput");
+    if (ip) ip.addEventListener("keydown", e => { if (e.key === "Enter") saveIdentity(); });
+  });
+
+  // ── PHASE WEB: VOICE INPUT (MediaRecorder + /transcribe) ──────────────
+  let mediaRecorder = null;
+  let audioChunks = [];
+  let isRecording = false;
+
+  async function toggleMic() {
+    const btn = document.getElementById("micBtn");
+    const hint = document.getElementById("recHint");
+    if (isRecording) {
+      // Stop
+      try { mediaRecorder.stop(); } catch (e) {}
+      isRecording = false;
+      btn.classList.remove("recording");
+      if (hint) hint.classList.remove("show");
+      return;
+    }
+    if (!navigator.mediaDevices || !window.MediaRecorder) {
+      alert("Voice not supported in this browser. Use Chrome/Safari/Edge latest.");
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Pick the best mime supported by this browser
+      const mimes = ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
+      const mime = mimes.find(m => MediaRecorder.isTypeSupported(m)) || "";
+      mediaRecorder = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+      audioChunks = [];
+
+      mediaRecorder.ondataavailable = e => { if (e.data.size > 0) audioChunks.push(e.data); };
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks (releases mic)
+        stream.getTracks().forEach(t => t.stop());
+        if (!audioChunks.length) return;
+        const blob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+        const reader = new FileReader();
+        reader.onloadend = async () => {
+          const dataUrl = reader.result;
+          // Strip "data:audio/webm;base64,"
+          const base64 = (dataUrl || "").split(",")[1];
+          if (!base64) { alert("Recording failed."); return; }
+          // Show transient typing while transcribing
+          showTyping();
+          try {
+            const r = await fetch("/transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ audio_base64: base64, mime: blob.type })
+            });
+            const d = await r.json();
+            removeTyping();
+            if (!r.ok || !d.text) {
+              addMessage("assistant", "⚠️ " + (d.error || "Transcription failed. Please try again."), "text");
+              return;
+            }
+            // Place transcript in input + auto-send
+            document.getElementById("msgInput").value = d.text;
+            sendMessage();
+          } catch (e) {
+            removeTyping();
+            addMessage("assistant", "⚠️ Voice upload failed: " + e.message, "text");
+          }
+        };
+        reader.readAsDataURL(blob);
+      };
+
+      // Auto-stop after 60s safety cap
+      const stopTimer = setTimeout(() => { if (isRecording) toggleMic(); }, 60_000);
+      mediaRecorder.addEventListener("stop", () => clearTimeout(stopTimer));
+
+      mediaRecorder.start();
+      isRecording = true;
+      btn.classList.add("recording");
+      if (hint) hint.classList.add("show");
+    } catch (e) {
+      alert("Mic access denied: " + e.message);
+    }
+  }
 
   function fixHTML(html) {
     html = html.replace(/\bundefined\b/gi, "-").replace(/\bnull\b/gi, "-").replace(/\bEMPTY\b/g, "-");
@@ -585,7 +1028,7 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
     bubble.appendChild(bar);
   }
 
-  function addMessage(role, content, type = "text", options = [], chartMeta = null) {
+  function addMessage(role, content, type = "text", options = [], chartMeta = null, attachments = []) {
     const chat = document.getElementById("chat");
     const wrap = document.createElement("div");
     wrap.className = "bubble-wrap " + (role === "user" ? "user" : "bot");
@@ -603,6 +1046,7 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
         makeLinksClickable(bubble);
         tryBuildChart(bubble, chartMeta);
         addDownloadButtons(bubble);
+        renderAttachments(bubble, attachments);
       }, 200);
     } else if (type === "suggestions") {
       bubble.className = "bubble bot";
@@ -640,9 +1084,16 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
           makeLinksClickable(bubble);
           tryBuildChart(bubble, chartMeta);
           addDownloadButtons(bubble);
+          renderAttachments(bubble, attachments);
         }, 200);
       } else {
-        bubble.textContent = content;
+        // Convert WhatsApp *bold* to <b>, preserve newlines
+        const safe = (content || "")
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+          .replace(/\*([^*\n]+)\*/g, "<b>$1</b>")
+          .replace(/\n/g, "<br>");
+        bubble.innerHTML = safe || (attachments.length ? "" : "&nbsp;");
+        if (attachments.length) renderAttachments(bubble, attachments);
       }
     }
 
@@ -660,6 +1111,87 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
     wrap.appendChild(col);
     chat.appendChild(wrap);
     chat.scrollTop = chat.scrollHeight;
+  }
+
+  // ── PHASE WEB: render attachments array on a bubble ───────────────────
+  // Attachment shapes (server.js mediaToWebAttachments):
+  //   { type:'image',     name, mime, base64, caption? }   → inline <img>
+  //   { type:'image_url', url, caption? }                  → inline <img> from remote URL
+  //   { type:'document',  name, mime, base64, caption? }   → download button
+
+  // Click-to-zoom lightbox (used by chart/image attachments)
+  function openImgLightbox(src) {
+    const lb = document.getElementById("imgLightbox");
+    const img = document.getElementById("imgLightboxImg");
+    if (!lb || !img) return;
+    img.src = src;
+    lb.classList.add("show");
+    document.body.style.overflow = "hidden";
+  }
+  function closeImgLightbox(e) {
+    if (e) e.stopPropagation();
+    const lb = document.getElementById("imgLightbox");
+    if (lb) lb.classList.remove("show");
+    document.body.style.overflow = "";
+  }
+  // Esc key closes the lightbox
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeImgLightbox();
+  });
+
+  function renderAttachments(bubble, attachments) {
+    if (!attachments || !attachments.length) return;
+    const wrap = document.createElement("div");
+    wrap.className = "attachments";
+    for (const a of attachments) {
+      if (a.type === "image_url" && a.url) {
+        const img = document.createElement("img");
+        img.className = "att-img";
+        img.src = a.url;
+        img.alt = a.caption || "";
+        img.title = "Click to zoom";
+        img.onclick = () => openImgLightbox(a.url);
+        wrap.appendChild(img);
+        if (a.caption) {
+          const cap = document.createElement("div");
+          cap.className = "att-caption";
+          cap.textContent = a.caption;
+          wrap.appendChild(cap);
+        }
+      } else if (a.type === "image" && a.base64) {
+        const img = document.createElement("img");
+        img.className = "att-img";
+        img.src = "data:" + (a.mime || "image/png") + ";base64," + a.base64;
+        img.alt = a.name || "";
+        img.title = a.name ? a.name + " — click to zoom" : "Click to zoom";
+        img.onclick = () => openImgLightbox(img.src);
+        wrap.appendChild(img);
+      } else if (a.type === "document" && a.base64) {
+        const url = "data:" + (a.mime || "application/octet-stream") + ";base64," + a.base64;
+        const link = document.createElement("a");
+        link.className = "att-doc";
+        link.href = url;
+        link.download = a.name || "download";
+        const icon = document.createElement("span");
+        icon.className = "att-icon";
+        icon.textContent = (a.mime || "").includes("pdf") ? "📄"
+                          : (a.mime || "").includes("csv") ? "📊"
+                          : (a.mime || "").includes("sheet") ? "📊"
+                          : "📎";
+        const name = document.createElement("span");
+        name.className = "att-name";
+        name.textContent = a.name || "Download";
+        const meta = document.createElement("span");
+        meta.className = "att-meta";
+        const kb = Math.round((a.base64.length * 0.75) / 1024);
+        meta.textContent = kb < 1024 ? kb + " KB" : (kb / 1024).toFixed(1) + " MB";
+        link.appendChild(icon);
+        link.appendChild(name);
+        link.appendChild(meta);
+        wrap.appendChild(link);
+      }
+    }
+    bubble.appendChild(wrap);
   }
 
   function showTyping() {
@@ -684,16 +1216,24 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
 
     try {
       const body = { message: text, history, session_id: SESSION_ID };
+      // PHASE WEB: send phone identity for tenant routing
+      if (USER_PHONE) body.phone = USER_PHONE;
       if (pendingExactName) { body.exactName = pendingExactName; pendingExactName = null; }
-      const res = await fetch("/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const headers = { "Content-Type": "application/json" };
+      try {
+        const t = localStorage.getItem('mis_chat_token');
+        if (t) headers['X-Chat-Token'] = t;
+      } catch (_) { /* localStorage unavailable */ }
+      const res = await fetch("/chat", { method: "POST", headers, body: JSON.stringify(body) });
       const data = await res.json();
       removeTyping();
       const type = data.type || "text";
       const reply = data.reply || data.message || "";
       const options = data.options || [];
       const chartMeta = data.chartMeta || null;
-      addMessage("assistant", reply, type, options, chartMeta);
-      if (type !== "suggestions") history.push({ role: "assistant", content: reply });
+      const attachments = data.attachments || [];
+      addMessage("assistant", reply, type, options, chartMeta, attachments);
+      if (type !== "suggestions" && reply) history.push({ role: "assistant", content: reply });
     } catch(e) {
       removeTyping();
       addMessage("assistant", "Server error. Please try again.", "text");
@@ -715,8 +1255,22 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
       const res = await fetch("/history/" + SESSION_ID);
       const data = await res.json();
       data.forEach(m => {
-        const isHTML = m.content && /<table|<div|<tr|<td|<th/i.test(m.content);
-        addMessage(m.role, m.content, isHTML && m.role === "assistant" ? "html" : "text");
+        // Persisted chart attachments are embedded in content as [ATT:{json}] markers.
+        // Extract them so we can render the image inline on reload.
+        let cleaned = m.content || "";
+        const attachments = [];
+        if (cleaned && cleaned.indexOf("[ATT:") !== -1) {
+          cleaned = cleaned.replace(/\[ATT:({[\s\S]*?})\]/g, (_, json) => {
+            try {
+              const att = JSON.parse(json);
+              if (att && att.type && (att.url || att.base64)) attachments.push(att);
+            } catch (e) { /* malformed marker — skip */ }
+            return "";
+          }).trim();
+        }
+        const isHTML = cleaned && /<table|<div|<tr|<td|<th/i.test(cleaned);
+        const type = isHTML && m.role === "assistant" ? "html" : "text";
+        addMessage(m.role, cleaned, type, [], null, attachments);
         history.push({ role: m.role, content: m.content });
       });
     } catch(e) {}
@@ -727,11 +1281,12 @@ Example: 'Tanvi ke kitne pending tasks hain?' or 'Show me all products'" rows="2
 
   function switchTab(tab) {
     document.querySelectorAll(".tab-btn").forEach((b,i) => {
-      b.classList.toggle("active", ["chat","doc","sync"][i] === tab);
+      b.classList.toggle("active", ["chat","doc","sync","connect"][i] === tab);
     });
     document.getElementById("chatPage").classList.toggle("active", tab === "chat");
     document.getElementById("docPage").classList.toggle("active", tab === "doc");
     document.getElementById("syncPage").classList.toggle("active", tab === "sync");
+    document.getElementById("connectPage").classList.toggle("active", tab === "connect");
     document.getElementById("syncBar").style.display = tab === "chat" ? "flex" : "none";
 
     if (tab === "doc") loadDocHistory();

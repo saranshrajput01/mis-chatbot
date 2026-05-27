@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Create your account · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .auth-theme-toggle {
+      position: fixed;
+      top: 18px; right: 18px;
+      width: 40px; height: 40px;
+      border-radius: 999px;
+      border: 1px solid var(--hairline);
+      background: var(--surface-glass);
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      display: grid; place-items: center;
+      cursor: pointer;
+      color: var(--color-text-secondary);
+      z-index: 100;
+      transition: transform var(--motion-fast) var(--ease-pop),
+                  border-color var(--motion-fast) var(--ease-apple);
+    }
+    .auth-theme-toggle:hover {
+      transform: scale(1.05);
+      border-color: var(--color-primary-400);
+      color: var(--color-primary-400);
+    }
+    .auth-theme-toggle svg { width: 18px; height: 18px; }
+    .auth-theme-toggle .moon-ic { display: none; }
+    .auth-theme-toggle .sun-ic  { display: block; }
+    [data-theme="dark"] .auth-theme-toggle .moon-ic { display: block; }
+    [data-theme="dark"] .auth-theme-toggle .sun-ic  { display: none; }
+
+    .step-pane { display: none; animation: lift-in 360ms var(--ease-apple) both; }
+    .step-pane.active { display: block; }
+    .schema-preview {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      padding: 12px;
+      background: var(--color-gray-50);
+      font-size: 13px;
+    }
+    [data-theme="dark"] .schema-preview { background: rgba(255,255,255,0.04); }
+    .schema-table {
+      padding: 8px 10px;
+      border-radius: 8px;
+      margin-bottom: 6px;
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+    }
+    .schema-table-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+    .schema-table-meta { color: var(--color-text-tertiary); font-size: 11.5px; }
+    .choice-row { display: flex; flex-direction: column; gap: 10px; margin-top: 14px; }
+    .choice-card {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 14px; border: 1px solid var(--hairline-strong);
+      border-radius: 12px; cursor: pointer;
+      transition: border-color var(--motion-fast) var(--ease-apple),
+                  box-shadow var(--motion-fast) var(--ease-apple);
+    }
+    .choice-card:hover { border-color: var(--color-primary-400); box-shadow: var(--glow-brand); }
+    .choice-card .ic {
+      width: 36px; height: 36px; border-radius: 10px;
+      background: rgba(0,164,210,0.10);
+      color: var(--color-primary-400);
+      display: grid; place-items: center; flex-shrink: 0;
+    }
+    .choice-card .ic svg { width: 18px; height: 18px; stroke-width: 1.75; }
+    .choice-card .meta { flex: 1; }
+    .choice-card .meta .t { font-weight: 600; font-size: 14px; }
+    .choice-card .meta .d { color: var(--color-text-secondary); font-size: 12.5px; margin-top: 2px; }
+    .success-icon {
+      width: 56px; height: 56px;
+      margin: 0 auto 16px;
+      border-radius: 50%;
+      background: rgba(16,185,129,0.12);
+      color: var(--color-success);
+      display: grid; place-items: center;
+      animation: pop-in 480ms var(--ease-pop) both;
+    }
+    .success-icon svg { width: 26px; height: 26px; stroke-width: 2; }
+    @keyframes pop-in {
+      0%   { transform: scale(0.4); opacity: 0; }
+      70%  { transform: scale(1.08); opacity: 1; }
+      100% { transform: scale(1); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<button class="auth-theme-toggle" id="themeBtn" type="button" aria-label="Toggle theme">
+  <i class="sun-ic" data-lucide="sun"></i>
+  <i class="moon-ic" data-lucide="moon"></i>
+</button>
+
+<main class="auth-stage">
+  <section class="auth-card" role="dialog" aria-labelledby="reg-title" style="width:min(100%, 460px);">
+    <div class="brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="t-meta" style="font-size:11px; margin-top:1px;">Make It Simple</div>
+      </div>
+    </div>
+
+    <div class="stepper" id="stepper">
+      <div class="step-pill active"></div>
+      <div class="step-pill"></div>
+      <div class="step-pill"></div>
+    </div>
+
+    <!-- ─── STEP 1: Name & business ─────────────────────────────────── -->
+    <div class="step-pane active" data-step="1">
+      <h1 id="reg-title">Let's get you set up</h1>
+      <p class="sub">Tell us about your business — takes less than a minute.</p>
+
+      <div class="form-row">
+        <label class="field-label" for="biz-name">Business name</label>
+        <input id="biz-name" class="input" type="text" placeholder="e.g., Insulators &amp; Electricals" maxlength="100" autofocus>
+      </div>
+
+      <div class="form-row">
+        <label class="field-label" for="biz-desc">What does your business do? <span class="text-tertiary" style="font-weight:400;">(optional)</span></label>
+        <input id="biz-desc" class="input" type="text" placeholder="e.g., Industrial electrical components" maxlength="200">
+      </div>
+
+      <div id="step1-status" class="status"></div>
+
+      <div class="actions">
+        <button type="button" class="btn btn-primary" data-action="next" data-target="2">
+          <span>Continue</span>
+          <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── STEP 2: Phone & email ───────────────────────────────────── -->
+    <div class="step-pane" data-step="2">
+      <h1>Your contact details</h1>
+      <p class="sub">We'll use your WhatsApp number to log you in and send important updates.</p>
+
+      <div class="form-row">
+        <label class="field-label" for="reg-phone">WhatsApp number</label>
+        <div class="input-group">
+          <span class="prefix">+91</span>
+          <input id="reg-phone" type="tel" inputmode="numeric" placeholder="98765 43210" maxlength="15">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <label class="field-label" for="reg-email">Email <span class="text-tertiary" style="font-weight:400;">(optional but recommended)</span></label>
+        <input id="reg-email" class="input" type="email" placeholder="you@business.com" maxlength="200">
+      </div>
+
+      <div id="step2-status" class="status"></div>
+
+      <div class="actions" style="flex-direction:row;">
+        <button type="button" class="btn btn-ghost" data-action="next" data-target="1" style="flex:1;">
+          <i data-lucide="arrow-left" style="width:18px;height:18px;"></i> <span>Back</span>
+        </button>
+        <button type="button" class="btn btn-primary" data-action="next" data-target="3" style="flex:2;">
+          <span>Continue</span> <i data-lucide="arrow-right" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── STEP 3: Sheet URL → schema detect → submit ──────────────── -->
+    <div class="step-pane" data-step="3">
+      <h1>Connect your data</h1>
+      <p class="sub">Paste your Google Sheet URL. We'll auto-detect tabs and columns.</p>
+
+      <div class="form-row">
+        <label class="field-label" for="sheet-url">Google Sheet URL</label>
+        <input id="sheet-url" class="input" type="url" placeholder="https://docs.google.com/spreadsheets/d/..." maxlength="500">
+        <div class="t-meta" style="margin-top:6px; font-size:12px;">
+          Make sure the sheet is shared as <strong>"Anyone with the link can view"</strong>.
+        </div>
+      </div>
+
+      <div id="schema-output" style="margin-top:12px; display:none;">
+        <div class="t-caption" style="margin-bottom:6px;">Detected tabs</div>
+        <div class="schema-preview" id="schema-list"></div>
+      </div>
+
+      <div id="step3-status" class="status"></div>
+
+      <div class="actions" style="flex-direction:row;">
+        <button type="button" class="btn btn-ghost" data-action="next" data-target="2" style="flex:1;">
+          <i data-lucide="arrow-left" style="width:18px;height:18px;"></i> <span>Back</span>
+        </button>
+        <button type="button" class="btn btn-primary" id="finishBtn" data-action="submit" style="flex:2;">
+          <span class="btn-label">Create account</span>
+          <i data-lucide="check" style="width:18px;height:18px;"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── CHOICE: existing user picks merge vs new ────────────────── -->
+    <div class="step-pane" data-step="choice">
+      <h1>Welcome back</h1>
+      <p class="sub" id="choice-msg">You already own a database. What would you like to do?</p>
+      <div class="choice-row" id="choice-list"></div>
+      <div class="actions" style="margin-top:14px;">
+        <button type="button" class="btn btn-ghost" data-action="next" data-target="1">
+          <i data-lucide="arrow-left" style="width:18px;height:18px;"></i> <span>Back to start</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- ─── SUCCESS ─────────────────────────────────────────────────── -->
+    <div class="step-pane" data-step="done">
+      <div class="success-icon"><i data-lucide="check"></i></div>
+      <h1 style="text-align:center;">You're all set!</h1>
+      <p class="sub" id="done-msg" style="text-align:center;">Your data is syncing in the background. Redirecting to your dashboard…</p>
+    </div>
+
+    <p class="footer-link" id="bottom-link">
+      Already have an account? <a href="/login">Sign in</a>
+    </p>
+  </section>
+</main>
+
+<script>
+  (function () {
+    'use strict';
+
+    let currentStep = 1;
+    const state = { name:'', desc:'', phone:'', email:'', sheetUrl:'', schema:null };
+
+    function $(s){ return document.querySelector(s); }
+    function showStatus(stepNum, kind, msg) {
+      const el = document.getElementById('step' + stepNum + '-status');
+      if (!el) return;
+      el.className = 'status show ' + kind;
+      el.textContent = msg;
+    }
+    function clearStatus(stepNum){
+      const el = document.getElementById('step' + stepNum + '-status');
+      if (el){ el.className='status'; el.textContent=''; }
+    }
+
+    function setStepper(n){
+      const pills = document.querySelectorAll('#stepper .step-pill');
+      pills.forEach((p,i) => {
+        p.classList.toggle('done',   (i+1) < n);
+        p.classList.toggle('active', (i+1) === n);
+      });
+    }
+
+    function showPane(name){
+      document.querySelectorAll('.step-pane').forEach(p => {
+        p.classList.toggle('active', p.dataset.step === String(name));
+      });
+      if (typeof name === 'number') {
+        currentStep = name;
+        setStepper(name);
+      }
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    function goStep(n){
+      // n may be the string 'choice' / 'done' or a number 1/2/3
+      clearStatus(currentStep);
+      if (n === 2) {
+        const name = ($('#biz-name').value || '').trim();
+        if (name.length < 2) {
+          showStatus(1, 'error', 'Please enter your business name (at least 2 characters).');
+          return;
+        }
+        state.name = name;
+        state.desc = ($('#biz-desc').value || '').trim();
+      }
+      if (n === 3) {
+        const raw = ($('#reg-phone').value || '').replace(/\D/g, '');
+        if (raw.length < 10 || raw.length > 15) {
+          showStatus(2, 'error', 'Please enter a valid phone number.');
+          return;
+        }
+        let phone = raw;
+        if (phone.length > 10 && phone.startsWith('91')) phone = phone.slice(2);
+        if (phone.length === 11 && phone.startsWith('0')) phone = phone.slice(1);
+        state.phone = '91' + phone;
+        const email = ($('#reg-email').value || '').trim();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          showStatus(2, 'error', 'Please enter a valid email or leave it blank.');
+          return;
+        }
+        state.email = email;
+      }
+      showPane(n);
+    }
+
+    let detectTimer = null;
+    function onSheetInput(e){
+      if (!e.target || e.target.id !== 'sheet-url') return;
+      clearStatus(3);
+      const url = (e.target.value || '').trim();
+      const out = $('#schema-output');
+      if (out) out.style.display = 'none';
+      if (!/^https:\/\/docs\.google\.com\/spreadsheets\//.test(url)) return;
+      clearTimeout(detectTimer);
+      detectTimer = setTimeout(() => detectSchema(url), 600);
+    }
+
+    async function detectSchema(url){
+      showStatus(3, 'info', 'Detecting tabs and columns…');
+      try {
+        const res = await fetch('/api/tenant/detect-schema', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sheet_url: url })
+        });
+        const data = await res.json();
+        if (data.error) { showStatus(3, 'error', data.error); return; }
+        state.schema = data;
+        state.sheetUrl = url;
+        renderSchema(data);
+        clearStatus(3);
+      } catch (e) {
+        showStatus(3, 'error', 'Could not access the sheet. Make sure it is shared publicly.');
+      }
+    }
+
+    function renderSchema(schema){
+      const out = $('#schema-list');
+      out.innerHTML = '';
+      const tables = (schema && schema.tables) || [];
+      if (!tables.length) {
+        out.innerHTML = '<div class="t-meta">No tabs detected.</div>';
+      } else {
+        tables.forEach(t => {
+          const cols = (t.columns || []).slice(0, 6).map(c => c.name).join(', ');
+          const more = (t.columns || []).length > 6 ? ' +' + (t.columns.length - 6) + ' more' : '';
+          const div = document.createElement('div');
+          div.className = 'schema-table';
+          div.innerHTML =
+            '<div class="schema-table-name">' + t.name + '</div>' +
+            '<div class="schema-table-meta">' + (t.row_count || 0).toLocaleString('en-IN') +
+            ' rows · ' + cols + more + '</div>';
+          out.appendChild(div);
+        });
+      }
+      $('#schema-output').style.display = 'block';
+    }
+
+    function setFinishLoading(loading){
+      const btn = $('#finishBtn');
+      btn.disabled = loading;
+      btn.style.opacity = loading ? '0.7' : '1';
+      btn.querySelector('.btn-label').textContent = loading ? 'Creating…' : 'Create account';
+    }
+
+    async function submitSignup(extraOpts){
+      extraOpts = extraOpts || {};
+      clearStatus(3);
+      const url = ($('#sheet-url').value || '').trim();
+      if (url && !/^https:\/\/docs\.google\.com\/spreadsheets\//.test(url)) {
+        showStatus(3, 'error', 'Please enter a valid Google Sheets URL or leave it blank.');
+        return;
+      }
+      setFinishLoading(true);
+      try {
+        const payload = {
+          name: state.name,
+          phone: state.phone,
+          email: state.email || undefined,
+          business_description: state.desc || undefined,
+          sheet_url: url || undefined,
+          schema: state.schema || undefined
+        };
+        Object.assign(payload, extraOpts);
+
+        const res = await fetch('/api/tenant/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+
+        if (data.requires_choice) {
+          renderChoice(data);
+          showPane('choice');
+          setFinishLoading(false);
+          return;
+        }
+        if (!res.ok || data.error) {
+          showStatus(3, 'error', data.error || 'Signup failed. Please try again.');
+          setFinishLoading(false);
+          return;
+        }
+        // success
+        window.MIS.auth.setPhone(state.phone);
+        window.MIS.auth.setTenantName(data.name || state.name);
+        // Sprint 1.4: issue chat token (best-effort)
+        try { await window.MIS.auth.issueChatToken(state.phone); } catch (_) {}
+        $('#done-msg').textContent = data.message || 'Your data is syncing. Redirecting to your dashboard…';
+        showPane('done');
+        const blink = $('#bottom-link'); if (blink) blink.style.display = 'none';
+        setTimeout(() => window.location.replace('/dashboard'), 1800);
+      } catch (e) {
+        showStatus(3, 'error', 'Network issue. Please try again.');
+        setFinishLoading(false);
+      }
+    }
+
+    function renderChoice(data){
+      $('#choice-msg').textContent = data.message || 'You already own a database. What would you like to do?';
+      const list = $('#choice-list');
+      list.innerHTML = '';
+      (data.existing || []).forEach(t => {
+        const card = document.createElement('div');
+        card.className = 'choice-card';
+        card.innerHTML =
+          '<div class="ic"><i data-lucide="layers"></i></div>' +
+          '<div class="meta">' +
+            '<div class="t">Add new tabs to "' + t.name + '"</div>' +
+            '<div class="d">Merge this sheet into your existing database. Tabs will combine.</div>' +
+          '</div>' +
+          '<i data-lucide="chevron-right" style="width:18px;height:18px;align-self:center;color:var(--color-text-tertiary);"></i>';
+        card.addEventListener('click', () => submitSignup({ add_to_existing: true, tenant_id: t.id }));
+        list.appendChild(card);
+      });
+      const sepCard = document.createElement('div');
+      sepCard.className = 'choice-card';
+      sepCard.innerHTML =
+        '<div class="ic" style="background:rgba(245,158,11,0.10);color:#D97706;"><i data-lucide="plus-circle"></i></div>' +
+        '<div class="meta">' +
+          '<div class="t">Create a new separate database</div>' +
+          '<div class="d">Keep this sheet completely independent from any existing data.</div>' +
+        '</div>' +
+        '<i data-lucide="chevron-right" style="width:18px;height:18px;align-self:center;color:var(--color-text-tertiary);"></i>';
+      sepCard.addEventListener('click', () => submitSignup({ mode: 'new_separate' }));
+      list.appendChild(sepCard);
+      if (window.lucide) window.lucide.createIcons();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      // If already logged in, send to dashboard
+      if (window.MIS && window.MIS.auth && window.MIS.auth.getPhone()) {
+        window.location.replace('/dashboard');
+        return;
+      }
+
+      // Wire up all buttons by data-action attribute (event delegation)
+      document.body.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-action]');
+        if (!btn) return;
+        const act = btn.dataset.action;
+        if (act === 'next') {
+          const target = btn.dataset.target;
+          const n = /^\d+$/.test(target) ? Number(target) : target;
+          goStep(n);
+        } else if (act === 'submit') {
+          submitSignup();
+        }
+      });
+
+      // Sheet URL input listener
+      const sheetEl = document.getElementById('sheet-url');
+      if (sheetEl) sheetEl.addEventListener('input', onSheetInput);
+
+      // Theme toggle
+      const themeBtn = document.getElementById('themeBtn');
+      themeBtn.addEventListener('click', () => {
+        window.MIS.theme.toggle();
+        if (window.lucide) window.lucide.createIcons();
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+    });
+  })();
+</script>
+</body>
+</html>

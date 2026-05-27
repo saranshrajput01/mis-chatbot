@@ -1,0 +1,2124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Dashboard · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <style>
+    /* Page-local refinements */
+    .table-widget {
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      padding: 18px 0 0;
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
+                  transform 380ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .table-widget:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-2px); }
+    .table-widget .head {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 22px 14px;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .table-widget .row {
+      display: grid;
+      grid-template-columns: 24px 1fr auto auto;
+      gap: 12px; align-items: center;
+      padding: 12px 22px;
+      border-bottom: 1px solid var(--hairline);
+      font-size: 13.5px;
+      transition: background 180ms ease;
+    }
+    .table-widget .row:hover { background: var(--accent-cyan-soft); }
+    .table-widget .row:last-child { border-bottom: none; }
+    .table-widget .row .rank {
+      width: 22px; height: 22px;
+      border-radius: 6px;
+      display: grid; place-items: center;
+      font-size: 11px; font-weight: 700;
+      color: white;
+    }
+    .table-widget .row[data-rank="1"] .rank { background: linear-gradient(135deg, #F59E0B, #F97316); }
+    .table-widget .row[data-rank="2"] .rank { background: linear-gradient(135deg, #94A3B8, #64748B); }
+    .table-widget .row[data-rank="3"] .rank { background: linear-gradient(135deg, #B45309, #92400E); }
+    .table-widget .row[data-rank="4"] .rank,
+    .table-widget .row[data-rank="5"] .rank,
+    .table-widget .row[data-rank="6"] .rank,
+    .table-widget .row[data-rank="7"] .rank,
+    .table-widget .row[data-rank="8"] .rank { background: var(--color-gray-200); color: var(--color-text-secondary); }
+    [data-theme="dark"] .table-widget .row[data-rank="4"] .rank,
+    [data-theme="dark"] .table-widget .row[data-rank="5"] .rank,
+    [data-theme="dark"] .table-widget .row[data-rank="6"] .rank,
+    [data-theme="dark"] .table-widget .row[data-rank="7"] .rank,
+    [data-theme="dark"] .table-widget .row[data-rank="8"] .rank { background: rgba(255,255,255,0.08); color: var(--color-text-secondary); }
+    .table-widget .row .name { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .table-widget .row .meta { color: var(--color-text-tertiary); font-size: 12.5px; white-space: nowrap; }
+    .table-widget .row .val  { font-family: var(--font-mono); font-weight: 600; font-size: 13px; white-space: nowrap; }
+
+    .chart-card {
+      background: linear-gradient(145deg, rgba(255,255,255,0.92) 0%, rgba(240,248,255,0.85) 100%);
+      backdrop-filter: blur(20px) saturate(140%);
+      -webkit-backdrop-filter: blur(20px) saturate(140%);
+      border: 1px solid rgba(0,164,210,0.15);
+      border-radius: 22px;
+      padding: 24px 24px 20px;
+      box-shadow:
+        0 8px 32px rgba(0,164,210,0.08),
+        0 2px 8px rgba(0,0,0,0.04),
+        inset 0 1px 0 rgba(255,255,255,0.8);
+      display: flex; flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      transition: all 420ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    [data-theme="dark"] .chart-card {
+      background: linear-gradient(145deg, rgba(28,28,30,0.88) 0%, rgba(20,20,35,0.92) 100%);
+      border-color: rgba(0,164,210,0.2);
+      box-shadow:
+        0 8px 32px rgba(0,0,0,0.3),
+        0 0 1px rgba(0,164,210,0.3),
+        inset 0 1px 0 rgba(255,255,255,0.05);
+    }
+    /* Animated neon border glow */
+    .chart-card::before {
+      content: "";
+      position: absolute;
+      inset: -1px;
+      border-radius: 23px;
+      padding: 1.5px;
+      background: linear-gradient(135deg, rgba(0,164,210,0.4), rgba(139,92,246,0.3) 50%, rgba(236,72,153,0.3));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      opacity: 0;
+      transition: opacity 480ms ease;
+      pointer-events: none;
+      z-index: 0;
+    }
+    /* Aurora ambient glow */
+    .chart-card::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: 22px;
+      background:
+        radial-gradient(ellipse 60% 50% at 90% -5%, rgba(0,164,210,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at -5% 105%, rgba(139,92,246,0.10) 0%, transparent 60%);
+      opacity: 0.6;
+      pointer-events: none;
+      z-index: 0;
+    }
+    [data-theme="dark"] .chart-card::after {
+      background:
+        radial-gradient(ellipse 60% 50% at 90% -5%, rgba(0,164,210,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at -5% 105%, rgba(139,92,246,0.15) 0%, transparent 60%);
+      opacity: 1;
+    }
+    .chart-card > * { position: relative; z-index: 1; }
+    .chart-card:hover {
+      transform: translateY(-4px) scale(1.005);
+      border-color: rgba(0,164,210,0.35);
+      box-shadow:
+        0 20px 50px rgba(0,164,210,0.15),
+        0 0 0 1px rgba(0,164,210,0.2) inset,
+        0 0 40px rgba(0,164,210,0.06);
+    }
+    [data-theme="dark"] .chart-card:hover {
+      box-shadow:
+        0 20px 50px rgba(0,164,210,0.2),
+        0 0 0 1px rgba(0,164,210,0.3) inset,
+        0 0 60px rgba(0,164,210,0.08);
+    }
+    .chart-card:hover::before { opacity: 1; }
+    .chart-card .chart-header {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      margin-bottom: 16px;
+    }
+    .chart-card .chart-header .t-h3 {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(135deg, var(--color-text-primary) 60%, var(--accent-cyan));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .chart-card .chart-header .t-meta {
+      font-size: 11.5px;
+      color: var(--color-text-tertiary);
+      margin-top: 2px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      font-weight: 500;
+    }
+    .chart-card .chart-icon {
+      width: 36px; height: 36px;
+      border-radius: 12px;
+      display: grid; place-items: center;
+      background: linear-gradient(135deg, rgba(0,164,210,0.15), rgba(139,92,246,0.12));
+      color: var(--accent-cyan);
+      box-shadow:
+        0 0 0 1px rgba(0,164,210,0.2),
+        0 4px 14px rgba(0,164,210,0.15),
+        0 0 20px rgba(0,164,210,0.08);
+      transition: all 380ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    [data-theme="dark"] .chart-card .chart-icon {
+      background: linear-gradient(135deg, rgba(0,164,210,0.2), rgba(139,92,246,0.18));
+      box-shadow:
+        0 0 0 1px rgba(0,164,210,0.3),
+        0 4px 14px rgba(0,164,210,0.2),
+        0 0 24px rgba(0,164,210,0.12);
+    }
+    .chart-card:hover .chart-icon {
+      transform: scale(1.12) rotate(-6deg);
+      box-shadow:
+        0 0 0 1px rgba(0,164,210,0.3),
+        0 6px 20px rgba(0,164,210,0.25),
+        0 0 30px rgba(0,164,210,0.15);
+    }
+    .chart-card .chart-icon svg { width: 17px; height: 17px; }
+    .chart-card .body {
+      flex: 1;
+      min-height: 260px;
+      position: relative;
+    }
+    .chart-card canvas { max-width: 100%; }
+
+    .filter-row {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 12px; flex-wrap: wrap;
+      margin-bottom: var(--gap-section);
+    }
+
+    .mobile-toggle { display: none; }
+    @media (max-width: 760px) {
+      .sidebar.open { display: flex; position: fixed; inset: 0; z-index: 100; }
+      .mobile-toggle { display: inline-flex !important; }
+    }
+
+    .empty-card {
+      grid-column: 1 / -1;
+      padding: 48px 24px;
+      text-align: center;
+      color: var(--color-text-secondary);
+      background: var(--surface-card);
+      border: 1px dashed var(--hairline-strong);
+      border-radius: 16px;
+    }
+    .empty-card .ic { font-size: 32px; margin-bottom: 8px; opacity: 0.5; }
+
+    .nav-item {
+      transition: background 200ms ease, color 200ms ease, transform 220ms cubic-bezier(0.22,1,0.36,1);
+    }
+    .nav-item:hover { transform: translateX(2px); }
+    .nav-item.active {
+      background: linear-gradient(135deg, var(--accent-cyan-soft), var(--accent-indigo-soft));
+      color: var(--accent-cyan);
+    }
+    [data-theme="dark"] .nav-item.active { color: var(--accent-cyan); }
+
+    .topbar-actions { gap: 8px; }
+    .btn-icon {
+      transition: background 220ms ease, transform 200ms ease, color 220ms ease;
+    }
+    .btn-icon:hover { transform: scale(1.06); }
+
+    /* ── Chat-app-style topbar greeting (matches /chat for consistency) ── */
+    .tenant-avatar {
+      width: 30px; height: 30px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-violet) 65%, var(--accent-fuchsia));
+      color: #fff;
+      display: grid; place-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      flex-shrink: 0;
+      box-shadow:
+        0 0 0 3px rgba(0,164,210,0.10),
+        0 4px 10px rgba(0,164,210,0.18);
+      position: relative;
+      transition: transform 320ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+    .tenant-avatar:hover { transform: scale(1.06) rotate(-2deg); }
+    [data-theme="dark"] .tenant-avatar {
+      box-shadow:
+        0 0 0 3px rgba(0,164,210,0.18),
+        0 4px 10px rgba(0,164,210,0.30);
+    }
+
+    .topbar .greeting { gap: 2px; }
+    .topbar .greeting .who {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      letter-spacing: -0.01em;
+      line-height: 1.2;
+    }
+    .topbar .greeting .who .status-dot {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 0 0 rgba(16,185,129,0.55);
+      animation: dotPulse 2.4s ease-out infinite;
+    }
+    @keyframes dotPulse {
+      0%   { box-shadow: 0 0 0 0 rgba(16,185,129,0.45); }
+      70%  { box-shadow: 0 0 0 6px rgba(16,185,129,0); }
+      100% { box-shadow: 0 0 0 0 rgba(16,185,129,0); }
+    }
+    .topbar .greeting .when {
+      font-size: 11px;
+      color: var(--color-text-tertiary);
+      font-weight: 500;
+      letter-spacing: 0.005em;
+      line-height: 1.2;
+      margin-top: 1px;
+    }
+
+    /* Phase 22 Sprint 3B — anomaly KPI indicators */
+    .kpi-anomaly {
+      box-shadow:
+        var(--shadow-card),
+        0 0 0 2px rgba(239, 68, 68, 0.45),
+        0 0 24px rgba(239, 68, 68, 0.18);
+      animation: anomalyPulse 2.4s ease-in-out infinite;
+    }
+    [data-theme="dark"] .kpi-anomaly {
+      box-shadow:
+        var(--shadow-card),
+        0 0 0 2px rgba(239, 68, 68, 0.55),
+        0 0 28px rgba(239, 68, 68, 0.28);
+    }
+    @keyframes anomalyPulse {
+      0%, 100% { box-shadow: var(--shadow-card), 0 0 0 2px rgba(239, 68, 68, 0.45), 0 0 24px rgba(239, 68, 68, 0.18); }
+      50%      { box-shadow: var(--shadow-card), 0 0 0 2px rgba(239, 68, 68, 0.6),  0 0 32px rgba(239, 68, 68, 0.3); }
+    }
+    .kpi-anomaly-badge {
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, rgb(239, 68, 68), rgb(220, 38, 38));
+      color: white;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 700;
+      box-shadow: 0 2px 6px rgba(239, 68, 68, 0.4);
+      cursor: help;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .kpi-anomaly { animation: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ────────── SIDEBAR ────────── -->
+  <aside class="sidebar glass" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="tag">Make It Simple</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item active" href="/dashboard">
+        <i data-lucide="layout-dashboard"></i> <span>Dashboard</span>
+      </a>
+      <a class="nav-item" href="/chat">
+        <i data-lucide="message-square-text"></i> <span>Chatbot</span>
+      </a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales">
+        <i data-lucide="trending-up"></i> <span>Sales</span>
+      </a>
+      <a class="nav-item" href="/outstanding">
+        <i data-lucide="hourglass"></i> <span>Outstanding</span>
+      </a>
+      <a class="nav-item" href="/stock">
+        <i data-lucide="package"></i> <span>Stock</span>
+      </a>
+      <a class="nav-item" href="/ledger">
+        <i data-lucide="book-open"></i> <span>Ledger</span>
+      </a>
+      <a class="nav-item" href="/calendar">
+        <i data-lucide="calendar"></i> <span>Calendar</span>
+      </a>
+      <a class="nav-item" href="/reports">
+        <i data-lucide="bar-chart-3"></i> <span>Reports</span>
+      </a>
+    </div>
+
+    <div class="sidebar-footer">
+      <a class="nav-item" href="/settings">
+        <i data-lucide="settings"></i> <span>Settings</span>
+      </a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;">
+          <i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode
+        </span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink">
+        <i data-lucide="log-out"></i> <span>Sign out</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- ────────── MAIN ────────── -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar glass">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-icon mobile-toggle" id="sidebarToggle" type="button">
+          <i data-lucide="menu"></i>
+        </button>
+        <div class="tenant-avatar" id="tenantAvatar" aria-hidden="true">M</div>
+        <div class="greeting">
+          <div class="who">
+            <span id="tenant-name">Loading…</span>
+            <span class="status-dot" title="Connected"></span>
+          </div>
+          <div class="when" id="today-date">—</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <div class="pill-toggle" id="rangeToggle" role="tablist">
+          <span class="slider" id="rangeSlider"></span>
+          <button class="active" data-range="today" type="button">Today</button>
+          <button data-range="week" type="button">Week</button>
+          <button data-range="month" type="button">Month</button>
+        </div>
+        <button class="btn-icon" title="Refresh" id="refreshBtn" type="button">
+          <i data-lucide="refresh-cw"></i>
+        </button>
+        <button class="btn-icon" title="Search (⌘K)" id="searchBtn" type="button">
+          <i data-lucide="search"></i>
+        </button>
+        <button class="btn-icon" title="Notifications" type="button" id="notifBtn" style="position:relative;">
+          <i data-lucide="bell"></i>
+          <span id="notifBadge" style="display:none; position:absolute; top:-2px; right:-2px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:rgb(239,68,68); color:white; font-size:10px; font-weight:700; line-height:16px; text-align:center; box-shadow:0 0 0 2px var(--surface-card);"></span>
+        </button>
+        <div class="avatar" id="avatar-init" title="Account">M</div>
+      </div>
+    </header>
+
+    <!-- PAGE -->
+    <div class="page">
+
+      <!-- Dashboard hero header -->
+      <div class="page-header page-header-hero">
+        <div class="page-header-bg">
+          <div class="aurora aurora-1"></div>
+          <div class="aurora aurora-2"></div>
+          <div class="grid-overlay"></div>
+        </div>
+        <div class="page-header-content">
+          <div class="page-icon-glow"><i data-lucide="layout-dashboard"></i></div>
+          <div class="page-header-text">
+            <div class="page-title-row">
+              <h1 class="t-h1 page-title-gradient">Dashboard</h1>
+              <span class="live-pill"><span class="live-dot"></span>Live</span>
+            </div>
+            <p class="page-desc">Real-time MIS overview — KPIs, charts, and AI briefing</p>
+            <div class="page-chips">
+              <span class="page-chip"><i data-lucide="zap" style="width:12px;height:12px;"></i> Live data</span>
+              <span class="page-chip"><i data-lucide="sparkles" style="width:12px;height:12px;"></i> AI briefing</span>
+              <span class="page-chip"><i data-lucide="search" style="width:12px;height:12px;"></i> ⌘K search</span>
+              <span class="page-chip"><i data-lucide="bell" style="width:12px;height:12px;"></i> Notifications</span>
+            </div>
+            <div class="page-underline"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI Briefing — Aurora -->
+      <div class="briefing-aurora stagger-in" data-i="0">
+        <div class="ic"><i data-lucide="sparkles"></i></div>
+        <div style="flex:1;">
+          <div class="label">SNAPSHOT</div>
+          <div class="text" id="briefing-text">Loading your data…</div>
+        </div>
+      </div>
+
+      <!-- KPI ROW (rendered dynamically) -->
+      <div class="kpi-row" id="kpi-row"></div>
+
+      <!-- CHARTS ROW -->
+      <div class="widget-grid" id="charts-row"></div>
+
+      <!-- TABLES ROW -->
+      <div class="widget-grid-3" id="tables-row"></div>
+
+      <!-- Pro tip banner -->
+      <div class="tip-banner stagger-in" data-i="7" id="tipBanner" style="display:none;">
+        <div class="ic"><i data-lucide="lightbulb"></i></div>
+        <div>
+          <div class="ttl">Pro Tip</div>
+          <div class="desc" id="tipText">Press <span style="font-family:var(--font-mono); padding:2px 6px; border-radius:4px; background:rgba(0,0,0,0.06);">⌘K</span> to search anything · click any KPI to drill down · use Today/Week/Month to change date range</div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Floating chat trigger -->
+    <button class="floating-chat" title="Ask MIS" id="chatFab" type="button">
+      <i data-lucide="sparkles"></i>
+    </button>
+  </main>
+</div>
+
+<!-- ════════ Notifications Drawer (Phase 22 Sprint 2D) ════════ -->
+<style>
+  .notif-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+    opacity: 0; pointer-events: none;
+    transition: opacity 220ms ease;
+    z-index: 8500;
+  }
+  .notif-backdrop.open { opacity: 1; pointer-events: auto; }
+  .notif-drawer {
+    position: fixed; top: 0; right: 0;
+    width: min(420px, 92vw); height: 100vh;
+    background: var(--surface-card);
+    border-left: 1px solid var(--hairline);
+    box-shadow: -8px 0 30px rgba(0, 0, 0, 0.18);
+    transform: translateX(100%);
+    transition: transform 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 8600;
+    display: flex; flex-direction: column;
+  }
+  .notif-drawer.open { transform: translateX(0); }
+  .notif-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 20px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .notif-head .ttl { font-size: 16px; font-weight: 700; }
+  .notif-head .actions { display: flex; gap: 8px; }
+  .notif-head button {
+    padding: 6px 10px;
+    font: inherit; font-size: 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 7px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: all 180ms ease;
+  }
+  .notif-head button:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+  .notif-list { flex: 1; overflow-y: auto; padding: 8px 0; }
+  .notif-item {
+    display: grid;
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--hairline);
+    cursor: pointer;
+    transition: background 180ms ease;
+  }
+  .notif-item:hover { background: var(--accent-cyan-soft); }
+  .notif-item.unread { background: rgba(0,164,210,0.04); }
+  .notif-item.unread::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    width: 6px; height: 6px;
+    margin-top: 8px;
+    background: var(--accent-cyan);
+    border-radius: 50%;
+  }
+  .notif-item .ic {
+    width: 36px; height: 36px;
+    border-radius: 9px;
+    display: grid; place-items: center;
+    background: var(--accent-cyan-soft);
+    color: var(--accent-cyan);
+  }
+  .notif-item .ic.warning { background: rgba(245,158,11,0.15); color: rgb(217,119,6); }
+  .notif-item .ic.error   { background: rgba(239,68,68,0.15);  color: rgb(239,68,68); }
+  .notif-item .ic svg { width: 16px; height: 16px; }
+  .notif-item .body { min-width: 0; }
+  .notif-item .body .t { font-size: 13.5px; font-weight: 600; margin-bottom: 2px; }
+  .notif-item .body .m { font-size: 12.5px; color: var(--color-text-secondary); margin-bottom: 4px; line-height: 1.4; }
+  .notif-item .body .ts { font-size: 11px; color: var(--color-text-tertiary); }
+  .notif-empty {
+    padding: 60px 20px;
+    text-align: center;
+    color: var(--color-text-tertiary);
+  }
+  .notif-empty .ic { font-size: 36px; opacity: 0.6; margin-bottom: 12px; }
+</style>
+
+<div class="notif-backdrop" id="notifBackdrop"></div>
+<aside class="notif-drawer" id="notifDrawer" aria-label="Notifications">
+  <div class="notif-head">
+    <div class="ttl">Notifications</div>
+    <div class="actions">
+      <button id="notifMarkAll" type="button">Mark all read</button>
+      <button id="notifClose" type="button" title="Close">✕</button>
+    </div>
+  </div>
+  <div class="notif-list" id="notifList">
+    <div class="notif-empty"><div class="ic">🔔</div>Loading…</div>
+  </div>
+</aside>
+
+<script>
+(function() {
+  // Self-contained notifications module — runs once on load, polls every 60s.
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) return;
+  const PHONE = window.MIS.auth.getPhone();
+
+  const NOTIF_ICON = {
+    schema_drift:   { svg: 'database', cls: 'warning' },
+    sync_error:     { svg: 'alert-circle', cls: 'error' },
+    calendar_book:  { svg: 'calendar-plus', cls: '' },
+    calendar_remind:{ svg: 'clock', cls: '' },
+    tenant_signup:  { svg: 'user-plus', cls: '' },
+    info:           { svg: 'info', cls: '' },
+    warning:        { svg: 'alert-triangle', cls: 'warning' },
+    error:          { svg: 'alert-octagon', cls: 'error' }
+  };
+
+  function escHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+  function fmtRel(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    const sec = Math.floor((Date.now() - d.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+    if (sec < 86400 * 7) return Math.floor(sec / 86400) + 'd ago';
+    return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  }
+
+  async function loadNotifications(silent) {
+    try {
+      const res = await fetch('/api/notifications?phone=' + encodeURIComponent(PHONE) + '&limit=50');
+      if (!res.ok) return;
+      const data = await res.json();
+      const badge = document.getElementById('notifBadge');
+      if (data.unread_count > 0) {
+        badge.textContent = data.unread_count > 99 ? '99+' : String(data.unread_count);
+        badge.style.display = 'inline-block';
+      } else {
+        badge.style.display = 'none';
+      }
+      if (!silent) {
+        renderList(data.notifications);
+      }
+    } catch (e) { /* silent — don't disrupt page */ }
+  }
+
+  function renderList(notifications) {
+    const list = document.getElementById('notifList');
+    if (!notifications || !notifications.length) {
+      list.innerHTML = '<div class="notif-empty"><div class="ic">🔔</div>You\'re all caught up — no notifications.</div>';
+      return;
+    }
+    list.innerHTML = notifications.map(n => {
+      const meta = NOTIF_ICON[n.kind] || NOTIF_ICON[n.severity] || NOTIF_ICON.info;
+      return `<div class="notif-item ${n.read ? '' : 'unread'}" data-id="${n.id}">
+        <div class="ic ${meta.cls}"><i data-lucide="${meta.svg}"></i></div>
+        <div class="body">
+          <div class="t">${escHtml(n.title)}</div>
+          ${n.message ? `<div class="m">${escHtml(n.message)}</div>` : ''}
+          <div class="ts">${fmtRel(n.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('');
+    if (window.lucide) window.lucide.createIcons();
+    list.querySelectorAll('.notif-item').forEach(el => {
+      el.addEventListener('click', async () => {
+        const id = el.dataset.id;
+        if (!el.classList.contains('unread')) return;
+        el.classList.remove('unread');
+        try {
+          await fetch('/api/notifications/' + id + '/read', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: PHONE })
+          });
+          loadNotifications(true); // refresh badge
+        } catch (_) {}
+      });
+    });
+  }
+
+  function openDrawer() {
+    document.getElementById('notifDrawer').classList.add('open');
+    document.getElementById('notifBackdrop').classList.add('open');
+    loadNotifications(false);
+  }
+  function closeDrawer() {
+    document.getElementById('notifDrawer').classList.remove('open');
+    document.getElementById('notifBackdrop').classList.remove('open');
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('notifBtn');
+    if (btn) btn.addEventListener('click', openDrawer);
+    document.getElementById('notifClose').addEventListener('click', closeDrawer);
+    document.getElementById('notifBackdrop').addEventListener('click', closeDrawer);
+    document.getElementById('notifMarkAll').addEventListener('click', async () => {
+      try {
+        await fetch('/api/notifications/mark-all-read', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone: PHONE })
+        });
+        loadNotifications(false);
+      } catch (_) {}
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeDrawer();
+    });
+
+    // Initial badge fetch + poll every 60s
+    loadNotifications(true);
+    setInterval(() => loadNotifications(true), 60 * 1000);
+  });
+})();
+</script>
+
+<!-- ════════ ⌘K Spotlight ════════ -->
+<div class="modal-backdrop" id="spotlightBackdrop">
+  <div class="modal-card spotlight">
+    <div class="spotlight-input-row">
+      <i data-lucide="search" style="width:18px;height:18px;color:var(--color-text-secondary);"></i>
+      <input class="spotlight-input" id="spotlightInput" type="text" placeholder="Search KPIs, customers, items, chat…" autocomplete="off">
+      <span class="kbd" style="font-family:var(--font-mono); font-size:11px; padding:2px 6px; border-radius:4px; background:var(--color-gray-100); color:var(--color-text-tertiary);">esc</span>
+    </div>
+    <div class="spotlight-list" id="spotlightList"></div>
+  </div>
+</div>
+
+<!-- ════════ Drill-down modal ════════ -->
+<div class="modal-backdrop" id="drillBackdrop">
+  <div class="modal-card drill-modal" style="--kpi-color: var(--accent-cyan); --kpi-soft: var(--accent-cyan-soft);">
+    <div class="drill-head">
+      <div class="ic-lg" id="drillIcon"><i data-lucide="trending-up"></i></div>
+      <div>
+        <div class="t-h2" id="drillTitle">—</div>
+        <div class="t-meta" id="drillMeta">—</div>
+      </div>
+      <button class="btn-close" id="drillClose" type="button"><i data-lucide="x"></i></button>
+    </div>
+    <div class="drill-body">
+      <div class="drill-stat-grid">
+        <div class="drill-stat"><div class="lbl">Current</div><div class="val" id="drillCurrent">—</div></div>
+        <div class="drill-stat"><div class="lbl">Previous</div><div class="val" id="drillPrev">—</div></div>
+        <div class="drill-stat"><div class="lbl">Change</div><div class="val" id="drillDelta">—</div></div>
+      </div>
+      <div class="drill-chart-wrap" id="drillChartWrap">
+        <canvas id="drillChart" class="drill-canvas"></canvas>
+        <div class="drill-marker high" id="drillMarkerHigh"><div class="pill"><span>🔺</span><span id="drillMarkerHighText"></span></div><div class="arr"></div></div>
+        <div class="drill-marker low"  id="drillMarkerLow"><div class="pill"><span>🔻</span><span id="drillMarkerLowText"></span></div><div class="arr"></div></div>
+        <div class="drill-pulse high" id="drillPulseHigh"></div>
+        <div class="drill-pulse low"  id="drillPulseLow"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ────── Auth ──────
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    window.location.replace('/login');
+    return;
+  }
+  const PHONE = window.MIS.auth.getPhone();
+  let CURRENT_RANGE = 'month';
+  const charts = {};
+  let drillChart = null;
+  let lastDashCache = null;
+
+  // ────── Helpers ──────
+  function fmtValue(v, format) {
+    if (v === null || v === undefined || isNaN(v)) return '—';
+    if (format === 'inr') return window.MIS.fmt.inr(Number(v));
+    return window.MIS.fmt.num(Number(v));
+  }
+  function deltaChip(pct) {
+    if (pct === null || pct === undefined || isNaN(pct)) return '<span class="delta-chip flat">—</span>';
+    const cls = pct > 0.5 ? 'up' : pct < -0.5 ? 'down' : 'flat';
+    const arrow = pct > 0.5 ? '↗' : pct < -0.5 ? '↘' : '·';
+    return `<span class="delta-chip ${cls}">${arrow} ${Math.abs(pct).toFixed(1)}%</span>`;
+  }
+  function el(html) {
+    const t = document.createElement('template');
+    t.innerHTML = html.trim();
+    return t.content.firstElementChild;
+  }
+  function escapeHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function getThemeColors() {
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    return {
+      grid:     dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)',
+      // Dark-mode chart text uses Apple's primary text colour (#F5F5F7) for
+      // maximum contrast — legend/axis labels were previously fading against
+      // the deep card background.
+      tick:     dark ? '#F5F5F7' : '#86868B',
+      tickMuted: dark ? '#A1A1A6' : '#A1A1A6',
+      tooltip:  dark ? '#1C1C1E' : '#FFFFFF',
+      tooltipText: dark ? '#F5F5F7' : '#1D1D1F',
+      // Vibrant multi-hue palette — Apple × M5 fusion
+      palette: [
+        '#10B981', // emerald
+        '#F59E0B', // amber
+        '#6366F1', // indigo
+        '#8B5CF6', // violet
+        '#F43F5E', // rose
+        '#00A4D2', // cyan (brand)
+        '#0EA5E9', // sky
+        '#D946EF'  // fuchsia
+      ],
+      brand: '#00A4D2'
+    };
+  }
+  // Map accent name → hex
+  const ACCENT_MAP = {
+    emerald: '#10B981', amber: '#F59E0B', indigo: '#6366F1',
+    violet:  '#8B5CF6', rose:  '#F43F5E', cyan:   '#00A4D2',
+    sky:     '#0EA5E9', fuchsia:'#D946EF'
+  };
+
+  // ────── KPI render with sparkline + icon ──────
+  function renderKpis(widgets) {
+    const row = document.getElementById('kpi-row');
+    row.innerHTML = '';
+    if (!widgets.length) {
+      row.innerHTML = `<div class="empty-card"><div class="ic">📊</div><div>No KPIs available — sync your sheet to populate the dashboard.</div></div>`;
+      return;
+    }
+    widgets.forEach((w, i) => {
+      const d = w.data || {};
+      const accent = w.accent || 'cyan';
+      const color = ACCENT_MAP[accent] || ACCENT_MAP.cyan;
+      const icon = w.icon || 'activity';
+
+      const card = el(`
+        <div class="kpi tilt-card stagger-in${d.anomaly?.flagged ? ' kpi-anomaly' : ''}" data-id="${w.id}" data-accent="${accent}" data-i="${i + 1}"
+             style="--kpi-color: ${color}; --kpi-soft: var(--accent-${accent}-soft); --kpi-glow: var(--accent-${accent}-glow);"
+             ${d.anomaly?.flagged ? `title="⚠ ${d.anomaly.reason}"` : ''}>
+          <div class="kpi-top">
+            <div class="kpi-icon-box"><i data-lucide="${icon}"></i></div>
+            ${d.anomaly?.flagged ? '<div class="kpi-anomaly-badge" title="Anomaly detected">⚠</div>' : (i === 0 ? '<div class="kpi-pulse-live" title="Live"></div>' : '')}
+          </div>
+          <div class="kpi-label">${w.title}</div>
+          <div class="kpi-value">${fmtValue(d.value, d.format)}</div>
+          <div class="kpi-delta">${deltaChip(d.delta_pct)} <span style="color:var(--color-text-tertiary); font-size:12px; margin-left:6px;">vs prev</span></div>
+          <canvas class="kpi-spark-canvas" data-spark='${JSON.stringify(d.sparkline || [])}'></canvas>
+        </div>`);
+      row.appendChild(card);
+
+      // Animate counter
+      const valueEl = card.querySelector('.kpi-value');
+      const target = Number(d.value || 0);
+      if (target > 0) {
+        valueEl.textContent = fmtValue(0, d.format);
+        const fmt = d.format === 'inr' ? window.MIS.fmt.inr : window.MIS.fmt.num;
+        window.MIS.animateCounter(valueEl, target, { duration: 980, formatter: fmt });
+      }
+
+      // Render sparkline
+      const sparkCanvas = card.querySelector('.kpi-spark-canvas');
+      const sparkData = d.sparkline || [];
+      if (sparkCanvas && sparkData.length >= 2) {
+        // delay so layout is final
+        requestAnimationFrame(() => drawSparkline(sparkCanvas, sparkData, color));
+      }
+
+      // Click to drill down
+      card.addEventListener('click', () => openDrillDown(w));
+
+      // Magnetic 3D tilt on mouse move
+      card.addEventListener('mousemove', (e) => {
+        const r = card.getBoundingClientRect();
+        const px = (e.clientX - r.left) / r.width;
+        const py = (e.clientY - r.top) / r.height;
+        card.style.setProperty('--ry', `${(px - 0.5) * 6}deg`);
+        card.style.setProperty('--rx', `${(0.5 - py) * 6}deg`);
+        card.style.setProperty('--mx', `${px * 100}%`);
+        card.style.setProperty('--my', `${py * 100}%`);
+      });
+      card.addEventListener('mouseleave', () => {
+        card.style.setProperty('--rx', '0deg');
+        card.style.setProperty('--ry', '0deg');
+      });
+    });
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  // ────── Sparkline (no Chart.js — pure canvas, performant) ──────
+  function drawSparkline(canvas, data, color) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const ctx = canvas.getContext('2d');
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    const min = Math.min(...data, 0);
+    const max = Math.max(...data, 1);
+    const span = max - min || 1;
+    const stepX = w / (data.length - 1);
+    const pad = 2;
+    const points = data.map((v, i) => ({
+      x: i * stepX,
+      y: h - pad - ((v - min) / span) * (h - pad * 2)
+    }));
+
+    // gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, color + '55');
+    grad.addColorStop(1, color + '00');
+
+    // smooth path (Catmull–Rom-ish)
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, h);
+    ctx.lineTo(points[0].x, points[0].y);
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i], p1 = points[i + 1];
+      const xc = (p0.x + p1.x) / 2;
+      const yc = (p0.y + p1.y) / 2;
+      ctx.quadraticCurveTo(p0.x, p0.y, xc, yc);
+    }
+    ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    ctx.lineTo(points[points.length - 1].x, h);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[i], p1 = points[i + 1];
+      const xc = (p0.x + p1.x) / 2;
+      const yc = (p0.y + p1.y) / 2;
+      ctx.quadraticCurveTo(p0.x, p0.y, xc, yc);
+    }
+    ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+    ctx.lineWidth = 1.8;
+    ctx.strokeStyle = color;
+    ctx.stroke();
+
+    // last point dot
+    const last = points[points.length - 1];
+    ctx.beginPath();
+    ctx.arc(last.x, last.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // ────── Charts (multi-hue) ──────
+  function renderCharts(widgets) {
+    const row = document.getElementById('charts-row');
+    row.innerHTML = '';
+    Object.keys(charts).forEach(id => { try { charts[id].destroy(); } catch {} delete charts[id]; });
+    if (!widgets.length) return;
+
+    widgets.forEach((w, i) => {
+      try {
+      const card = el(`
+        <div class="chart-card stagger-in" data-i="${5 + i}">
+          <div class="chart-header">
+            <div>
+              <div class="t-h3">${w.title}</div>
+              <div class="t-meta">${w.chartKind === 'line' ? 'Trend over time' : w.chartKind === 'donut' ? 'Distribution share' : 'Comparison'}</div>
+            </div>
+            <div class="chart-icon">
+              <i data-lucide="${w.chartKind === 'line' ? 'activity' : w.chartKind === 'donut' ? 'pie-chart' : 'bar-chart-3'}"></i>
+            </div>
+          </div>
+          <div class="body"><canvas id="canvas-${w.id.replace(/\./g, '-')}"></canvas></div>
+        </div>`);
+      row.appendChild(card);
+
+      const canvas = card.querySelector('canvas');
+      const ctx = canvas.getContext('2d');
+      const colors = getThemeColors();
+      const data = w.data || { labels: [], data: [] };
+
+      const tooltipFmt = (val) => (data.format === 'inr')
+        ? window.MIS.fmt.inr(val)
+        : window.MIS.fmt.num(val);
+
+      // Premium frosted tooltip shared across all chart types
+      const premiumTooltip = {
+        backgroundColor: 'rgba(15,15,20,0.92)',
+        titleColor: '#F5F5F7',
+        bodyColor: '#E5E5EA',
+        borderColor: 'rgba(0,164,210,0.3)',
+        borderWidth: 1,
+        padding: { top: 10, bottom: 10, left: 14, right: 14 },
+        cornerRadius: 12,
+        titleFont: { family: 'Inter', size: 12, weight: '600' },
+        bodyFont: { family: 'JetBrains Mono, monospace', size: 12.5, weight: '500' },
+        displayColors: w.chartKind !== 'line',
+        boxPadding: 6,
+        callbacks: { label: (item) => ' ' + tooltipFmt(w.chartKind === 'donut' ? item.parsed : item.parsed.y) }
+      };
+
+      const baseOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 1400, easing: 'easeOutQuart' },
+        interaction: w.chartKind === 'line' ? { mode: 'index', intersect: false } : {},
+        plugins: {
+          legend: { display: false },
+          tooltip: premiumTooltip
+        },
+        scales: (w.chartKind === 'donut') ? {} : {
+          x: {
+            grid:   { display: false, drawBorder: false },
+            border: { display: false },
+            ticks: {
+              color: colors.tick,
+              font: { family: 'Inter', size: 10.5, weight: '500' },
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: w.chartKind === 'line' ? 7 : 10,
+              padding: 8,
+              callback: function(v, i) {
+                const raw = this.getLabelForValue ? this.getLabelForValue(v) : data.labels[i];
+                if (typeof raw === 'string' && /^\d{4}-\d{2}-\d{2}/.test(raw)) {
+                  const dd = new Date(raw + 'T00:00:00');
+                  return isNaN(dd.getTime()) ? raw : dd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+                }
+                return raw;
+              }
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid:   { color: colors.grid, drawBorder: false, drawTicks: false, lineWidth: 0.8 },
+            border: { display: false },
+            ticks: {
+              color: colors.tick,
+              font: { family: 'JetBrains Mono, monospace', size: 10.5, weight: '500' },
+              padding: 10,
+              maxTicksLimit: 5,
+              callback: (v) => tooltipFmt(v)
+            }
+          }
+        }
+      };
+
+      if (w.chartKind === 'line') {
+        // Vivid neon gradient fill — cyan to transparent with multiple stops
+        const h = canvas.parentElement?.clientHeight || 260;
+        const grad = ctx.createLinearGradient(0, 0, 0, h);
+        grad.addColorStop(0,    'rgba(0,164,210,0.45)');
+        grad.addColorStop(0.25, 'rgba(0,164,210,0.25)');
+        grad.addColorStop(0.5,  'rgba(99,102,241,0.12)');
+        grad.addColorStop(0.8,  'rgba(139,92,246,0.05)');
+        grad.addColorStop(1,    'rgba(0,0,0,0)');
+        charts[w.id] = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              label: w.title,
+              data: data.data,
+              borderColor: '#00A4D2',
+              backgroundColor: grad,
+              borderWidth: 2.8,
+              tension: 0.3,
+              cubicInterpolationMode: 'monotone',
+              fill: true,
+              pointRadius: 0,
+              pointHoverRadius: 7,
+              pointHitRadius: 20,
+              pointBackgroundColor: '#00A4D2',
+              pointBorderColor: '#fff',
+              pointBorderWidth: 2.5,
+              pointHoverBorderWidth: 3,
+              spanGaps: true,
+              shadowBlur: 22,
+              glow: true
+            }]
+          },
+          options: baseOpts
+        });
+      } else if (w.chartKind === 'donut') {
+        const palette = colors.palette || [];
+        charts[w.id] = new Chart(ctx, {
+          type: 'doughnut',
+          data: {
+            labels: data.labels,
+            datasets: [{
+              data: data.data,
+              backgroundColor: palette.slice(0, (data.data || []).length),
+              borderWidth: 2,
+              borderColor: colors.tooltip === '#1C1C1E' ? 'rgba(28,28,30,0.6)' : 'rgba(255,255,255,0.8)',
+              hoverOffset: 18,
+              hoverBorderWidth: 0,
+              spacing: 4,
+              borderRadius: 8
+            }]
+          },
+          options: {
+            ...baseOpts,
+            cutout: '68%',
+            animation: {
+              duration: 1500,
+              easing: 'easeOutQuart',
+              animateRotate: true,
+              animateScale: true
+            },
+            layout: { padding: { top: 8, bottom: 8 } },
+            plugins: {
+              ...baseOpts.plugins,
+              legend: {
+                display: true,
+                position: 'right',
+                labels: {
+                  color: colors.tick,
+                  font: { family: 'Inter', size: 12.5, weight: '600' },
+                  boxWidth: 10, boxHeight: 10,
+                  padding: 14,
+                  usePointStyle: true,
+                  pointStyle: 'circle',
+                  generateLabels: function(chart) {
+                    const ds = chart.data.datasets[0];
+                    // Re-read theme at call time (not closure-captured) so a
+                    // mid-session theme toggle paints with the right colour.
+                    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    const labelColor = dark ? '#F5F5F7' : '#1D1D1F';
+                    // Truncation at 32 chars — fits most party names
+                    // (e.g. "Bharat Heavy Electricals Limited" = 32 chars,
+                    // "Insulators & Electricals Company" = 32 chars). Only
+                    // the rare 40+ char names get an ellipsis.
+                    return chart.data.labels.map((label, i) => ({
+                      text: label.length > 32 ? label.slice(0, 31) + '…' : label,
+                      fillStyle: ds.backgroundColor[i],
+                      strokeStyle: 'transparent',
+                      lineWidth: 0,
+                      pointStyle: 'circle',
+                      hidden: false,
+                      index: i,
+                      fontColor: labelColor   // belt-and-suspenders per-item
+                    }));
+                  }
+                }
+              },
+              donutCenter: {
+                // Pass format string instead of formatter function (see
+                // barEndLabel comment) — Chart.js v4 scriptable options
+                // would otherwise eval the function and store the result.
+                format: data.format || 'num',
+                label: 'Total',
+                labelColor: colors.tick,
+                valueColor: colors.tooltipText
+              }
+            }
+          }
+        });
+      } else { // bar (horizontal, multi-color with gradient per bar)
+        const palette = (colors.palette && colors.palette.length) ? colors.palette : [colors.brand];
+        const barColors = (data.data || []).map((_, i) => palette[i % palette.length]);
+        // Create subtle gradient per bar for depth
+        const barGrads = barColors.map(c => {
+          const g = ctx.createLinearGradient(0, 0, canvas.clientWidth || 400, 0);
+          g.addColorStop(0, c + 'DD');
+          g.addColorStop(1, c + '88');
+          return g;
+        });
+        charts[w.id] = new Chart(ctx, {
+          type: 'bar',
+          data: {
+            labels: data.labels || [],
+            datasets: [{
+              data: data.data || [],
+              backgroundColor: barGrads,
+              hoverBackgroundColor: barColors,
+              borderRadius: 8,
+              borderSkipped: false,
+              barPercentage: 0.72,
+              categoryPercentage: 0.85
+            }]
+          },
+          options: {
+            ...baseOpts,
+            indexAxis: 'y',
+            layout: { padding: { right: 90 } },
+            animation: { duration: 1200, easing: 'easeOutQuart', delay: (ctx) => ctx.dataIndex * 80 },
+            plugins: {
+              ...baseOpts.plugins,
+              legend: { display: false },
+              barEndLabel: {
+                enabled: true,
+                color: colors.tooltipText || '#1C1C1E',
+                // Pass FORMAT STRING not a function — Chart.js v4's scriptable
+                // options system would otherwise evaluate the function during
+                // config-resolve and replace it with the call result.
+                format: data.format || 'num'
+              }
+            },
+            scales: {
+              y: {
+                grid:   { display: false, drawBorder: false },
+                border: { display: false },
+                ticks: {
+                  color: colors.tick,
+                  font: { family: 'Inter', size: 11, weight: '500' },
+                  autoSkip: false,
+                  padding: 8,
+                  callback: function(v) {
+                    const raw = (this.getLabelForValue ? this.getLabelForValue(v) : (data.labels || [])[v]) || '';
+                    if (typeof raw !== 'string') return raw;
+                    // 28 chars — fits most item names; rare 30+ get ellipsis.
+                    return raw.length > 28 ? raw.slice(0, 27) + '…' : raw;
+                  }
+                }
+              },
+              x: {
+                beginAtZero: true,
+                grid:   { color: colors.grid, drawBorder: false, drawTicks: false, lineWidth: 0.6 },
+                border: { display: false },
+                ticks: {
+                  color: colors.tick,
+                  font: { family: 'JetBrains Mono, monospace', size: 10, weight: '500' },
+                  padding: 6,
+                  maxTicksLimit: 5,
+                  callback: (v) => tooltipFmt(v)
+                }
+              }
+            }
+          }
+        });
+      }
+      } catch (chartErr) {
+        console.error('[CHART RENDER ERROR]', w.id, chartErr);
+        // Don't let one bad widget kill the whole render — continue to next
+      }
+    });
+    if (window.lucide) window.lucide.createIcons();
+  }
+
+  // ────── Tables ──────
+  function renderTables(widgets) {
+    const row = document.getElementById('tables-row');
+    row.innerHTML = '';
+    if (!widgets.length) return;
+
+    widgets.forEach((w, i) => {
+      const card = document.createElement('div');
+      card.className = 'table-widget stagger-in';
+      card.dataset.i = String(5 + i);
+      const d = w.data || {};
+
+      let inner = `<div class="head">
+        <div>
+          <div class="t-h3">${w.title}</div>
+          <div class="t-meta">${(d.rows || []).length} entries</div>
+        </div>
+        <button class="btn-link" type="button">View all →</button>
+      </div>`;
+
+      const rows = d.rows || [];
+      if (!rows.length) {
+        inner += `<div style="padding:32px 22px; color:var(--color-text-tertiary); font-size:13px; text-align:center;">No data in this period.</div>`;
+      } else if (w.id === 'table.recent_invoices') {
+        rows.forEach((r, idx) => {
+          const day = r.day || r.date || '';
+          inner += `<div class="row" data-rank="${idx + 1}">
+            <div class="rank">${idx + 1}</div>
+            <div class="name">${escapeHtml(r.party || r.voucher || day)}</div>
+            <div class="meta">${escapeHtml(day)}</div>
+            <div class="val">${window.MIS.fmt.inr(Number(r.amount || 0))}</div>
+          </div>`;
+        });
+      } else if (w.id === 'table.top_customers') {
+        rows.forEach((r, idx) => {
+          inner += `<div class="row" data-rank="${idx + 1}">
+            <div class="rank">${idx + 1}</div>
+            <div class="name">${escapeHtml(r.party || '—')}</div>
+            <div class="meta">${r.invoices || 0} inv</div>
+            <div class="val">${window.MIS.fmt.inr(Number(r.total || 0))}</div>
+          </div>`;
+        });
+      } else if (w.id === 'table.top_items') {
+        rows.forEach((r, idx) => {
+          inner += `<div class="row" data-rank="${idx + 1}">
+            <div class="rank">${idx + 1}</div>
+            <div class="name">${escapeHtml(r.item || '—')}</div>
+            <div class="meta">${r.qty ? Number(r.qty).toLocaleString('en-IN') + ' u' : ''}</div>
+            <div class="val">${window.MIS.fmt.inr(Number(r.total || 0))}</div>
+          </div>`;
+        });
+      } else {
+        rows.forEach((r, idx) => {
+          inner += `<div class="row" data-rank="${idx + 1}"><div class="rank">${idx + 1}</div><div class="name">${escapeHtml(JSON.stringify(r).slice(0, 80))}</div><div class="meta"></div><div class="val"></div></div>`;
+        });
+      }
+      card.innerHTML = inner;
+      row.appendChild(card);
+    });
+  }
+
+  // ────── Briefing ──────
+  function renderBriefing(dash) {
+    const t = document.getElementById('briefing-text');
+    if (dash.empty) { t.textContent = dash.message || 'No data yet — sync your sheet.'; return; }
+
+    // Build template fallback first so we always have something to show
+    const kpis = (dash.widgets || []).filter(w => w.kind === 'kpi' && w.ok);
+    const sales = kpis.find(w => w.id === 'kpi.total_sales');
+    const purchases = kpis.find(w => w.id === 'kpi.total_purchases');
+    const invCount = kpis.find(w => w.id === 'kpi.invoice_count');
+    const customers = kpis.find(w => w.id === 'kpi.unique_customers');
+    const topCust = (dash.widgets || []).find(w => w.id === 'table.top_customers' && w.ok);
+    const parts = [];
+    const r = (CURRENT_RANGE === 'today') ? 'Today' : (CURRENT_RANGE === 'week') ? 'This week' : 'This month';
+    if (sales) {
+      let p = `${r}: ${window.MIS.fmt.inr(sales.data.value)} in sales`;
+      if (sales.data.delta_pct != null) p += ` (${sales.data.delta_pct >= 0 ? 'up' : 'down'} ${Math.abs(sales.data.delta_pct).toFixed(1)}%)`;
+      parts.push(p);
+    }
+    if (invCount) parts.push(`${invCount.data.value} invoices`);
+    if (customers) parts.push(`${customers.data.value} active customers`);
+    if (topCust && (topCust.data?.rows || []).length) {
+      const top = topCust.data.rows[0];
+      parts.push(`Top: ${top.party} at ${window.MIS.fmt.inr(Number(top.total || 0))}`);
+    }
+    if (purchases) parts.push(`Purchases ${window.MIS.fmt.inr(purchases.data.value)}`);
+    const fallbackText = parts.length ? parts.join(' · ') + '.' : 'Dashboard ready.';
+
+    // Show fallback while AI loads
+    t.textContent = fallbackText;
+
+    // Fetch real AI briefing in background, replace with typewriter on success
+    fetch(`/api/briefing?phone=${encodeURIComponent(PHONE)}&range=${encodeURIComponent(CURRENT_RANGE)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data || !data.briefing || data.error) return;
+        typewriteBriefing(t, data.briefing);
+      })
+      .catch(() => { /* keep fallback */ });
+  }
+
+  // Typewriter effect for AI briefing — char-by-char append.
+  function typewriteBriefing(el, text) {
+    if (!text || text === el.textContent) return;
+    el.textContent = '';
+    let i = 0;
+    const speed = 14; // ms per char
+    function step() {
+      if (i >= text.length) return;
+      el.textContent += text.charAt(i++);
+      setTimeout(step, speed);
+    }
+    step();
+  }
+
+  // ────── Drill-down modal ──────
+  // Chart.js plugin — paint a soft glow under the line for a "neon" feel.
+  // Applied only to LINE charts (skips bar/donut to avoid noisy fills).
+  // Per-dataset opt-out via `dataset.glow = false` (used for the dashed trend overlay).
+  const glowLinePlugin = {
+    id: 'glowLine',
+    defaults: {},
+    beforeDatasetDraw(chart, args) {
+      if (chart.config.type !== 'line') return;
+      const dsCfg = chart.data.datasets[args.index];
+      if (!dsCfg || dsCfg.glow === false) return;
+      const ctx = chart.ctx;
+      ctx.save();
+      ctx.shadowColor = dsCfg.borderColor || 'rgba(0,164,210,0.4)';
+      ctx.shadowBlur  = dsCfg.shadowBlur ?? 16;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    },
+    // Mirror the skip-condition exactly — without this, datasets that opted
+    // out of glow (e.g. the dashed 7-day trend overlay) still trigger
+    // `restore()`, which pops Chart.js's own internal save off the canvas
+    // state stack. Result: the next dataset gets clipped to a corrupted
+    // region and the line/area silently fails to render.
+    afterDatasetDraw(chart, args) {
+      if (chart.config.type !== 'line') return;
+      const dsCfg = chart.data.datasets[args.index];
+      if (!dsCfg || dsCfg.glow === false) return;
+      try { chart.ctx.restore(); } catch {}
+    }
+  };
+
+  // Donut centre — render "TOTAL" label + total value in the doughnut hole
+  const donutCenterPlugin = {
+    id: 'donutCenter',
+    defaults: {},
+    afterDraw(chart) {
+      try {
+        if (chart.config.type !== 'doughnut') return;
+        const opts = chart.options.plugins?.donutCenter;
+        if (!opts) return;
+        const area = chart.chartArea;
+        if (!area || !area.right) return;
+        const cx = (area.left + area.right) / 2;
+        const cy = (area.top + area.bottom) / 2;
+        const ds = chart.data.datasets?.[0];
+        if (!ds || !ds.data || !ds.data.length) return;
+        const total = ds.data.reduce((s, v) => s + (Number(v) || 0), 0);
+        // Derive formatter from `opts.format` string instead of accepting a
+        // function — Chart.js v4's scriptable-options system would otherwise
+        // eval any function we pass under plugin options.
+        const fmt = opts.format === 'inr' ? window.MIS.fmt.inr
+                  : opts.format === 'num' ? window.MIS.fmt.num
+                  : (v) => String(v);
+        const totalText = fmt(total);
+        const labelText = (opts.label || 'Total').toUpperCase();
+
+        const ctx = chart.ctx;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.fillStyle = opts.labelColor || 'rgba(134,134,139,0.95)';
+        ctx.font = '600 10.5px Inter';
+        ctx.fillText(labelText, cx, cy - 11);
+
+        ctx.fillStyle = opts.valueColor || '#1C1C1E';
+        ctx.font = '700 17px JetBrains Mono, monospace';
+        ctx.fillText(totalText, cx, cy + 10);
+        ctx.restore();
+      } catch {}
+    }
+  };
+
+  // Bar end-label — render the value pill at the END of each horizontal bar
+  const barEndLabelPlugin = {
+    id: 'barEndLabel',
+    defaults: {},
+    afterDatasetsDraw(chart) {
+      const opts = chart.options.plugins?.barEndLabel;
+      if (!opts || !opts.enabled) return;
+      const ctx = chart.ctx;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data) return;
+      const dataset = chart.data.datasets[0];
+      if (!dataset) return;
+      // Derive formatter from `opts.format` string (see donutCenter plugin).
+      // Avoids Chart.js v4 scriptable-options system from eval'ing a function
+      // we pass under plugin options.
+      const fmt = opts.format === 'inr' ? window.MIS.fmt.inr
+                : opts.format === 'num' ? window.MIS.fmt.num
+                : (v) => String(v);
+
+      ctx.save();
+      ctx.font = '600 11.5px JetBrains Mono, monospace';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = opts.color || 'rgba(28,28,30,0.85)';
+
+      meta.data.forEach((bar, idx) => {
+        const v = Number(dataset.data[idx]) || 0;
+        if (!v) return;
+        const text = fmt(v);
+        const x = bar.x + 8;
+        const y = bar.y;
+        ctx.fillText(text, x, y);
+      });
+      ctx.restore();
+    }
+  };
+
+  if (window.Chart && !Chart._glowRegistered) {
+    Chart.register(glowLinePlugin, donutCenterPlugin, barEndLabelPlugin);
+    Chart._glowRegistered = true;
+  }
+
+  // Apply theme-aware Chart.js global defaults at boot AND on every theme
+  // change. Without this, Chart.js falls back to its built-in #666 grey for
+  // any text where we don't pass an explicit colour — causing legend labels
+  // to vanish against a dark background even when our `labels.color` is set.
+  function applyChartDefaults() {
+    if (!window.Chart) return;
+    const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    Chart.defaults.color = dark ? '#F5F5F7' : '#1D1D1F';
+    Chart.defaults.borderColor = dark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)';
+  }
+  applyChartDefaults();
+  // Re-apply on theme toggle and re-render all charts so the new colour wins.
+  const _themeObserver = new MutationObserver(() => {
+    applyChartDefaults();
+    Object.values(charts || {}).forEach(c => { try { c.update('none'); } catch {} });
+  });
+  _themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+  // Compute centred moving average (smooths daily noise into a trend line)
+  function movingAverage(arr, win = 7) {
+    const out = new Array(arr.length).fill(null);
+    const half = Math.floor(win / 2);
+    for (let i = 0; i < arr.length; i++) {
+      const s = Math.max(0, i - half);
+      const e = Math.min(arr.length, i + half + 1);
+      let sum = 0, count = 0;
+      for (let j = s; j < e; j++) { sum += Number(arr[j]) || 0; count++; }
+      out[i] = count ? sum / count : 0;
+    }
+    return out;
+  }
+
+  // Animate a stat value from 0 → target with spring easing
+  function animateStatValue(el, target, format, duration = 1100) {
+    if (target == null || isNaN(target)) { el.textContent = '—'; return; }
+    const fmt = (v) => format === 'inr' ? window.MIS.fmt.inr(v) : window.MIS.fmt.num(v);
+    const start = performance.now();
+    const ease = (t) => 1 - Math.pow(1 - t, 3);   // ease-out cubic
+    function tick(now) {
+      const t = Math.min((now - start) / duration, 1);
+      const v = target * ease(t);
+      el.textContent = fmt(v);
+      if (t < 1) requestAnimationFrame(tick);
+      else el.textContent = fmt(target);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function openDrillDown(w) {
+    const d = w.data || {};
+    const accent = w.accent || 'cyan';
+    const color = ACCENT_MAP[accent] || ACCENT_MAP.cyan;
+    const card = document.querySelector('#drillBackdrop .modal-card');
+    card.style.setProperty('--kpi-color', color);
+    card.style.setProperty('--kpi-soft', `var(--accent-${accent}-soft)`);
+
+    document.getElementById('drillTitle').textContent = w.title;
+    document.getElementById('drillMeta').textContent = `${CURRENT_RANGE} · last 30-day breakdown`;
+
+    // ── Animated count-up on Current / Previous values ──
+    const fmtV = (v) => v == null ? '—' : (d.format === 'inr' ? window.MIS.fmt.inr(v) : window.MIS.fmt.num(v));
+    document.getElementById('drillCurrent').textContent = '—';
+    document.getElementById('drillPrev').textContent = '—';
+    setTimeout(() => animateStatValue(document.getElementById('drillCurrent'), Number(d.value) || 0, d.format, 1100), 200);
+    if (d.prev != null) setTimeout(() => animateStatValue(document.getElementById('drillPrev'), Number(d.prev) || 0, d.format, 1100), 320);
+    document.getElementById('drillDelta').innerHTML = deltaChip(d.delta_pct);
+
+    const iconBox = document.getElementById('drillIcon');
+    iconBox.innerHTML = `<i data-lucide="${w.icon || 'activity'}"></i>`;
+    if (window.lucide) window.lucide.createIcons();
+
+    // Big chart
+    if (drillChart) { try { drillChart.destroy(); } catch {} }
+    // ── Defensive: clear stale marker text + hide chips before new chart renders ──
+    // Prevents the chip from briefly showing the previous KPI's values during
+    // the 1100ms animation window when user rapidly switches between KPIs.
+    ['drillMarkerHighText', 'drillMarkerLowText'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = '';
+    });
+    ['drillMarkerHigh','drillMarkerLow','drillPulseHigh','drillPulseLow'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('show');
+    });
+    const canvas = document.getElementById('drillChart');
+    const ctx = canvas.getContext('2d');
+    const sp = (d.sparkline || []).map(v => Number(v) || 0);
+    const dates = (d.sparkline_dates && d.sparkline_dates.length === sp.length) ? d.sparkline_dates : null;
+
+    const formatDateShort = (iso) => {
+      if (!iso) return '';
+      const dd = new Date(iso + 'T00:00:00');
+      if (isNaN(dd.getTime())) return iso;
+      return dd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    };
+    const labels = dates ? dates.map(formatDateShort) : sp.map((_, i) => `Day ${i + 1}`);
+
+    // 4-stop vivid gradient fill
+    const grad = ctx.createLinearGradient(0, 0, 0, 280);
+    grad.addColorStop(0,    color + '70');
+    grad.addColorStop(0.35, color + '40');
+    grad.addColorStop(0.75, color + '15');
+    grad.addColorStop(1,    color + '00');
+
+    // 7-day moving average for the trend overlay
+    const avg = movingAverage(sp, 7);
+
+    // Theme-aware colours
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const tickColor = isDark ? '#F5F5F7' : '#86868B';
+    const gridColor = isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.05)';
+
+    drillChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          // Layer 1 — Trend (7-day moving average, dashed, subtle)
+          {
+            data: avg,
+            borderColor: color + 'A0',
+            backgroundColor: 'transparent',
+            borderWidth: 1.4,
+            borderDash: [6, 5],
+            tension: 0.3,
+            cubicInterpolationMode: 'monotone',
+            fill: false,
+            pointRadius: 0,
+            pointHoverRadius: 0,
+            glow: false,
+            order: 2
+          },
+          // Layer 2 — Main neon line + gradient fill
+          {
+            data: sp,
+            borderColor: color,
+            backgroundColor: grad,
+            borderWidth: 2.6,
+            tension: 0.25,
+            cubicInterpolationMode: 'monotone',
+            fill: true,
+            pointRadius: 0,
+            pointHoverRadius: 6,
+            pointHitRadius: 18,
+            pointBackgroundColor: color,
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            spanGaps: true,
+            shadowBlur: 22,
+            order: 1
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        animation: {
+          duration: 1100,
+          easing: 'easeOutCubic',
+          // Fires after the curve has animated to its true positions.
+          // We capture the chart instance via `chartHandle` and skip stale
+          // callbacks (e.g. user opens KPI A, closes, opens KPI B before
+          // animation completes — A's onComplete must not paint B's markers).
+          onComplete: function() {
+            if (!chartHandle || drillChart !== chartHandle) return;
+            positionMinMaxMarkers(chartHandle, sp, dates, d.format);
+          }
+        },
+        animations: {
+          x: { duration: 0 },
+          y: { duration: 1100, easing: 'easeOutCubic' }
+        },
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: isDark ? 'rgba(28,28,30,0.96)' : 'rgba(28,28,30,0.94)',
+            titleColor: '#F5F5F7',
+            bodyColor: '#F5F5F7',
+            borderColor: 'rgba(255,255,255,0.08)',
+            borderWidth: 1,
+            padding: 11,
+            cornerRadius: 10,
+            displayColors: false,
+            titleFont: { family: 'Inter', size: 11.5, weight: '600' },
+            bodyFont:  { family: 'JetBrains Mono', size: 13.5, weight: '600' },
+            filter: (item) => item.datasetIndex === 1,   // hide trend-line tooltips
+            callbacks: {
+              title: (items) => items[0].label,
+              label: (i) => '  ' + (d.format === 'inr' ? window.MIS.fmt.inr(i.parsed.y) : window.MIS.fmt.num(i.parsed.y))
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid:   { display: false, drawBorder: false },
+            border: { display: false },
+            ticks: {
+              color: tickColor,
+              font: { family: 'Inter', size: 11, weight: '500' },
+              maxRotation: 0,
+              autoSkip: true,
+              maxTicksLimit: 7,
+              padding: 8
+            }
+          },
+          y: {
+            beginAtZero: true,
+            grid:   { color: gridColor, drawBorder: false, lineWidth: 1, drawTicks: false },
+            border: { display: false },
+            ticks: {
+              color: tickColor,
+              font: { family: 'Inter', size: 11, weight: '500' },
+              padding: 8,
+              maxTicksLimit: 5,
+              callback: (v) => d.format === 'inr' ? window.MIS.fmt.inr(v) : window.MIS.fmt.num(v)
+            }
+          }
+        }
+      }
+    });
+
+    // Capture the chart instance for the onComplete closure to verify against.
+    // (Chart.js v4 may fire onComplete on a destroyed chart in rapid-switch
+    //  scenarios — the closure check `drillChart !== chartHandle` guards that.)
+    const chartHandle = drillChart;
+
+    // Backup trigger: in case animation.onComplete doesn't fire (e.g. tab
+    // backgrounded, GPU throttle, Chart.js animation skip), forcibly position
+    // markers ~1.2s after open. The chart-instance check inside
+    // positionMinMaxMarkers (via meta.data) is safe to call multiple times.
+    setTimeout(() => {
+      if (drillChart === chartHandle &&
+          document.getElementById('drillBackdrop').classList.contains('open')) {
+        positionMinMaxMarkers(chartHandle, sp, dates, d.format);
+      }
+    }, 1200);
+
+    document.getElementById('drillBackdrop').classList.add('open');
+  }
+
+  // Positions floating min/max chips + pulsing dots over the actual peaks
+  function positionMinMaxMarkers(chart, data, dates, format) {
+    const wrap = document.getElementById('drillChartWrap');
+    const markerHigh = document.getElementById('drillMarkerHigh');
+    const markerLow  = document.getElementById('drillMarkerLow');
+    const pulseHigh  = document.getElementById('drillPulseHigh');
+    const pulseLow   = document.getElementById('drillPulseLow');
+    const txtHigh    = document.getElementById('drillMarkerHighText');
+    const txtLow     = document.getElementById('drillMarkerLowText');
+    [markerHigh, markerLow, pulseHigh, pulseLow].forEach(el => el && el.classList.remove('show'));
+    if (!data || data.length === 0) return;
+
+    let maxIdx = 0, minIdx = 0;
+    for (let i = 1; i < data.length; i++) {
+      if (data[i] > data[maxIdx]) maxIdx = i;
+      if (data[i] < data[minIdx]) minIdx = i;
+    }
+    if (data[maxIdx] === data[minIdx]) return;   // no variation, skip markers
+
+    const fmtV = (v) => format === 'inr' ? window.MIS.fmt.inr(v) : window.MIS.fmt.num(v);
+    const dateLabel = (i) => {
+      if (!dates || !dates[i]) return '';
+      const d = new Date(dates[i] + 'T00:00:00');
+      return isNaN(d.getTime()) ? dates[i] : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+    };
+
+    const meta  = chart.getDatasetMeta(1);
+    const ptMax = meta.data[maxIdx];
+    const ptMin = meta.data[minIdx];
+    const wrapRect = wrap.getBoundingClientRect();
+    const canvasRect = chart.canvas.getBoundingClientRect();
+    const offsetX = canvasRect.left - wrapRect.left;
+    const offsetY = canvasRect.top - wrapRect.top;
+
+    if (ptMax) {
+      txtHigh.textContent = fmtV(data[maxIdx]) + (dateLabel(maxIdx) ? ' · ' + dateLabel(maxIdx) : '');
+      markerHigh.style.left = (offsetX + ptMax.x) + 'px';
+      markerHigh.style.top  = (offsetY + ptMax.y) + 'px';
+      pulseHigh.style.left  = (offsetX + ptMax.x) + 'px';
+      pulseHigh.style.top   = (offsetY + ptMax.y) + 'px';
+      requestAnimationFrame(() => {
+        markerHigh.classList.add('show');
+        pulseHigh.classList.add('show');
+      });
+    }
+    if (ptMin && data[minIdx] > 0) {   // skip min if it's zero (noise)
+      txtLow.textContent = fmtV(data[minIdx]) + (dateLabel(minIdx) ? ' · ' + dateLabel(minIdx) : '');
+      markerLow.style.left = (offsetX + ptMin.x) + 'px';
+      markerLow.style.top  = (offsetY + ptMin.y) + 'px';
+      pulseLow.style.left  = (offsetX + ptMin.x) + 'px';
+      pulseLow.style.top   = (offsetY + ptMin.y) + 'px';
+      requestAnimationFrame(() => {
+        markerLow.classList.add('show');
+        pulseLow.classList.add('show');
+      });
+    }
+  }
+  function closeDrillDown() {
+    document.getElementById('drillBackdrop').classList.remove('open');
+    // Hide markers so they don't flash on next open
+    ['drillMarkerHigh','drillMarkerLow','drillPulseHigh','drillPulseLow'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.classList.remove('show');
+    });
+  }
+
+  // ────── Spotlight (⌘K) ──────
+  let _spotlightFetchSeq = 0;     // monotonic — drop stale responses
+  let _spotlightDebounce = null;
+
+  function openSpotlight() {
+    const bd = document.getElementById('spotlightBackdrop');
+    bd.classList.add('open');
+    setTimeout(() => document.getElementById('spotlightInput').focus(), 80);
+    renderSpotlightItems('');
+  }
+  function closeSpotlight() {
+    document.getElementById('spotlightBackdrop').classList.remove('open');
+    document.getElementById('spotlightInput').value = '';
+  }
+
+  // Build the local (offline) item list — actions, ranges, cached KPIs, top rows.
+  function buildLocalSpotlightItems() {
+    const items = [];
+    items.push(
+      { type: 'action', label: 'Open Chatbot', icon: 'message-square-text', kbd: '⏎', action: () => location.href = '/chat' },
+      { type: 'action', label: 'Refresh dashboard', icon: 'refresh-cw', kbd: 'R', action: () => loadDashboard(CURRENT_RANGE) },
+      { type: 'action', label: 'Toggle dark mode', icon: 'moon', kbd: 'D', action: () => window.MIS.theme.toggle() },
+      { type: 'action', label: 'Sign out', icon: 'log-out', kbd: '', action: () => window.MIS.auth.logout() }
+    );
+    ['today', 'week', 'month'].forEach(r => {
+      items.push({ type: 'range', label: `Switch to ${r.charAt(0).toUpperCase() + r.slice(1)}`, icon: 'calendar', kbd: '', action: () => { setRange(r); }});
+    });
+    if (lastDashCache) {
+      (lastDashCache.widgets || []).filter(w => w.kind === 'kpi' && w.ok).forEach(w => {
+        items.push({ type: 'kpi', label: `View ${w.title}`, icon: w.icon || 'activity', kbd: '', action: () => { closeSpotlight(); openDrillDown(w); } });
+      });
+      const tc = (lastDashCache.widgets || []).find(w => w.id === 'table.top_customers' && w.ok);
+      (tc?.data?.rows || []).forEach(r => items.push({ type: 'customer', label: r.party, icon: 'user', kbd: '', meta: window.MIS.fmt.inr(Number(r.total || 0)), action: () => { closeSpotlight(); location.href = `/ledger?q=${encodeURIComponent(r.party)}`; } }));
+      const ti = (lastDashCache.widgets || []).find(w => w.id === 'table.top_items' && w.ok);
+      (ti?.data?.rows || []).forEach(r => items.push({ type: 'item', label: r.item, icon: 'package', kbd: '', meta: window.MIS.fmt.inr(Number(r.total || 0)), action: () => { closeSpotlight(); location.href = '/stock'; } }));
+    }
+    return items;
+  }
+
+  // Render a flat list of items into #spotlightList. Optionally prefixed
+  // with a "Database results" subsection.
+  function paintSpotlightList(localItems, dbItems, dbState) {
+    const list = document.getElementById('spotlightList');
+    const groups = [];
+
+    if (dbItems && dbItems.length) {
+      groups.push({ heading: 'Database results', items: dbItems });
+    } else if (dbState === 'searching') {
+      groups.push({ heading: 'Database results', loading: true });
+    } else if (dbState === 'empty') {
+      groups.push({ heading: 'Database results', emptyMessage: 'No matches in your database.' });
+    }
+    if (localItems && localItems.length) {
+      groups.push({ heading: dbItems || dbState ? 'Quick actions' : null, items: localItems });
+    }
+
+    if (!groups.length) {
+      list.innerHTML = `<div style="padding:28px; text-align:center; color:var(--color-text-tertiary);">No matches.</div>`;
+      return;
+    }
+
+    let idxCounter = 0;
+    const flat = [];        // for click delegation
+    const html = groups.map(g => {
+      const headHtml = g.heading
+        ? `<div class="spotlight-group-head" style="padding:10px 16px 4px; font-size:11px; font-weight:600; color:var(--color-text-tertiary); letter-spacing:0.6px; text-transform:uppercase;">${escapeHtml(g.heading)}</div>`
+        : '';
+      if (g.loading) {
+        return headHtml + `<div style="padding:14px 16px; color:var(--color-text-tertiary); font-size:13px;"><i data-lucide="loader-2" style="width:14px;height:14px;vertical-align:-2px;animation:spin 0.9s linear infinite;"></i>&nbsp;&nbsp;Searching…</div>`;
+      }
+      if (g.emptyMessage) {
+        return headHtml + `<div style="padding:14px 16px; color:var(--color-text-tertiary); font-size:13px;">${escapeHtml(g.emptyMessage)}</div>`;
+      }
+      const rows = g.items.map(it => {
+        const i = idxCounter++;
+        flat.push(it);
+        const metaHtml = it.meta ? `<span style="color:var(--color-text-tertiary); font-size:12px; margin-right:8px;">${escapeHtml(it.meta)}</span>` : '';
+        const kbdHtml  = it.kbd  ? `<span class="kbd">${escapeHtml(it.kbd)}</span>` : '';
+        return `<div class="spotlight-item ${i === 0 ? 'active' : ''}" data-idx="${i}">
+          <div class="ic-mini"><i data-lucide="${it.icon || 'circle'}"></i></div>
+          <div class="label">${escapeHtml(it.label)}</div>
+          ${metaHtml}${kbdHtml}
+        </div>`;
+      }).join('');
+      return headHtml + rows;
+    }).join('');
+
+    list.innerHTML = html;
+    if (window.lucide) window.lucide.createIcons();
+    list.querySelectorAll('.spotlight-item').forEach((node) => {
+      const idx = +node.dataset.idx;
+      const it = flat[idx];
+      node.addEventListener('click', () => {
+        closeSpotlight();
+        if (it && typeof it.action === 'function') it.action();
+      });
+    });
+  }
+
+  // Map server result kind → lucide icon
+  const _SEARCH_KIND_ICON = {
+    customer: 'user', supplier: 'truck', item: 'package', invoice: 'receipt'
+  };
+  const _SEARCH_KIND_LABEL = {
+    customer: 'Customer', supplier: 'Supplier', item: 'Item', invoice: 'Invoice'
+  };
+
+  function renderSpotlightItems(q) {
+    const all = buildLocalSpotlightItems();
+    const trimmed = (q || '').trim();
+    const localFiltered = trimmed
+      ? all.filter(i => i.label.toLowerCase().includes(trimmed.toLowerCase()))
+      : all;
+
+    if (trimmed.length < 2) {
+      // Pure local view — no server fetch yet
+      paintSpotlightList(localFiltered, null, null);
+      return;
+    }
+
+    // Show local + "searching…" placeholder immediately
+    paintSpotlightList(localFiltered, null, 'searching');
+
+    // Debounced fetch
+    if (_spotlightDebounce) clearTimeout(_spotlightDebounce);
+    _spotlightDebounce = setTimeout(async () => {
+      const seq = ++_spotlightFetchSeq;
+      try {
+        const url = `/api/search?phone=${encodeURIComponent(PHONE)}&q=${encodeURIComponent(trimmed)}&limit=20`;
+        const res = await fetch(url);
+        if (seq !== _spotlightFetchSeq) return; // stale — newer query in flight
+        if (!res.ok) {
+          paintSpotlightList(localFiltered, null, 'empty');
+          return;
+        }
+        const json = await res.json();
+        const dbItems = (json.results || []).map(r => ({
+          type: r.kind,
+          label: r.label,
+          icon: _SEARCH_KIND_ICON[r.kind] || 'database',
+          kbd: '',
+          meta: _SEARCH_KIND_LABEL[r.kind] || r.kind,
+          action: () => {
+            closeSpotlight();
+            if (r.link) location.href = r.link;
+          }
+        }));
+        paintSpotlightList(localFiltered, dbItems.length ? dbItems : null, dbItems.length ? null : 'empty');
+      } catch (_) {
+        if (seq !== _spotlightFetchSeq) return;
+        paintSpotlightList(localFiltered, null, 'empty');
+      }
+    }, 220);
+  }
+
+  // ────── Range slider position (iOS spring) ──────
+  function positionRangeSlider() {
+    const toggle = document.getElementById('rangeToggle');
+    const slider = document.getElementById('rangeSlider');
+    if (!toggle || !slider) return;
+    const active = toggle.querySelector('button.active');
+    if (!active) return;
+    const r = active.getBoundingClientRect();
+    const tr = toggle.getBoundingClientRect();
+    slider.style.left  = (r.left - tr.left) + 'px';
+    slider.style.width = r.width + 'px';
+  }
+  function setRange(r) {
+    const buttons = document.querySelectorAll('#rangeToggle button');
+    buttons.forEach(b => b.classList.toggle('active', b.dataset.range === r));
+    positionRangeSlider();
+    loadDashboard(r);
+  }
+
+  // ────── Skeleton ──────
+  function showSkeletons() {
+    const row = document.getElementById('kpi-row');
+    row.innerHTML = '';
+    for (let i = 0; i < 4; i++) {
+      row.appendChild(el(`
+        <div class="kpi" style="opacity:0.7;">
+          <div class="kpi-top">
+            <div class="skel" style="width:38px;height:38px;border-radius:11px;"></div>
+          </div>
+          <div class="kpi-label skel" style="height:11px; width:50%;">&nbsp;</div>
+          <div class="kpi-value skel" style="height:32px; width:65%; margin-top:8px;">&nbsp;</div>
+          <div class="kpi-delta skel" style="height:14px; width:40%; margin-top:6px;">&nbsp;</div>
+        </div>`));
+    }
+    document.getElementById('charts-row').innerHTML = `
+      <div class="chart-card"><div class="body skel" style="border-radius:12px;"></div></div>
+      <div class="chart-card"><div class="body skel" style="border-radius:12px;"></div></div>`;
+    document.getElementById('tables-row').innerHTML = `
+      <div class="table-widget"><div class="head"><div class="t-h3 skel" style="height:14px; width:40%;">&nbsp;</div></div><div style="padding:32px;" class="skel">&nbsp;</div></div>
+      <div class="table-widget"><div class="head"><div class="t-h3 skel" style="height:14px; width:40%;">&nbsp;</div></div><div style="padding:32px;" class="skel">&nbsp;</div></div>
+      <div class="table-widget"><div class="head"><div class="t-h3 skel" style="height:14px; width:40%;">&nbsp;</div></div><div style="padding:32px;" class="skel">&nbsp;</div></div>`;
+    document.getElementById('briefing-text').textContent = 'Loading your data…';
+  }
+
+  // ────── Load + render dashboard ──────
+  async function loadDashboard(range) {
+    CURRENT_RANGE = range || CURRENT_RANGE;
+    showSkeletons();
+    try {
+      const res = await fetch(`/api/dashboard?phone=${encodeURIComponent(PHONE)}&range=${encodeURIComponent(CURRENT_RANGE)}`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        document.getElementById('briefing-text').textContent = err.error || 'Failed to load dashboard.';
+        return;
+      }
+      const dash = await res.json();
+      lastDashCache = dash;
+      if (dash.tenant?.name) {
+        document.getElementById('tenant-name').textContent = dash.tenant.name;
+        const initial = (dash.tenant.name.trim().charAt(0) || 'M').toUpperCase();
+        document.getElementById('avatar-init').textContent = initial;
+        const tenantAv = document.getElementById('tenantAvatar');
+        if (tenantAv) tenantAv.textContent = initial;
+        window.MIS.auth.setTenantName(dash.tenant.name);
+      }
+      // Live subtitle: dashboard just loaded fresh data → reset sync clock
+      lastSyncAt = Date.now();
+      refreshTopbarSubtitle();
+      const kpis    = (dash.widgets || []).filter(w => w.kind === 'kpi'   && w.ok);
+      const charts_ = (dash.widgets || []).filter(w => w.kind === 'chart' && w.ok);
+      const tables  = (dash.widgets || []).filter(w => w.kind === 'table' && w.ok);
+      renderKpis(kpis);
+      renderCharts(charts_);
+      renderTables(tables);
+      renderBriefing(dash);
+
+      document.getElementById('tipBanner').style.display = '';
+    } catch (e) {
+      console.error(e);
+      document.getElementById('briefing-text').textContent = 'Network issue — please refresh.';
+    }
+  }
+
+  // ────── Live "Synced X ago" subtitle ──────
+  let lastSyncAt = Date.now();
+  function syncLabel() {
+    const sec = Math.floor((Date.now() - lastSyncAt) / 1000);
+    if (sec < 30)    return 'just synced';
+    if (sec < 90)    return 'synced 1m ago';
+    if (sec < 3600)  return 'synced ' + Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return 'synced ' + Math.floor(sec / 3600) + 'h ago';
+    return 'synced earlier';
+  }
+  function refreshTopbarSubtitle() {
+    const dateEl = document.getElementById('today-date');
+    if (dateEl) dateEl.textContent = window.MIS.fmt.today() + ' · ' + syncLabel();
+  }
+
+  // ────── Wire up DOM ──────
+  document.addEventListener('DOMContentLoaded', () => {
+    refreshTopbarSubtitle();
+    setInterval(refreshTopbarSubtitle, 30000);
+    const tName = window.MIS.auth.getTenantName() || '…';
+    document.getElementById('tenant-name').textContent = tName;
+    const initial = (tName.trim().charAt(0) || 'M').toUpperCase();
+    document.getElementById('avatar-init').textContent = initial;
+    const tenantAv = document.getElementById('tenantAvatar');
+    if (tenantAv) tenantAv.textContent = initial;
+
+    // Range toggle
+    document.querySelectorAll('#rangeToggle button').forEach(b => {
+      b.addEventListener('click', () => setRange(b.dataset.range));
+    });
+
+    // Refresh
+    document.getElementById('refreshBtn').addEventListener('click', () => loadDashboard(CURRENT_RANGE));
+
+    // Theme toggle (sidebar)
+    document.getElementById('themeRow').addEventListener('click', () => {
+      window.MIS.theme.toggle();
+      // Re-render charts so colours follow theme
+      if (lastDashCache) {
+        const charts_ = (lastDashCache.widgets || []).filter(w => w.kind === 'chart' && w.ok);
+        renderCharts(charts_);
+        // Re-render sparklines too
+        document.querySelectorAll('.kpi-spark-canvas').forEach((cv, i) => {
+          const kpi = (lastDashCache.widgets || []).filter(w => w.kind === 'kpi' && w.ok)[i];
+          if (kpi && kpi.data?.sparkline) {
+            const color = ACCENT_MAP[kpi.accent || 'cyan'];
+            drawSparkline(cv, kpi.data.sparkline, color);
+          }
+        });
+      }
+    });
+
+    // Logout
+    document.getElementById('logoutLink').addEventListener('click', (e) => {
+      e.preventDefault();
+      window.MIS.auth.logout();
+    });
+
+    // Mobile sidebar
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+
+    // Floating chat
+    document.getElementById('chatFab').addEventListener('click', () => location.href = '/chat');
+
+    // Search button → spotlight
+    document.getElementById('searchBtn').addEventListener('click', openSpotlight);
+
+    // Spotlight
+    document.getElementById('spotlightInput').addEventListener('input', (e) => renderSpotlightItems(e.target.value));
+    document.getElementById('spotlightBackdrop').addEventListener('click', (e) => {
+      if (e.target.id === 'spotlightBackdrop') closeSpotlight();
+    });
+
+    // Drill-down close
+    document.getElementById('drillClose').addEventListener('click', closeDrillDown);
+    document.getElementById('drillBackdrop').addEventListener('click', (e) => {
+      if (e.target.id === 'drillBackdrop') closeDrillDown();
+    });
+
+    // Keyboard shortcuts: ⌘K / Ctrl+K → spotlight; Esc → close modals
+    document.addEventListener('keydown', (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (document.getElementById('spotlightBackdrop').classList.contains('open')) closeSpotlight();
+        else openSpotlight();
+      } else if (e.key === 'Escape') {
+        closeSpotlight();
+        closeDrillDown();
+      }
+    });
+
+    // Window resize → re-position range slider, re-draw sparklines
+    window.addEventListener('resize', () => {
+      positionRangeSlider();
+      if (lastDashCache) {
+        document.querySelectorAll('.kpi-spark-canvas').forEach((cv, i) => {
+          const kpi = (lastDashCache.widgets || []).filter(w => w.kind === 'kpi' && w.ok)[i];
+          if (kpi && kpi.data?.sparkline) {
+            drawSparkline(cv, kpi.data.sparkline, ACCENT_MAP[kpi.accent || 'cyan']);
+          }
+        });
+      }
+    });
+
+    if (window.lucide) window.lucide.createIcons();
+
+    // Default to month range, position slider
+    document.querySelectorAll('#rangeToggle button').forEach(x => x.classList.remove('active'));
+    const monthBtn = document.querySelector('#rangeToggle button[data-range="month"]');
+    if (monthBtn) monthBtn.classList.add('active');
+    requestAnimationFrame(positionRangeSlider);
+    loadDashboard('month');
+  });
+
+})();
+</script>
+</body>
+</html>

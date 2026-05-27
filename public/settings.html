@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Settings · MIS</title>
+  <meta name="theme-color" content="#00A4D2">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="/assets/js/app.js"></script>
+  <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+  <style>
+    .mobile-toggle { display: none; }
+    @media (max-width: 760px) { .mobile-toggle { display: inline-grid; } }
+
+    /* Settings page layout */
+    .settings-grid { display: grid; gap: 16px; max-width: 880px; }
+
+    .settings-card {
+      background: var(--surface-card);
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      padding: 22px;
+      box-shadow: var(--shadow-card);
+      transition: box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .settings-card:hover { box-shadow: var(--shadow-card-hover); }
+
+    .settings-card-header {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .settings-card-header .ic {
+      width: 36px; height: 36px;
+      border-radius: 10px;
+      display: grid; place-items: center;
+      background: var(--accent-cyan-soft);
+      color: var(--accent-cyan);
+    }
+    .settings-card-header .ic svg { width: 18px; height: 18px; }
+    .settings-card-header .titles {
+      display: flex; flex-direction: column; gap: 2px;
+    }
+    .settings-card-header .t { font-size: 15px; font-weight: 600; }
+    .settings-card-header .sub { font-size: 12px; color: var(--color-text-tertiary); }
+
+    .form-row { display: grid; grid-template-columns: 130px 1fr; gap: 14px; align-items: center; margin-bottom: 12px; }
+    .form-row label { font-size: 13px; color: var(--color-text-secondary); }
+    .form-row input[type="text"],
+    .form-row input[type="email"],
+    .form-row input[type="tel"] {
+      font: inherit; font-size: 13.5px;
+      padding: 9px 12px;
+      border: 1px solid var(--hairline);
+      border-radius: 9px;
+      background: var(--surface-input, transparent);
+      color: var(--color-text-primary);
+      transition: border-color 180ms ease, box-shadow 180ms ease;
+    }
+    .form-row input:focus {
+      outline: none;
+      border-color: var(--accent-cyan);
+      box-shadow: 0 0 0 3px rgba(0, 164, 210, 0.12);
+    }
+    .form-row input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .form-actions {
+      margin-top: 16px;
+      display: flex; gap: 10px; align-items: center;
+    }
+    .btn-primary {
+      font: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 18px;
+      border: none; cursor: pointer;
+      border-radius: 9px;
+      background: linear-gradient(135deg, var(--accent-cyan) 0%, var(--accent-violet) 100%);
+      color: white;
+      transition: transform 180ms ease, box-shadow 180ms ease, opacity 180ms ease;
+      box-shadow: 0 2px 6px rgba(0, 164, 210, 0.2);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 164, 210, 0.3); }
+    .btn-primary:disabled { opacity: 0.5; cursor: wait; }
+    .btn-danger {
+      font: inherit; font-size: 13px; font-weight: 600;
+      padding: 9px 18px;
+      border: 1px solid rgba(239, 68, 68, 0.35); cursor: pointer;
+      border-radius: 9px;
+      background: rgba(239, 68, 68, 0.08);
+      color: rgb(239, 68, 68);
+      transition: all 180ms ease;
+    }
+    .btn-danger:hover { background: rgba(239, 68, 68, 0.18); }
+    .btn-secondary {
+      font: inherit; font-size: 13px; font-weight: 500;
+      padding: 9px 14px;
+      border: 1px solid var(--hairline); cursor: pointer;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--color-text-secondary);
+    }
+    .btn-secondary:hover { border-color: var(--accent-cyan); color: var(--accent-cyan); }
+
+    .status-line { font-size: 12.5px; color: var(--color-text-tertiary); }
+    .status-line .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px; font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+    .status-line .badge.ok    { background: rgba(34, 197, 94, 0.12); color: rgb(34, 197, 94); }
+    .status-line .badge.off   { background: rgba(148, 163, 184, 0.18); color: rgb(100, 116, 139); }
+    .status-line .badge.warn  { background: rgba(245, 158, 11, 0.15); color: rgb(217, 119, 6); }
+
+    .db-list { display: flex; flex-direction: column; gap: 10px; }
+    .db-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 14px;
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      transition: border-color 180ms ease;
+    }
+    .db-row.active { border-color: var(--accent-cyan); background: var(--accent-cyan-soft); }
+    .db-row .name  { font-size: 13.5px; font-weight: 500; }
+    .db-row .meta  { font-size: 11.5px; color: var(--color-text-tertiary); margin-top: 2px; }
+
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      padding: 12px 18px;
+      background: rgba(20, 20, 22, 0.95);
+      color: white;
+      border-radius: 10px;
+      font-size: 13px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      opacity: 0; transform: translateY(8px);
+      pointer-events: none;
+      transition: opacity 240ms ease, transform 240ms ease;
+      z-index: 9999;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    .toast.err  { background: rgba(239, 68, 68, 0.95); }
+    .toast.ok   { background: rgba(34, 197, 94, 0.95); }
+
+    .empty-msg {
+      padding: 16px; text-align: center;
+      color: var(--color-text-tertiary);
+      font-size: 13px;
+    }
+
+    /* Topbar avatar + status dot — settings theme: slate → indigo → cyan */
+    .tenant-avatar { width: 30px; height: 30px; border-radius: 8px; background: linear-gradient(135deg, #475569, #6366F1, #00A4D2); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; flex-shrink: 0; box-shadow: 0 4px 14px rgba(99,102,241,0.28); }
+    [data-theme="dark"] .tenant-avatar { box-shadow: 0 4px 14px rgba(99,102,241,0.18); }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10B981; box-shadow: 0 0 0 0 rgba(16,185,129,0.5); animation: dotPulse 2.4s ease-in-out infinite; display: inline-block; vertical-align: middle; margin-left: 6px; }
+    @keyframes dotPulse { 0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.5); } 50% { box-shadow: 0 0 0 6px rgba(16,185,129,0); } }
+  </style>
+</head>
+<body>
+
+<div class="app-shell">
+
+  <!-- ────────── SIDEBAR ────────── -->
+  <aside class="sidebar glass" id="sidebar">
+    <div class="sidebar-brand">
+      <div class="logo">M</div>
+      <div>
+        <div class="name">MIS</div>
+        <div class="tag">Make It Simple</div>
+      </div>
+    </div>
+
+    <div class="nav-section">
+      <a class="nav-item" href="/dashboard"><i data-lucide="layout-dashboard"></i> <span>Dashboard</span></a>
+      <a class="nav-item" href="/chat"><i data-lucide="message-square-text"></i> <span>Chatbot</span></a>
+    </div>
+
+    <div class="nav-section">
+      <div class="nav-section-label">Insights</div>
+      <a class="nav-item" href="/sales"><i data-lucide="trending-up"></i> <span>Sales</span></a>
+      <a class="nav-item" href="/outstanding"><i data-lucide="hourglass"></i> <span>Outstanding</span></a>
+      <a class="nav-item" href="/stock"><i data-lucide="package"></i> <span>Stock</span></a>
+      <a class="nav-item" href="/ledger"><i data-lucide="book-open"></i> <span>Ledger</span></a>
+      <a class="nav-item" href="/calendar"><i data-lucide="calendar"></i> <span>Calendar</span></a>
+      <a class="nav-item" href="/reports"><i data-lucide="bar-chart-3"></i> <span>Reports</span></a>
+    </div>
+
+    <div class="sidebar-footer">
+      <a class="nav-item active" href="/settings"><i data-lucide="settings"></i> <span>Settings</span></a>
+      <div class="theme-toggle" id="themeRow">
+        <span style="display:flex; align-items:center; gap:10px;">
+          <i data-lucide="moon" style="width:16px;height:16px;"></i> Dark mode
+        </span>
+        <div class="toggle-switch" id="themeSwitch"></div>
+      </div>
+      <a class="nav-item" href="#" id="logoutLink"><i data-lucide="log-out"></i> <span>Sign out</span></a>
+    </div>
+  </aside>
+
+  <!-- ────────── MAIN ────────── -->
+  <main class="main">
+
+    <!-- TOPBAR -->
+    <header class="topbar glass">
+      <div style="display:flex; align-items:center; gap:14px;">
+        <button class="btn-icon mobile-toggle" id="sidebarToggle" type="button"><i data-lucide="menu"></i></button>
+        <div class="tenant-avatar" id="tenantAvatar">M</div>
+        <div class="greeting">
+          <div class="who"><span id="tenant-name">…</span> <span class="status-dot" title="Connected"></span></div>
+          <div class="when">Settings · profile + integrations</div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn-icon" title="Refresh" id="refreshBtn" type="button"><i data-lucide="refresh-cw"></i></button>
+      </div>
+    </header>
+
+    <div class="page">
+      <div class="page-header page-header-hero">
+        <div class="page-header-bg">
+          <div class="aurora aurora-1"></div>
+          <div class="aurora aurora-2"></div>
+          <div class="aurora aurora-3"></div>
+          <div class="grid-overlay"></div>
+        </div>
+        <div class="page-header-content">
+          <div class="page-icon-glow"><i data-lucide="settings"></i></div>
+          <div class="page-header-text">
+            <div class="page-title-row">
+              <h1 class="t-h1 page-title-gradient">Settings</h1>
+              <span class="live-pill"><span class="live-dot"></span>Live</span>
+            </div>
+            <p class="page-desc">Manage your profile, databases, and integrations</p>
+            <div class="page-chips">
+              <span class="page-chip"><i data-lucide="user" style="width:12px;height:12px;"></i> Profile</span>
+              <span class="page-chip"><i data-lucide="database" style="width:12px;height:12px;"></i> Databases</span>
+              <span class="page-chip"><i data-lucide="calendar-check" style="width:12px;height:12px;"></i> Calendar</span>
+              <span class="page-chip"><i data-lucide="message-circle" style="width:12px;height:12px;"></i> WhatsApp</span>
+            </div>
+            <div class="page-underline"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-grid">
+
+        <!-- ─── Profile ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic"><i data-lucide="user"></i></div>
+            <div class="titles">
+              <div class="t">Profile</div>
+              <div class="sub">Your name, email, and contact</div>
+            </div>
+          </div>
+          <form id="profileForm" autocomplete="off">
+            <div class="form-row">
+              <label for="prof-name">Name</label>
+              <input id="prof-name" type="text" maxlength="100" placeholder="Your name" required>
+            </div>
+            <div class="form-row">
+              <label for="prof-email">Email</label>
+              <input id="prof-email" type="email" maxlength="254" placeholder="you@example.com">
+            </div>
+            <div class="form-row">
+              <label for="prof-phone">Phone</label>
+              <input id="prof-phone" type="tel" disabled>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" id="profSave">Save changes</button>
+              <span class="status-line" id="profStatus"></span>
+            </div>
+          </form>
+        </div>
+
+        <!-- ─── Database ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic"><i data-lucide="database"></i></div>
+            <div class="titles">
+              <div class="t">Databases</div>
+              <div class="sub">Connected Tally workbooks · click to switch active</div>
+            </div>
+          </div>
+          <div class="db-list" id="dbList"><div class="empty-msg">Loading…</div></div>
+        </div>
+
+        <!-- ─── Calendar ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic"><i data-lucide="calendar"></i></div>
+            <div class="titles">
+              <div class="t">Google Calendar</div>
+              <div class="sub">Booking confirmation emails + reminders</div>
+            </div>
+          </div>
+          <div id="calendarBlock">
+            <div class="status-line" style="margin-bottom: 14px;">
+              Status: <span class="badge" id="calBadge">…</span>
+              <span id="calMeta" style="margin-left: 8px;"></span>
+            </div>
+            <div class="form-actions" id="calActions"></div>
+          </div>
+        </div>
+
+        <!-- ─── Sync ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic"><i data-lucide="refresh-cw"></i></div>
+            <div class="titles">
+              <div class="t">Data sync</div>
+              <div class="sub">Pull latest sheet rows into the database</div>
+            </div>
+          </div>
+          <div class="status-line" style="margin-bottom: 12px;">
+            Last sync: <span id="lastSync">—</span>
+          </div>
+          <div class="form-actions">
+            <button class="btn-primary" id="syncNow" type="button">Sync now</button>
+            <span class="status-line" id="syncStatus"></span>
+          </div>
+        </div>
+
+        <!-- ─── WhatsApp ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic"><i data-lucide="message-circle"></i></div>
+            <div class="titles">
+              <div class="t">WhatsApp</div>
+              <div class="sub">Number connected to your bot</div>
+            </div>
+          </div>
+          <div class="status-line">
+            Linked phone: <strong id="waPhone">…</strong> &nbsp;
+            <span class="badge ok">Active</span>
+          </div>
+          <div class="status-line" style="margin-top:8px;">
+            Voice messages, queries, and bookings work via WhatsApp.
+            <br>To change the linked number, contact support.
+          </div>
+        </div>
+
+        <!-- ─── Sign out ─── -->
+        <div class="settings-card">
+          <div class="settings-card-header">
+            <div class="ic" style="background: rgba(239, 68, 68, 0.08); color: rgb(239, 68, 68);"><i data-lucide="log-out"></i></div>
+            <div class="titles">
+              <div class="t">Sign out</div>
+              <div class="sub">Clear local session and return to login</div>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button class="btn-danger" id="signOutBtn" type="button">Sign out of MIS</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ─── Auth gate ───
+  if (!window.MIS || !window.MIS.auth || !window.MIS.auth.getPhone()) {
+    location.href = '/login?redirect=' + encodeURIComponent(location.pathname);
+    return;
+  }
+  const PHONE = window.MIS.auth.getPhone();
+
+  // ─── Toast ───
+  let toastTimer;
+  function toast(msg, kind = 'ok') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast show ' + (kind || '');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.classList.remove('show'); }, 2400);
+  }
+
+  // ─── Topbar fill ───
+  const tName = window.MIS.auth.getTenantName() || 'Account';
+  document.getElementById('tenant-name').textContent = tName;
+  document.getElementById('tenantAvatar').textContent = (tName.charAt(0) || 'M').toUpperCase();
+
+  // ─── Load profile ───
+  async function loadProfile() {
+    try {
+      const res = await fetch(`/api/tenant/profile?phone=${encodeURIComponent(PHONE)}`);
+      if (!res.ok) throw new Error('Profile load failed');
+      const p = await res.json();
+      document.getElementById('prof-name').value  = p.name  || '';
+      document.getElementById('prof-email').value = p.email || '';
+      document.getElementById('prof-phone').value = p.phone || PHONE;
+      document.getElementById('waPhone').textContent = '+' + (p.phone || PHONE);
+
+      // Calendar status
+      const cb = document.getElementById('calBadge');
+      const cm = document.getElementById('calMeta');
+      const ca = document.getElementById('calActions');
+      if (p.calendar_connected) {
+        cb.textContent = 'Connected';
+        cb.className = 'badge ok';
+        cm.textContent = p.calendar_email ? '· ' + p.calendar_email : '';
+        ca.innerHTML = '<button class="btn-secondary" id="calDisconnect" type="button">Disconnect</button>';
+        document.getElementById('calDisconnect').addEventListener('click', disconnectCalendar);
+      } else {
+        cb.textContent = 'Not connected';
+        cb.className = 'badge off';
+        cm.textContent = '';
+        ca.innerHTML = '<a class="btn-primary" id="calConnect">Connect Google Calendar</a>';
+        document.getElementById('calConnect').href = `/api/tenant/calendar/auth?tenant_id=${p.tenant_id}`;
+        document.getElementById('calConnect').target = '_blank';
+      }
+
+      // Last sync
+      document.getElementById('lastSync').textContent = p.last_sync_at
+        ? formatRelative(new Date(p.last_sync_at))
+        : 'never';
+
+      // Databases
+      renderDbList(p.databases || [], p.active_db_id);
+    } catch (e) {
+      console.error(e);
+      toast('Could not load profile.', 'err');
+    }
+  }
+
+  function formatRelative(date) {
+    const sec = Math.floor((Date.now() - date.getTime()) / 1000);
+    if (sec < 60) return 'just now';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ago';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ago';
+    return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  }
+
+  function renderDbList(dbs, activeId) {
+    const list = document.getElementById('dbList');
+    if (!dbs.length) {
+      list.innerHTML = '<div class="empty-msg">No databases connected. <a href="/register">Add one</a>.</div>';
+      return;
+    }
+    list.innerHTML = dbs.map(d => `
+      <div class="db-row ${d.tenant_id === activeId ? 'active' : ''}" data-id="${d.tenant_id}">
+        <div>
+          <div class="name">${escapeHtml(d.name)}</div>
+          <div class="meta">${escapeHtml(d.role || 'Owner')} · ${d.tenant_id.slice(0, 8)}</div>
+        </div>
+        <button class="btn-secondary db-switch" data-id="${d.tenant_id}" ${d.tenant_id === activeId ? 'disabled' : ''}>
+          ${d.tenant_id === activeId ? 'Active' : 'Switch'}
+        </button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.db-switch').forEach(btn => {
+      btn.addEventListener('click', () => switchDb(btn.dataset.id));
+    });
+  }
+
+  async function switchDb(tenantId) {
+    try {
+      const res = await fetch('/api/tenant/switch-db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: PHONE, tenant_id: tenantId })
+      });
+      if (!res.ok) throw new Error('Switch failed');
+      toast('Active database switched.', 'ok');
+      loadProfile();
+    } catch (e) {
+      toast('Could not switch database.', 'err');
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  // ─── Save profile ───
+  document.getElementById('profileForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('profSave');
+    btn.disabled = true;
+    btn.textContent = 'Saving…';
+    try {
+      const res = await fetch('/api/tenant/update-profile', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phone: PHONE,
+          name:  document.getElementById('prof-name').value.trim(),
+          email: document.getElementById('prof-email').value.trim()
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Save failed');
+      toast('Profile saved.', 'ok');
+      if (data.name) window.MIS.auth.setTenantName(data.name);
+    } catch (e) {
+      toast(e.message || 'Could not save.', 'err');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  });
+
+  // ─── Calendar disconnect ───
+  async function disconnectCalendar() {
+    if (!confirm('Disconnect Google Calendar? You will need to re-authorize to book meetings via chat.')) return;
+    try {
+      const res = await fetch('/api/tenant/calendar/disconnect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: PHONE })
+      });
+      if (!res.ok) throw new Error('Disconnect failed');
+      toast('Calendar disconnected.', 'ok');
+      loadProfile();
+    } catch (e) {
+      toast('Could not disconnect.', 'err');
+    }
+  }
+
+  // ─── Sync now ───
+  document.getElementById('syncNow').addEventListener('click', async () => {
+    const btn = document.getElementById('syncNow');
+    const status = document.getElementById('syncStatus');
+    btn.disabled = true;
+    btn.textContent = 'Syncing…';
+    status.textContent = '';
+    try {
+      const res = await fetch('/api/tenant/sync-now', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: PHONE })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Sync failed');
+      toast('Sync complete.', 'ok');
+      status.textContent = data.message || 'Done.';
+      loadProfile();
+    } catch (e) {
+      toast(e.message || 'Sync failed.', 'err');
+      status.textContent = '';
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Sync now';
+    }
+  });
+
+  // ─── Sign out ───
+  document.getElementById('signOutBtn').addEventListener('click', () => {
+    if (confirm('Sign out of MIS?')) window.MIS.auth.logout();
+  });
+  document.getElementById('logoutLink').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (confirm('Sign out of MIS?')) window.MIS.auth.logout();
+  });
+
+  // ─── Theme + sidebar ───
+  document.getElementById('themeRow').addEventListener('click', () => window.MIS.theme.toggle());
+  document.getElementById('sidebarToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('open');
+  });
+  document.getElementById('refreshBtn').addEventListener('click', loadProfile);
+
+  // ─── Init ───
+  document.addEventListener('DOMContentLoaded', () => {
+    if (window.lucide) window.lucide.createIcons();
+    loadProfile();
+  });
+
+})();
+</script>
+</body>
+</html>
